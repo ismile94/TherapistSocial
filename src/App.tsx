@@ -117,12 +117,14 @@ function AccountDropdown({
   currentUser, 
   onProfileClick, 
   onSettingsClick,
-  onSignOut 
+  onSignOut,
+  onOpenConnections
 }: { 
   currentUser: any
   onProfileClick: () => void
   onSettingsClick: () => void
   onSignOut: () => void
+  onOpenConnections: () => void
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -161,6 +163,16 @@ function AccountDropdown({
               >
                 <User className="w-4 h-4 mr-2" />
                 Profile
+              </button>
+              <button
+                onClick={() => {
+                  onOpenConnections()
+                  setIsOpen(false)
+                }}
+                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Users className="w-4 h-4 mr-2" />
+                Network
               </button>
               <button
                 onClick={() => {
@@ -1074,12 +1086,23 @@ const cancelConnectionRequest = async (connectionId: string) => {
             
             {/* Yeni Account Dropdown */}
             <div className="hidden md:block">
-            <AccountDropdown 
-              currentUser={currentUser}
-              onProfileClick={handleProfileClick}
-              onSettingsClick={handleSettingsClick}
-              onSignOut={handleSignOut}
-            />
+              <AccountDropdown 
+                currentUser={currentUser}
+                onProfileClick={handleProfileClick}
+                onSettingsClick={handleSettingsClick}
+                onSignOut={handleSignOut}
+                onOpenConnections={() => setIsConnectionsOpen(true)}
+              />
+            </div>
+            {/* Mobile single menu button */}
+            <div className="md:hidden">
+              <AccountDropdown 
+                currentUser={currentUser}
+                onProfileClick={handleProfileClick}
+                onSettingsClick={handleSettingsClick}
+                onSignOut={handleSignOut}
+                onOpenConnections={() => setIsConnectionsOpen(true)}
+              />
             </div>
           </div>
         </div>
