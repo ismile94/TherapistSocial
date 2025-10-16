@@ -1020,8 +1020,8 @@ const cancelConnectionRequest = async (connectionId: string) => {
 
   return (
     <div className="h-screen flex flex-col">
-      <header className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
+      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 text-white" />
@@ -1030,13 +1030,13 @@ const cancelConnectionRequest = async (connectionId: string) => {
           </div>
           
           <div className="flex items-center space-x-4">
-            <nav className="flex space-x-1">
+            <nav className="flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   setActiveView('map')
                   setSelectedProfileId(null)
                 }}
-                className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`flex items-center px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
                   activeView === 'map' && !selectedProfileId
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -1050,7 +1050,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
                   setActiveView('community')
                   setSelectedProfileId(null)
                 }}
-                className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                className={`flex items-center px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
                   activeView === 'community' && !selectedProfileId
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -1083,7 +1083,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
         </div>
       </header>
       
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
         {selectedProfileId ? (
           <ProfileDetailPage 
             profileId={selectedProfileId} 
@@ -1108,7 +1108,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
               therapists={filteredTherapists}
             />
             
-            <div className="flex-1 relative">
+            <div className="flex-1 relative min-h-[50vh] md:min-h-0">
               <MapComponent 
                 therapists={filteredTherapists}
                 geocodeLocation={geocodeLocation}
@@ -1134,6 +1134,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
       )}
 
       {/* Chat Boxes */}
+      <div className="hidden md:block">
       {chatBoxes.map((chatBox, index) => (
         <ChatBoxComponent
           key={chatBox.id}
@@ -1147,9 +1148,10 @@ const cancelConnectionRequest = async (connectionId: string) => {
           playNotificationSound={playNotificationSound}
         />
       ))}
+      </div>
 
       {/* Messages Overlay (LinkedIn-style) */}
-      <div className="fixed bottom-0 right-4 z-[1000]">
+      <div className="fixed bottom-0 right-4 z-[1000] hidden md:block">
         <div className="relative">
           {/* Bildirim göstergesi */}
           {unreadMessagesCount > 0 && (
@@ -2395,7 +2397,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
   ]
 
   return (
-    <div className="w-80 bg-white shadow-sm border-r flex flex-col overflow-hidden">
+    <div className="w-full md:w-80 bg-white shadow-sm border-r flex flex-col overflow-hidden">
       {/* Search - Always visible */}
       <div className="p-4 border-b">
         <h2 className="text-xl font-bold text-gray-900 mb-4">Find Therapists</h2>
