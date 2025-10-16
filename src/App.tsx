@@ -112,6 +112,122 @@ interface ConversationMetadata {
   isArchived: boolean
 }
 
+function calculateTotalExperience(workExperience: any[]): string {
+  if (!workExperience || workExperience.length === 0) return '0'
+
+  let totalYears = 0
+  let totalMonths = 0
+  let totalDays = 0
+
+  workExperience.forEach((exp: any) => {
+    // Tarihleri parse et
+    let startDate: Date | null = null
+    let endDate: Date | null = null
+
+    if (exp.start_date) {
+      const [year, month, day] = exp.start_date.split('-').map(Number)
+      startDate = new Date(year, month - 1, day || 1)
+    }
+
+    if (exp.end_date?.toLowerCase() === 'present') {
+      endDate = new Date()
+    } else if (exp.end_date) {
+      const [year, month, day] = exp.end_date.split('-').map(Number)
+      endDate = new Date(year, month - 1, day || 1)
+    }
+
+    if (startDate && endDate) {
+      // Yıl hesapla
+      let years = endDate.getFullYear() - startDate.getFullYear()
+      let months = endDate.getMonth() - startDate.getMonth()
+      let days = endDate.getDate() - startDate.getDate()
+
+      // Gün negatifse ay azalt ve gün düzelt
+      if (days < 0) {
+        months--
+        const prevMonth = new Date(endDate.getFullYear(), endDate.getMonth(), 0)
+        days += prevMonth.getDate()
+      }
+
+      // Ay negatifse yıl azalt ve ay düzelt
+      if (months < 0) {
+        years--
+        months += 12
+      }
+
+      totalYears += years
+      totalMonths += months
+      totalDays += days
+    }
+  })
+
+  // Fazla günleri aya çevir
+  if (totalDays >= 30) {
+    totalMonths += Math.floor(totalDays / 30)
+    totalDays = totalDays % 30
+  }
+
+  // Fazla ayları yıla çevir
+  if (totalMonths >= 12) {
+    totalYears += Math.floor(totalMonths / 12)
+    totalMonths = totalMonths % 12
+  }
+
+  // Format logic
+  
+  // < 1 year: show months only
+  if (totalYears === 0) {
+    return totalMonths > 0 ? `${totalMonths}m` : `${totalDays}d`
+  }
+
+  // 1-3 years: show "Xy Zm" format
+  if (totalYears < 3) {
+    return totalMonths > 0 ? `${totalYears}y ${totalMonths}m` : `${totalYears}y`
+  }
+
+  // 3+ years: special formatting based on months
+  if (totalYears >= 3) {
+    // Year beginning (months 0-3): "x+ years"
+    if (totalMonths < 4) {
+      return `${totalYears}+ years`
+    }
+    
+    // Mid-year start (months 4-5): "approximately x.5 years"
+    if (totalMonths >= 4 && totalMonths <= 5) {
+      return `approximately ${totalYears}.5 years`
+    }
+    
+    // Mid-year end (months 6-8): "x.5+ years"
+    if (totalMonths > 5 && totalMonths <= 8) {
+      return `${totalYears}.5+ years`
+    }
+    
+    // Year end (months 9+): "approximately x+1 years"
+    if (totalMonths > 8) {
+      return `approximately ${totalYears + 1} years`
+    }
+  }
+
+  return `${totalYears}y`
+}
+
+// Tests:
+console.log(calculateTotalExperience([
+  { start_date: '2024-09-01', end_date: '2024-10-15' }
+])) // Output: "1m"
+
+console.log(calculateTotalExperience([
+  { start_date: '2022-06-01', end_date: 'present' }
+])) // Output: "2y 5m"
+
+console.log(calculateTotalExperience([
+  { start_date: '2019-02-01', end_date: 'present' }
+])) // Output: "5+ years" or "approximately 6 years" depending on current month
+
+console.log(calculateTotalExperience([
+  { start_date: '2021-03-01', end_date: 'present' }
+])) // Output: "3+ years" or "approximately 3.5 years" depending on current month
+
 // Account Dropdown Component
 function AccountDropdown({ 
   currentUser, 
@@ -2716,14 +2832,6 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
     return matchesSearch && matchesProfession && matchesLanguages
   })
 
-  const calculateExperience = (month?: string, year?: string) => {
-    if (!year) return null
-    const startDate = new Date(`${month || 'January'} 1, ${year}`)
-    const now = new Date()
-    const diffYears = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
-    return diffYears.toFixed(1)
-  }
-
   return (
     <>
       <div className="flex items-center justify-between mb-3">
@@ -2734,7 +2842,8 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
 
       <div className="space-y-2">
         {filteredTherapists.map((therapist: Profile) => {
-          const experience = calculateExperience(therapist.experience_month, therapist.experience_year)
+          // Use the global calculateTotalExperience function
+          const experience = calculateTotalExperience(therapist.work_experience || [])
           const isHovered = hoveredId === therapist.id
           
           return (
@@ -2759,7 +2868,7 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
                     <p className="text-xs text-blue-600 font-medium">
                       {therapist.profession}
                     </p>
-                    {experience && (
+                    {experience !== '0' && (
                       <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">
                         {experience} yrs
                       </span>
@@ -2835,14 +2944,6 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
     addCoordinates()
   }, [therapists])
 
-  const calculateExperience = (month?: string, year?: string) => {
-    if (!year) return null
-    const startDate = new Date(`${month || 'January'} 1, ${year}`)
-    const now = new Date()
-    const diffYears = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
-    return diffYears.toFixed(1)
-  }
-
   return (
     <div className="h-full">
       <MapContainer center={[54.5, -2]} zoom={6} className="h-full w-full">
@@ -2851,7 +2952,8 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
           attribution='&copy; OpenStreetMap'
         />
         {therapistsWithCoords.map(t => {
-          const experience = calculateExperience(t.experience_month, t.experience_year)
+          // Use the global calculateTotalExperience function
+          const experience = calculateTotalExperience(t.work_experience || [])
           
           return t.lat && t.lng && (
             <Marker key={t.id} position={[t.lat, t.lng]}>
@@ -2860,7 +2962,7 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
                   <h3 className="font-semibold text-lg text-gray-900">{t.full_name}</h3>
                   <div className="flex items-center gap-2 mt-1 mb-2">
                     <p className="text-blue-600 font-medium text-sm">{t.profession}</p>
-                    {experience && (
+                    {experience !== '0' && (
                       <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap">
                         {experience} yrs
                       </span>
@@ -2909,7 +3011,6 @@ function ProfileDetailPage({
   connectionRequests,
   onSendConnectionRequest,
   onRemoveConnection
-  // onAcceptConnectionRequest ve onRejectConnectionRequest kaldırıldı
 }: { 
   profileId: string
   onClose: () => void
@@ -3058,27 +3159,6 @@ function ProfileDetailPage({
     }
   }
 
-  const calculateTotalExperience = (workExperience: any[]) => {
-    if (!workExperience || workExperience.length === 0) return '0'
-    
-    let totalMonths = 0
-    
-    workExperience.forEach((exp: any) => {
-      const startDate = exp.start_date ? new Date(exp.start_date + '-01') : null
-      const endDate = exp.end_date?.toLowerCase() === 'present' ? new Date() : 
-                     (exp.end_date ? new Date(exp.end_date + '-01') : null)
-      
-      if (startDate && endDate) {
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-        const diffMonths = Math.ceil(diffTime / (1000 * 60 * 60 * 24 * 30.44))
-        totalMonths += diffMonths
-      }
-    })
-    
-    const totalYears = (totalMonths / 12).toFixed(1)
-    return totalYears
-  }
-
   const handleConnect = async () => {
     if (!currentUserId) {
       alert('Please sign in to connect with therapists')
@@ -3101,7 +3181,6 @@ function ProfileDetailPage({
   const handleMessage = async () => {
     if (!currentUserId || !profile) return
     
-    // Mevcut mesajlaşma fonksiyonunu kullan
     const { data: existingConversations } = await supabase
       .from('conversations')
       .select('*, user1:profiles!user1_id(*), user2:profiles!user2_id(*)')
@@ -3264,7 +3343,7 @@ function ProfileDetailPage({
     )
   }
 
-  const totalExperience = calculateTotalExperience(profile.work_experience || [])
+  const totalExperience = calculateTotalExperience(profile?.work_experience || [])
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -3286,12 +3365,12 @@ function ProfileDetailPage({
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
             <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold flex-shrink-0">
-              {profile.full_name?.charAt(0) || 'T'}
+              {profile?.full_name?.charAt(0) || 'T'}
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{profile.full_name}</h1>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{profile?.full_name}</h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
-                <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile.profession}</p>
+                <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile?.profession}</p>
                 {totalExperience !== '0' && (
                   <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
                     {totalExperience} years total experience
@@ -3434,8 +3513,7 @@ function ProfileDetailPage({
                         />
                         <div className="grid grid-cols-2 gap-2">
                           <input 
-                            type="text"
-                            placeholder="Start Date (e.g., 2020-01)"
+                            type="date"
                             className="px-3 py-2 border border-gray-300 rounded-lg"
                             value={exp.start_date || ''}
                             onChange={(e) => {
@@ -3446,10 +3524,9 @@ function ProfileDetailPage({
                           />
                           <div className="flex gap-2">
                             <input 
-                              type="text"
-                              placeholder={isCurrentJob ? "Present" : "End Date (e.g., 2022-12)"}
+                              type="date"
                               className={`flex-1 px-3 py-2 border border-gray-300 rounded-lg ${isCurrentJob ? 'bg-gray-100' : ''}`}
-                              value={isCurrentJob ? "Present" : (exp.end_date || '')}
+                              value={isCurrentJob ? "" : (exp.end_date || '')}
                               disabled={isCurrentJob}
                               onChange={(e) => {
                                 const updated = [...formData.workExperience]
@@ -3512,8 +3589,8 @@ function ProfileDetailPage({
                 <div className="space-y-4">
                   {profile.work_experience.map((exp: any, index: number) => {
                     const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
-                    const startDate = exp.start_date ? new Date(exp.start_date + '-01') : null
-                    const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date + '-01') : null)
+                    const startDate = exp.start_date ? new Date(exp.start_date + (exp.start_date.length === 7 ? '-01' : '')) : null
+                    const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date + (exp.end_date.length === 7 ? '-01' : '')) : null)
                     
                     let duration = ''
                     if (startDate && endDate) {
