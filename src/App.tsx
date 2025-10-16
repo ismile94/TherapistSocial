@@ -1031,8 +1031,8 @@ const cancelConnectionRequest = async (connectionId: string) => {
             <h1 className="text-xl font-bold text-gray-900">UK Therapist Network</h1>
           </div>
           
-          <div className="flex items-center space-x-4 w-full md:w-auto justify-between md:justify-end">
-            <nav className="flex flex-wrap gap-2">
+          <div className="flex items-center space-x-4 w-full md:w-auto">
+            <nav className="flex flex-wrap items-center gap-2">
               <button
                 onClick={() => {
                   setActiveView('map')
@@ -1069,28 +1069,15 @@ const cancelConnectionRequest = async (connectionId: string) => {
                   <UserPlus className="w-5 h-5" />
                 </button>
               )}
+              {/* Account inline icon button */}
+              <AccountDropdown 
+                currentUser={currentUser}
+                onProfileClick={handleProfileClick}
+                onSettingsClick={handleSettingsClick}
+                onSignOut={handleSignOut}
+                onOpenConnections={() => setIsConnectionsOpen(true)}
+              />
             </nav>
-            
-            {/* Yeni Account Dropdown */}
-            <div className="hidden md:block">
-              <AccountDropdown 
-                currentUser={currentUser}
-                onProfileClick={handleProfileClick}
-                onSettingsClick={handleSettingsClick}
-                onSignOut={handleSignOut}
-                onOpenConnections={() => setIsConnectionsOpen(true)}
-              />
-            </div>
-            {/* Mobile single menu button */}
-            <div className="md:hidden">
-              <AccountDropdown 
-                currentUser={currentUser}
-                onProfileClick={handleProfileClick}
-                onSettingsClick={handleSettingsClick}
-                onSignOut={handleSignOut}
-                onOpenConnections={() => setIsConnectionsOpen(true)}
-              />
-            </div>
           </div>
         </div>
       </header>
