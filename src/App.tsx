@@ -3992,6 +3992,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     password: '',
     profession: '',
     registrationNumber: '',
+    experienceDay: '',
     experienceMonth: '',
     experienceYear: '',
     specialties: [] as string[],
@@ -4023,9 +4024,50 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
   const [showLocationSuggestions, setShowLocationSuggestions] = useState(false)
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
 
+  // Organization auto-complete states
+  const [organizationSearch, setOrganizationSearch] = useState('')
+  const [organizationSuggestions, setOrganizationSuggestions] = useState<string[]>([])
+  const [showOrganizationSuggestions, setShowOrganizationSuggestions] = useState(false)
+  const [activeOrganizationSuggestionIndex, setActiveOrganizationSuggestionIndex] = useState(-1)
+  const [allOrganizations, setAllOrganizations] = useState<string[]>([])
+
   const specialtiesRef = useRef<HTMLDivElement>(null)
   const languagesRef = useRef<HTMLDivElement>(null)
   const locationRef = useRef<HTMLDivElement>(null)
+  const organizationRef = useRef<HTMLDivElement>(null)
+
+  // Tüm organization'ları veritabanından çek
+  useEffect(() => {
+    fetchAllOrganizations()
+  }, [])
+
+  const fetchAllOrganizations = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('work_experience')
+      
+      if (error) {
+        console.error('Error fetching organizations:', error)
+        return
+      }
+
+      const organizations = new Set<string>()
+      data.forEach(profile => {
+        if (profile.work_experience && Array.isArray(profile.work_experience)) {
+          profile.work_experience.forEach((exp: any) => {
+            if (exp.organization && exp.organization.trim()) {
+              organizations.add(exp.organization.trim())
+            }
+          })
+        }
+      })
+      
+      setAllOrganizations(Array.from(organizations).sort())
+    } catch (err) {
+      console.error('Error fetching organizations:', err)
+    }
+  }
 
   useEffect(() => {
     if (userProfile && !editingSection) {
@@ -4036,6 +4078,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         password: '',
         profession: userProfile.profession || '',
         registrationNumber: userProfile.regulator_number || '',
+        experienceDay: userProfile.experience_day || '',
         experienceMonth: userProfile.experience_month || '',
         experienceYear: userProfile.experience_year || '',
         specialties: userProfile.specialties || [],
@@ -4061,6 +4104,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     }
   }, [userProfile, currentUser, editingSection])
 
+  // Tecrübe hesaplama fonksiyonu - gün, ay, yıl ile
   const calculateTotalExperience = (workExperience: any[]) => {
     if (!workExperience || workExperience.length === 0) return '0'
     
@@ -4069,7 +4113,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     workExperience.forEach((exp: any) => {
       const startDate = exp.start_date ? new Date(exp.start_date) : null
       const endDate = exp.end_date?.toLowerCase() === 'present' ? new Date() : 
-                    (exp.end_date ? new Date(exp.end_date) : null)  
+                     (exp.end_date ? new Date(exp.end_date) : null)
       
       if (startDate && endDate) {
         const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
@@ -4080,6 +4124,57 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     
     const totalYears = (totalDays / 365.25).toFixed(1)
     return totalYears
+  }
+
+  // Organization auto-complete fonksiyonları
+  const handleOrganizationSearch = (searchTerm: string, index: number) => {
+    setOrganizationSearch(searchTerm)
+    
+    if (searchTerm.length < 2) {
+      setOrganizationSuggestions([])
+      setShowOrganizationSuggestions(false)
+      return
+    }
+
+    const filtered = allOrganizations.filter(org =>
+      org.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    
+    setOrganizationSuggestions(filtered.slice(0, 5))
+    setShowOrganizationSuggestions(true)
+    setActiveOrganizationSuggestionIndex(-1)
+  }
+
+  const handleOrganizationSelect = (organization: string, index: number) => {
+    const updated = [...formData.workExperience]
+    updated[index].organization = organization
+    setFormData({ ...formData, workExperience: updated })
+    
+    setShowOrganizationSuggestions(false)
+    setOrganizationSearch('')
+    setActiveOrganizationSuggestionIndex(-1)
+  }
+
+  const handleOrganizationKeyDown = (e: React.KeyboardEvent, index: number) => {
+    if (!showOrganizationSuggestions) return
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setActiveOrganizationSuggestionIndex(prev => 
+        prev < organizationSuggestions.length - 1 ? prev + 1 : prev
+      )
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setActiveOrganizationSuggestionIndex(prev => 
+        prev > 0 ? prev - 1 : -1
+      )
+    } else if (e.key === 'Enter' && activeOrganizationSuggestionIndex >= 0) {
+      e.preventDefault()
+      handleOrganizationSelect(organizationSuggestions[activeOrganizationSuggestionIndex], index)
+    } else if (e.key === 'Escape') {
+      setShowOrganizationSuggestions(false)
+      setActiveOrganizationSuggestionIndex(-1)
+    }
   }
 
   const toggleItem = (index: number) => {
@@ -4114,6 +4209,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         updateData.email = formData.email
       } else if (section === 'registration') {
         updateData.regulator_number = formData.registrationNumber
+        updateData.experience_day = formData.experienceDay
         updateData.experience_month = formData.experienceMonth
         updateData.experience_year = formData.experienceYear
       } else if (section === 'specialties') {
@@ -4169,6 +4265,9 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
       if (locationRef.current && !locationRef.current.contains(event.target as Node)) {
         setShowLocationSuggestions(false)
       }
+      if (organizationRef.current && !organizationRef.current.contains(event.target as Node)) {
+        setShowOrganizationSuggestions(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
@@ -4217,6 +4316,11 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
   const languageOptions = [
     'English', 'Turkish', 'Spanish', 'French', 'German', 'Italian',
     'Portuguese', 'Arabic', 'Hindi', 'Urdu', 'Polish', 'Romanian'
+  ]
+
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
   ]
   
   const handleLocationSelect = (suggestion: any) => {
@@ -4338,6 +4442,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
             full_name: fullName,
             profession: formData.profession,
             regulator_number: formData.registrationNumber,
+            experience_day: formData.experienceDay,
             experience_month: formData.experienceMonth,
             experience_year: formData.experienceYear,
             specialties: formData.specialties,
@@ -4636,13 +4741,45 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                             value={formData.registrationNumber}
                             onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
                           />
+                          <div className="grid grid-cols-3 gap-2">
+                            <select
+                              className="px-2 py-2 text-sm border border-gray-300 rounded"
+                              value={formData.experienceDay}
+                              onChange={(e) => setFormData({ ...formData, experienceDay: e.target.value })}
+                            >
+                              <option value="">Day</option>
+                              {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                                <option key={day} value={day}>{day}</option>
+                              ))}
+                            </select>
+                            <select
+                              className="px-2 py-2 text-sm border border-gray-300 rounded"
+                              value={formData.experienceMonth}
+                              onChange={(e) => setFormData({ ...formData, experienceMonth: e.target.value })}
+                            >
+                              <option value="">Month</option>
+                              {months.map(month => (
+                                <option key={month} value={month}>{month}</option>
+                              ))}
+                            </select>
+                            <select
+                              className="px-2 py-2 text-sm border border-gray-300 rounded"
+                              value={formData.experienceYear}
+                              onChange={(e) => setFormData({ ...formData, experienceYear: e.target.value })}
+                            >
+                              <option value="">Year</option>
+                              {Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                                <option key={year} value={year}>{year}</option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       ) : (
                         <>
                           <p className="text-sm font-medium text-gray-900">{userProfile?.regulator_number || 'Not set'}</p>
-                          {(userProfile?.experience_month || userProfile?.experience_year) && (
+                          {(userProfile?.experience_day || userProfile?.experience_month || userProfile?.experience_year) && (
                             <p className="text-xs text-gray-600 mt-1">
-                              Since {userProfile.experience_month} {userProfile.experience_year}
+                              Since {userProfile.experience_day} {userProfile.experience_month} {userProfile.experience_year}
                             </p>
                           )}
                         </>
@@ -4816,21 +4953,50 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                     setFormData({ ...formData, workExperience: updated })
                                   }}
                                 />
-                                <input 
-                                  type="text"
-                                  placeholder="Organization"
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                  value={exp.organization || ''}
-                                  onChange={(e) => {
-                                    const updated = [...formData.workExperience]
-                                    updated[index].organization = e.target.value
-                                    setFormData({ ...formData, workExperience: updated })
-                                  }}
-                                />
-                                <div className="grid grid-cols-2 gap-2">
+                                
+                                {/* Organization Input with Auto-complete */}
+                                <div className="relative" ref={organizationRef}>
                                   <input 
                                     type="text"
-                                    placeholder="Start Date (YYYY-MM)"
+                                    placeholder="Organization"
+                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                    value={exp.organization || ''}
+                                    onChange={(e) => {
+                                      const updated = [...formData.workExperience]
+                                      updated[index].organization = e.target.value
+                                      setFormData({ ...formData, workExperience: updated })
+                                      handleOrganizationSearch(e.target.value, index)
+                                    }}
+                                    onKeyDown={(e) => handleOrganizationKeyDown(e, index)}
+                                    onFocus={() => {
+                                      if (exp.organization) {
+                                        handleOrganizationSearch(exp.organization, index)
+                                      }
+                                    }}
+                                  />
+                                  {showOrganizationSuggestions && organizationSuggestions.length > 0 && (
+                                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                      {organizationSuggestions.map((org, idx) => (
+                                        <div
+                                          key={org}
+                                          className={`px-3 py-2 cursor-pointer ${
+                                            idx === activeOrganizationSuggestionIndex 
+                                              ? 'bg-blue-100 text-blue-800' 
+                                              : 'hover:bg-gray-100'
+                                          }`}
+                                          onClick={() => handleOrganizationSelect(org, index)}
+                                        >
+                                          {org}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-2">
+                                  <input 
+                                    type="date"
+                                    placeholder="Start Date"
                                     className="px-2 py-1 text-sm border border-gray-300 rounded"
                                     value={exp.start_date || ''}
                                     onChange={(e) => {
@@ -4841,10 +5007,10 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                   />
                                   <div className="flex gap-2">
                                     <input 
-                                      type="text"
-                                      placeholder={isCurrentJob ? "Present" : "End Date (YYYY-MM)"}
+                                      type="date"
+                                      placeholder={isCurrentJob ? "Present" : "End Date"}
                                       className={`flex-1 px-2 py-1 text-sm border border-gray-300 rounded ${isCurrentJob ? 'bg-gray-100' : ''}`}
-                                      value={isCurrentJob ? "Present" : (exp.end_date || '')}
+                                      value={isCurrentJob ? "" : (exp.end_date || '')}
                                       disabled={isCurrentJob}
                                       onChange={(e) => {
                                         const updated = [...formData.workExperience]
@@ -4908,22 +5074,28 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                           <div className="space-y-3">
                             {userProfile.work_experience.map((exp: any, index: number) => {
                               const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
-                              const startDate = exp.start_date ? new Date(exp.start_date + '-01') : null
-                              const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date + '-01') : null)
+                              const startDate = exp.start_date ? new Date(exp.start_date) : null
+                              const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date) : null)
                               
                               let duration = ''
                               if (startDate && endDate) {
                                 const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
                                 const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365.25))
                                 const diffMonths = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44))
+                                const diffDays = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 30.44)) / (1000 * 60 * 60 * 24))
                                 
                                 if (diffYears > 0) {
                                   duration = `${diffYears} yr${diffYears > 1 ? 's' : ''}`
                                   if (diffMonths > 0) {
                                     duration += ` ${diffMonths} mo${diffMonths > 1 ? 's' : ''}`
                                   }
-                                } else {
+                                } else if (diffMonths > 0) {
                                   duration = `${diffMonths} mo${diffMonths > 1 ? 's' : ''}`
+                                  if (diffDays > 0) {
+                                    duration += ` ${diffDays} day${diffDays > 1 ? 's' : ''}`
+                                  }
+                                } else {
+                                  duration = `${diffDays} day${diffDays > 1 ? 's' : ''}`
                                 }
                               }
 
@@ -4986,7 +5158,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                     )}
                   </div>
                 </div>
-  
+
                 {/* Specialties Section */}
                 <div 
                   className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -5078,7 +5250,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                     )}
                   </div>
                 </div>
-  
+
                 {/* Languages Section */}
                 <div 
                   className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -5170,7 +5342,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                     )}
                   </div>
                 </div>
-  
+
                 {/* Location Section */}
                 <div 
                   className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -5342,7 +5514,41 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
                     />
                   )}
-  
+
+                  {/* Experience - Gün, Ay, Yıl */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <select
+                      className="px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      value={formData.experienceDay}
+                      onChange={(e) => setFormData({ ...formData, experienceDay: e.target.value })}
+                    >
+                      <option value="">Day</option>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      value={formData.experienceMonth}
+                      onChange={(e) => setFormData({ ...formData, experienceMonth: e.target.value })}
+                    >
+                      <option value="">Month</option>
+                      {months.map(month => (
+                        <option key={month} value={month}>{month}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      value={formData.experienceYear}
+                      onChange={(e) => setFormData({ ...formData, experienceYear: e.target.value })}
+                    >
+                      <option value="">Year</option>
+                      {Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).map(year => (
+                        <option key={year} value={year}>{year}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   <div className="relative" ref={specialtiesRef}>
                     <button 
                       type="button"
