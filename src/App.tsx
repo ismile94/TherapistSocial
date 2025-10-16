@@ -1113,20 +1113,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
                 geocodeLocation={geocodeLocation}
                 onProfileClick={(id: string) => setSelectedProfileId(id)}
               />
-              {/* Floating Filters button on map */}
-              <button
-                onClick={() => {
-                  try {
-                    const evt = new CustomEvent('toggleFiltersDrawer')
-                    window.dispatchEvent(evt)
-                  } catch {}
-                }}
-                className="md:hidden absolute top-3 left-3 z-[500] bg-white/90 backdrop-blur border border-gray-200 shadow-md rounded-full px-3 py-2 flex items-center gap-2 text-gray-700 hover:bg-white"
-                aria-label="Open Filters"
-              >
-                <Filter className="w-4 h-4" />
-                <span className="text-sm">Filters</span>
-              </button>
+              
             </div>
           </>
         ) : activeView === 'community' ? (
@@ -2452,8 +2439,21 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
             placeholder="Search by name, city..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+            className="w-full pl-10 pr-28 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
           />
+          <button
+            onClick={() => {
+              try {
+                const evt = new CustomEvent('toggleFiltersDrawer')
+                window.dispatchEvent(evt)
+              } catch {}
+            }}
+            className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/90 backdrop-blur border border-gray-200 shadow-sm rounded-full px-3 py-1.5 flex items-center gap-2 text-gray-700 hover:bg-white"
+            aria-label="Open Filters"
+          >
+            <Filter className="w-4 h-4" />
+            <span className="text-sm">Filters</span>
+          </button>
         </div>
       </div>
 
