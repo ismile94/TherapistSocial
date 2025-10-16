@@ -163,16 +163,7 @@ function AccountDropdown({
                 <User className="w-4 h-4 mr-2" />
                 Profile
               </button>
-              <button
-                onClick={() => {
-                  onOpenConnections()
-                  setIsOpen(false)
-                }}
-                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Users className="w-4 h-4 mr-2" />
-                Network
-              </button>
+              {/* Network option removed from Account menu; now inline in header */}
               <button
                 onClick={() => {
                   onSettingsClick()
@@ -1068,18 +1059,17 @@ const cancelConnectionRequest = async (connectionId: string) => {
               >
                 <Users className="w-5 h-5" />
               </button>
+              {/* Network inline button */}
+              {currentUser && (
+                <button
+                  onClick={() => setIsConnectionsOpen(true)}
+                  className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                  aria-label="Network"
+                >
+                  <UserPlus className="w-5 h-5" />
+                </button>
+              )}
             </nav>
-            
-            {/* Network Butonu */}
-            {currentUser && (
-              <button
-                onClick={() => setIsConnectionsOpen(true)}
-                className="hidden md:flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
-                aria-label="Network"
-              >
-                <UserPlus className="w-5 h-5" />
-              </button>
-            )}
             
             {/* Yeni Account Dropdown */}
             <div className="hidden md:block">
