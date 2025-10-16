@@ -6,8 +6,10 @@ import {
   Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
   Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
   Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
-  UserPlus, UserCheck, Clock, Settings, Eye, Lock, Bell, Filter
+  UserPlus, UserCheck, Clock, Settings, Eye, Lock, Bell, Filter,
+  Download, Info   // <-- EKLENDİ
 } from 'lucide-react'
+
 
 // Supabase Client
 const supabaseUrl = 'https://ukxcfzcvkmtjtwtrsotb.supabase.co'
@@ -4676,60 +4678,39 @@ function CommunityComponent() {
 
 function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
   const [loading, setLoading] = useState(false)
+  const [cvStyle, setCvStyle] = useState<'modern' | 'professional' | 'creative'>('modern')
 
   const generatePDF = async () => {
     setLoading(true)
     try {
-      // This would integrate with a PDF generation service
-      // For now, we'll create a simple HTML-based CV
-      const cvContent = `
-        <div class="cv">
-          <h1>${userProfile.full_name}</h1>
-          <h2>${userProfile.profession}</h2>
-          ${userProfile.about_me ? `<p>${userProfile.about_me}</p>` : ''}
-          
-          ${userProfile.work_experience?.length > 0 ? `
-          <h3>Work Experience</h3>
-          ${userProfile.work_experience.map((exp: any) => `
-            <div class="experience">
-              <h4>${exp.title} - ${exp.organization}</h4>
-              <p>${exp.start_date} - ${exp.end_date || 'Present'}</p>
-              ${exp.description ? `<p>${exp.description}</p>` : ''}
-            </div>
-          `).join('')}
-          ` : ''}
-          
-          ${userProfile.qualifications?.length > 0 ? `
-          <h3>Qualifications</h3>
-          ${userProfile.qualifications.map((qual: any) => `
-            <div class="qualification">
-              <h4>${qual.title}</h4>
-              <p>${qual.institution} - ${qual.year}</p>
-            </div>
-          `).join('')}
-          ` : ''}
-        </div>
-      `
-
-      // Open print dialog for now - in production, use a library like jsPDF
+      const cvContent = generateCVContent()
       const printWindow = window.open('', '_blank')
-      printWindow?.document.write(`
-        <html>
-          <head>
-            <title>CV - ${userProfile.full_name}</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 40px; }
-              .cv { max-width: 800px; margin: 0 auto; }
-              h1 { color: #2563eb; margin-bottom: 5px; }
-              h2 { color: #4b5563; margin-top: 0; }
-              .experience, .qualification { margin-bottom: 20px; }
-            </style>
-          </head>
-          <body>${cvContent}</body>
-        </html>
-      `)
-      printWindow?.document.close()
-      printWindow?.print()
+      
+      if (printWindow) {
+        printWindow.document.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>CV - ${userProfile.full_name}</title>
+              <meta charset="UTF-8">
+              <style>
+                ${getCVStyles(cvStyle)}
+              </style>
+            </head>
+            <body>
+              <div class="cv-container">
+                ${cvContent}
+              </div>
+            </body>
+          </html>
+        `)
+        printWindow.document.close()
+        
+        // Yazdırma öncesi kısa bir gecikme ekleyelim
+        setTimeout(() => {
+          printWindow.print()
+        }, 500)
+      }
       
     } catch (error) {
       console.error('Error generating CV:', error)
@@ -4738,39 +4719,634 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     setLoading(false)
   }
 
+  const generateCVContent = () => {
+    return `
+      <!-- Header Section -->
+      <header class="cv-header">
+        <div class="header-content">
+          <h1 class="name">${userProfile.full_name || 'Professional Therapist'}</h1>
+          <h2 class="title">${userProfile.profession || 'Therapist'}</h2>
+          <div class="contact-info">
+            ${userProfile.contact_email ? `<div class="contact-item"><span class="icon">✉️</span> ${userProfile.contact_email}</div>` : ''}
+            ${userProfile.phone ? `<div class="contact-item"><span class="icon">📞</span> ${userProfile.phone}</div>` : ''}
+            ${userProfile.city ? `<div class="contact-item"><span class="icon">📍</span> ${userProfile.city}, ${userProfile.county}</div>` : ''}
+            ${userProfile.website ? `<div class="contact-item"><span class="icon">🌐</span> ${userProfile.website}</div>` : ''}
+          </div>
+        </div>
+      </header>
+
+      <!-- Main Content -->
+      <main class="cv-main">
+        <!-- Professional Summary -->
+        ${userProfile.about_me ? `
+        <section class="cv-section">
+          <h3 class="section-title">Professional Summary</h3>
+          <div class="section-content">
+            <p class="summary-text">${formatParagraphs(userProfile.about_me)}</p>
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Work Experience -->
+        ${userProfile.work_experience?.length > 0 ? `
+        <section class="cv-section">
+          <h3 class="section-title">Work Experience</h3>
+          <div class="section-content">
+            ${userProfile.work_experience.map((exp: any) => `
+              <div class="experience-item">
+                <div class="experience-header">
+                  <h4 class="job-title">${exp.title || 'Position'}</h4>
+                  <span class="date-range">${formatDate(exp.start_date)} - ${exp.end_date?.toLowerCase() === 'present' ? 'Present' : formatDate(exp.end_date)}</span>
+                </div>
+                <div class="company">${exp.organization || 'Organization'}</div>
+                ${exp.description ? `
+                  <div class="job-description">
+                    ${formatParagraphs(exp.description)}
+                  </div>
+                ` : ''}
+                ${calculateDuration(exp.start_date, exp.end_date) ? `
+                  <div class="duration">${calculateDuration(exp.start_date, exp.end_date)}</div>
+                ` : ''}
+              </div>
+            `).join('')}
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Qualifications -->
+        ${userProfile.qualifications?.length > 0 ? `
+        <section class="cv-section">
+          <h3 class="section-title">Qualifications & Certifications</h3>
+          <div class="section-content">
+            ${userProfile.qualifications.map((qual: any) => `
+              <div class="qualification-item">
+                <div class="qualification-header">
+                  <h4 class="qualification-title">${qual.title || 'Qualification'}</h4>
+                  <span class="qualification-year">${qual.year || ''}</span>
+                </div>
+                <div class="institution">${qual.institution || 'Institution'}</div>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Specialties -->
+        ${userProfile.specialties?.length > 0 ? `
+        <section class="cv-section">
+          <h3 class="section-title">Areas of Specialization</h3>
+          <div class="section-content">
+            <div class="skills-container">
+              ${userProfile.specialties.map((spec: string) => `
+                <span class="skill-tag">${spec}</span>
+              `).join('')}
+            </div>
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Languages -->
+        ${userProfile.languages?.length > 0 ? `
+        <section class="cv-section">
+          <h3 class="section-title">Languages</h3>
+          <div class="section-content">
+            <div class="languages-container">
+              ${userProfile.languages.map((lang: string) => `
+                <span class="language-item">${lang}</span>
+              `).join('')}
+            </div>
+          </div>
+        </section>
+        ` : ''}
+
+        <!-- Additional Information -->
+        <section class="cv-section">
+          <h3 class="section-title">Additional Information</h3>
+          <div class="section-content">
+            <div class="additional-info">
+              ${userProfile.offers_remote ? '<div class="info-item">✅ Available for remote sessions</div>' : ''}
+              ${userProfile.regulator_number ? `<div class="info-item">Professional Registration: ${userProfile.regulator_number}</div>` : ''}
+              <div class="info-item">Total Experience: ${calculateTotalExperience(userProfile.work_experience || [])}</div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- Footer -->
+      <footer class="cv-footer">
+        <p>Generated by UK Therapist Network • ${new Date().toLocaleDateString()}</p>
+      </footer>
+    `
+  }
+
+  const getCVStyles = (style: string) => {
+    const baseStyles = `
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        font-family: 'Inter', sans-serif;
+        line-height: 1.6;
+        color: #333;
+        background: #fff;
+      }
+      
+      .cv-container {
+        max-width: 210mm;
+        margin: 0 auto;
+        padding: 20mm;
+        background: white;
+        box-shadow: 0 0 20px rgba(0,0,0,0.1);
+      }
+      
+      .cv-header {
+        border-bottom: 3px solid #2563eb;
+        padding-bottom: 1.5rem;
+        margin-bottom: 2rem;
+      }
+      
+      .header-content {
+        text-align: center;
+      }
+      
+      .name {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.025em;
+      }
+      
+      .title {
+        font-size: 1.25rem;
+        font-weight: 500;
+        color: #2563eb;
+        margin-bottom: 1rem;
+      }
+      
+      .contact-info {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 1rem;
+        font-size: 0.9rem;
+        color: #64748b;
+      }
+      
+      .contact-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+      }
+      
+      .icon {
+        font-size: 0.8rem;
+      }
+      
+      .cv-section {
+        margin-bottom: 2rem;
+      }
+      
+      .section-title {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 1rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 2px solid #e2e8f0;
+        position: relative;
+      }
+      
+      .section-title::after {
+        content: '';
+        position: absolute;
+        bottom: -2px;
+        left: 0;
+        width: 60px;
+        height: 2px;
+        background: #2563eb;
+      }
+      
+      .section-content {
+        padding-left: 1rem;
+      }
+      
+      .experience-item {
+        margin-bottom: 1.5rem;
+        padding: 1rem;
+        background: #f8fafc;
+        border-radius: 8px;
+        border-left: 4px solid #2563eb;
+      }
+      
+      .experience-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.5rem;
+      }
+      
+      .job-title {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      
+      .date-range {
+        font-size: 0.9rem;
+        color: #64748b;
+        font-weight: 500;
+        white-space: nowrap;
+      }
+      
+      .company {
+        font-size: 1rem;
+        color: #2563eb;
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+      }
+      
+      .job-description {
+        color: #475569;
+        line-height: 1.6;
+        margin-bottom: 0.5rem;
+      }
+      
+      .duration {
+        font-size: 0.85rem;
+        color: #94a3b8;
+        font-style: italic;
+      }
+      
+      .qualification-item {
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+      }
+      
+      .qualification-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 0.25rem;
+      }
+      
+      .qualification-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: #1e293b;
+      }
+      
+      .qualification-year {
+        font-size: 0.9rem;
+        color: #64748b;
+        font-weight: 500;
+      }
+      
+      .institution {
+        color: #2563eb;
+        font-size: 0.95rem;
+      }
+      
+      .skills-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+      }
+      
+      .skill-tag {
+        background: #dbeafe;
+        color: #1e40af;
+        padding: 0.4rem 0.8rem;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        font-weight: 500;
+        border: 1px solid #bfdbfe;
+      }
+      
+      .languages-container {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+      
+      .language-item {
+        background: #f1f5f9;
+        color: #475569;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        font-size: 0.9rem;
+        font-weight: 500;
+      }
+      
+      .additional-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+      }
+      
+      .info-item {
+        color: #475569;
+        font-size: 0.95rem;
+      }
+      
+      .summary-text {
+        color: #475569;
+        line-height: 1.7;
+        font-size: 1rem;
+      }
+      
+      .cv-footer {
+        margin-top: 3rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e2e8f0;
+        text-align: center;
+        color: #94a3b8;
+        font-size: 0.85rem;
+      }
+      
+      /* Print Styles */
+      @media print {
+        body {
+          background: white !important;
+        }
+        
+        .cv-container {
+          box-shadow: none;
+          padding: 0;
+          max-width: 100%;
+        }
+        
+        .experience-item {
+          break-inside: avoid;
+        }
+        
+        .qualification-item {
+          break-inside: avoid;
+        }
+      }
+    `
+
+    const styleVariants = {
+      modern: `
+        .cv-header {
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          padding: 2rem;
+          margin: -20mm -20mm 2rem -20mm;
+        }
+        
+        .name, .title, .contact-info {
+          color: white;
+        }
+        
+        .section-title {
+          color: #374151;
+        }
+      `,
+      
+      professional: `
+        .cv-header {
+          background: #1e293b;
+          color: white;
+          padding: 2rem;
+          margin: -20mm -20mm 2rem -20mm;
+        }
+        
+        .name {
+          color: white;
+        }
+        
+        .title {
+          color: #cbd5e1;
+        }
+        
+        .contact-info {
+          color: #cbd5e1;
+        }
+        
+        .section-title {
+          color: #1e293b;
+          border-bottom-color: #cbd5e1;
+        }
+      `,
+      
+      creative: `
+        .cv-header {
+          background: linear-gradient(45deg, #ec4899, #8b5cf6);
+          color: white;
+          padding: 2rem;
+          margin: -20mm -20mm 2rem -20mm;
+          border-bottom: none;
+        }
+        
+        .name, .title, .contact-info {
+          color: white;
+        }
+        
+        .section-title {
+          color: #7c3aed;
+          border-bottom-color: #ddd6fe;
+        }
+        
+        .experience-item {
+          border-left-color: #8b5cf6;
+        }
+      `
+    }
+
+    return baseStyles + (styleVariants[style as keyof typeof styleVariants] || styleVariants.modern)
+  }
+
+  // Yardımcı fonksiyonlar
+  const formatParagraphs = (text: string) => {
+    if (!text) return ''
+    // Paragraf yapısını koru ve <br> ile değiştir
+    return text.split('\n').filter(para => para.trim()).map(para => 
+      `<p style="margin-bottom: 0.75rem;">${para.trim()}</p>`
+    ).join('')
+  }
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return ''
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('en-GB', { 
+        year: 'numeric', 
+        month: 'long' 
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+  const calculateDuration = (startDate: string, endDate: string) => {
+    if (!startDate) return ''
+    
+    const start = new Date(startDate)
+    const end = endDate?.toLowerCase() === 'present' ? new Date() : new Date(endDate)
+    
+    if (isNaN(start.getTime())) return ''
+    
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365.25))
+    const diffMonths = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44))
+    
+    if (diffYears > 0) {
+      return `${diffYears} year${diffYears > 1 ? 's' : ''} ${diffMonths > 0 ? `${diffMonths} month${diffMonths > 1 ? 's' : ''}` : ''}`.trim()
+    } else {
+      return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`
+    }
+  }
+
+  const previewCV = () => {
+    const cvContent = generateCVContent()
+    const previewWindow = window.open('', '_blank')
+    
+    if (previewWindow) {
+      previewWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>CV Preview - ${userProfile.full_name}</title>
+            <meta charset="UTF-8">
+            <style>
+              ${getCVStyles(cvStyle)}
+              body { 
+                background: #f8fafc; 
+                padding: 2rem;
+                display: flex;
+                justify-content: center;
+              }
+              .cv-container {
+                box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+                max-width: 210mm;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="cv-container">
+              ${cvContent}
+            </div>
+          </body>
+        </html>
+      `)
+      previewWindow.document.close()
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl p-6">
-        <div className="flex justify-between items-center mb-6">
+      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+        <div className="flex justify-between items-center p-6 border-b">
           <h2 className="text-2xl font-bold text-gray-900">CV Maker</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="space-y-4">
-          <p className="text-gray-600">
-            Generate a professional CV based on your profile information.
-          </p>
-          
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold mb-2">Included Information:</h3>
-            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
-              <li>Personal Information & Contact Details</li>
-              <li>Professional Summary</li>
-              <li>Work Experience ({userProfile.work_experience?.length || 0} positions)</li>
-              <li>Qualifications ({userProfile.qualifications?.length || 0} items)</li>
-              <li>Specialties & Languages</li>
-            </ul>
+        <div className="p-6 overflow-y-auto max-h-[70vh]">
+          {/* Style Selection */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Choose CV Style</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {[
+                { id: 'modern', name: 'Modern', color: 'blue' },
+                { id: 'professional', name: 'Professional', color: 'gray' },
+                { id: 'creative', name: 'Creative', color: 'purple' }
+              ].map((style) => (
+                <button
+                  key={style.id}
+                  onClick={() => setCvStyle(style.id as any)}
+                  className={`p-4 border-2 rounded-lg text-left transition-all ${
+                    cvStyle === style.id
+                      ? `border-${style.color}-500 bg-${style.color}-50`
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full bg-${style.color}-500 mb-2`}></div>
+                  <span className="font-medium text-gray-900">{style.name}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <button
-            onClick={generatePDF}
-            disabled={loading}
-            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-          >
-            {loading ? 'Generating CV...' : 'Generate & Download CV'}
-          </button>
+          {/* Included Information */}
+          <div className="bg-gray-50 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold mb-3 text-gray-900">Included Information:</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Personal & Contact Information</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Professional Summary</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Work Experience ({userProfile.work_experience?.length || 0} positions)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Qualifications ({userProfile.qualifications?.length || 0})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Specialties ({userProfile.specialties?.length || 0})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Check className="w-4 h-4 text-green-500" />
+                <span>Languages ({userProfile.languages?.length || 0})</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={previewCV}
+              className="flex-1 py-3 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+            >
+              <Eye className="w-5 h-5" />
+              Preview CV
+            </button>
+            <button
+              onClick={generatePDF}
+              disabled={loading}
+              className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="w-5 h-5" />
+                  Download PDF
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Tips */}
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
+              <Info className="w-4 h-4" />
+              Pro Tip
+            </h4>
+            <p className="text-sm text-blue-700">
+              For best results, use the "Print" dialog and save as PDF. Choose "A4" paper size and disable headers/footers for a clean look.
+            </p>
+          </div>
         </div>
       </div>
     </div>
