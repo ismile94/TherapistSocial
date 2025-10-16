@@ -1029,14 +1029,14 @@ const cancelConnectionRequest = async (connectionId: string) => {
             <h1 className="text-xl font-bold text-gray-900">UK Therapist Network</h1>
           </div>
           
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-4 w-full md:w-auto justify-between md:justify-end">
             <nav className="flex flex-wrap gap-2">
               <button
                 onClick={() => {
                   setActiveView('map')
                   setSelectedProfileId(null)
                 }}
-                className={`flex items-center px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
+              className={`flex items-center justify-center flex-1 min-w-[140px] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
                   activeView === 'map' && !selectedProfileId
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -1050,7 +1050,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
                   setActiveView('community')
                   setSelectedProfileId(null)
                 }}
-                className={`flex items-center px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
+              className={`flex items-center justify-center flex-1 min-w-[140px] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
                   activeView === 'community' && !selectedProfileId
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -1065,7 +1065,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
             {currentUser && (
               <button
                 onClick={() => setIsConnectionsOpen(true)}
-                className="flex items-center px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                className="hidden md:flex items-center px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
               >
                 <Users className="w-4 h-4 mr-2" />
                 Network
@@ -1073,12 +1073,14 @@ const cancelConnectionRequest = async (connectionId: string) => {
             )}
             
             {/* Yeni Account Dropdown */}
+            <div className="hidden md:block">
             <AccountDropdown 
               currentUser={currentUser}
               onProfileClick={handleProfileClick}
               onSettingsClick={handleSettingsClick}
               onSignOut={handleSignOut}
             />
+            </div>
           </div>
         </div>
       </header>
@@ -2383,6 +2385,14 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
   const [isLanguagesOpen, setIsLanguagesOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
 
+  const calculateExperience = (month?: string, year?: string) => {
+    if (!year) return null
+    const startDate = new Date(`${month || 'January'} 1, ${year}`)
+    const now = new Date()
+    const diffYears = (now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25)
+    return diffYears.toFixed(1)
+  }
+
   const professions = [
     'Physiotherapist',
     'Occupational Therapist',
@@ -2596,6 +2606,42 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
                   </div>
                 </>
               )}
+            </div>
+            {/* Results inside collapsible */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-semibold text-gray-900">Results ({therapists.length})</h3>
+              </div>
+              <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                {therapists.map((therapist: Profile) => {
+                  const experience = calculateExperience(therapist.experience_month, therapist.experience_year)
+                  return (
+                    <div
+                      key={therapist.id}
+                      onClick={() => onProfileClick(therapist.id)}
+                      className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all cursor-pointer"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                          {therapist.full_name?.charAt(0) || 'T'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-sm text-gray-900">{therapist.full_name}</h4>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <p className="text-xs text-blue-600 font-medium">{therapist.profession}</p>
+                            {experience && (
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">{experience} yrs</span>
+                            )}
+                          </div>
+                          {therapist.city && (
+                            <p className="text-xs text-gray-500 mt-1">📍 {therapist.city}, {therapist.county}</p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
         )}
@@ -3198,24 +3244,24 @@ function ProfileDetailPage({
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {/* Profile Header Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-6">
-          <div className="flex items-start gap-6">
-            <div className="w-32 h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-5xl font-bold flex-shrink-0">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 mb-6">
+          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold flex-shrink-0">
               {profile.full_name?.charAt(0) || 'T'}
             </div>
             <div className="flex-1">
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{profile.full_name}</h1>
-              <div className="flex items-center gap-3 mb-4">
-                <p className="text-xl text-blue-600 font-medium">{profile.profession}</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{profile.full_name}</h1>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
+                <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile.profession}</p>
                 {totalExperience !== '0' && (
-                  <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
+                  <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
                     {totalExperience} years total experience
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-gray-600 mb-4">
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
                   <span>{profile.city}, {profile.county}</span>
@@ -3234,11 +3280,11 @@ function ProfileDetailPage({
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Left Column - Main Info */}
-          <div className="col-span-2 space-y-6">
+          <div className="md:col-span-2 space-y-4 sm:space-y-6">
             {/* About Me */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative group">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <User className="w-5 h-5 text-blue-600" />
@@ -3287,7 +3333,7 @@ function ProfileDetailPage({
             </div>
 
             {/* Work Experience */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative group">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6 relative group">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <Briefcase className="w-5 h-5 text-blue-600" />
