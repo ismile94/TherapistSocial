@@ -143,11 +143,10 @@ function AccountDropdown({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+        className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+        aria-label="Account"
       >
-        <User className="w-4 h-4" />
-        <span>Account</span>
-        <ChevronDown className={`w-4 h-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <User className="w-5 h-5" />
       </button>
 
       {isOpen && (
@@ -1076,8 +1075,9 @@ const cancelConnectionRequest = async (connectionId: string) => {
               <button
                 onClick={() => setIsConnectionsOpen(true)}
                 className="hidden md:flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                aria-label="Network"
               >
-                <Users className="w-5 h-5" />
+                <UserPlus className="w-5 h-5" />
               </button>
             )}
             
@@ -1428,20 +1428,36 @@ function ConnectionsManager({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
-        <div className="p-6 border-b">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-3xl sm:max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl">
+        <div className="p-4 sm:p-6 border-b">
           <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-900">My Network</h2>
+            <h2 className="text-lg sm:text-2xl font-bold text-gray-900">My Network</h2>
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
           </div>
-          
-          <div className="flex mt-4 space-x-1">
+          {/* Search inside modal */}
+          <div className="mt-3 sm:mt-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="text"
+                placeholder="Search connections, requests, suggested..."
+                onChange={(e) => {
+                  const q = e.target.value.toLowerCase()
+                  // Simple client-side filter by dispatching a custom event; list sections will listen or we can just rely on built-in maps below
+                  window.dispatchEvent(new CustomEvent('networkSearch', { detail: { query: q } }))
+                }}
+                className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="flex mt-3 sm:mt-4 space-x-1">
             <button
               onClick={() => setActiveTab('connections')}
-              className={`px-4 py-2 rounded-lg font-medium ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium ${
                 activeTab === 'connections'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:text-gray-900'
@@ -1451,7 +1467,7 @@ function ConnectionsManager({
             </button>
             <button
               onClick={() => setActiveTab('requests')}
-              className={`px-4 py-2 rounded-lg font-medium ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium ${
                 activeTab === 'requests'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:text-gray-900'
@@ -1461,7 +1477,7 @@ function ConnectionsManager({
             </button>
             <button
               onClick={() => setActiveTab('suggested')}
-              className={`px-4 py-2 rounded-lg font-medium ${
+              className={`px-3 sm:px-4 py-2 rounded-lg text-sm sm:text-base font-medium ${
                 activeTab === 'suggested'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:text-gray-900'
@@ -1498,7 +1514,7 @@ function ConnectionsManager({
           )}
         </div>
 
-        <div className="overflow-y-auto max-h-[60vh] p-6">
+        <div className="overflow-y-auto max-h-[70vh] p-4 sm:p-6">
           {activeTab === 'connections' && (
             <div className="space-y-4">
               {connections.map(connection => {
@@ -1506,17 +1522,17 @@ function ConnectionsManager({
                 return (
                   <div 
                     key={connection.id} 
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                     onClick={() => otherUser?.id && handleProfileClick(otherUser.id)}
                   >
                     <div className="flex items-center space-x-3 flex-1">
-                      <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
                         {otherUser?.full_name?.charAt(0) || 'U'}
                       </div>
                       <div className="flex-1">
-                        <h3 className="font-semibold text-gray-900">{otherUser?.full_name}</h3>
-                        <p className="text-sm text-gray-600">{otherUser?.profession}</p>
-                        <p className="text-xs text-gray-500">{otherUser?.city}, {otherUser?.county}</p>
+                        <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{otherUser?.full_name}</h3>
+                        <p className="text-xs sm:text-sm text-gray-600">{otherUser?.profession}</p>
+                        <p className="text-[11px] sm:text-xs text-gray-500">{otherUser?.city}, {otherUser?.county}</p>
                       </div>
                     </div>
                     <button
@@ -1524,7 +1540,7 @@ function ConnectionsManager({
                         e.stopPropagation()
                         handleRemoveConnection(connection.id)
                       }}
-                      className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                      className="px-2 sm:px-3 py-1 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
                     >
                       Remove
                     </button>
@@ -1542,29 +1558,29 @@ function ConnectionsManager({
               {connectionRequests.map(request => (
                 <div 
                   key={request.id} 
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => request.sender?.id && handleProfileClick(request.sender.id)}
                 >
                   <div className="flex items-center space-x-3 flex-1">
-                    <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
                       {request.sender?.full_name?.charAt(0) || 'U'}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{request.sender?.full_name}</h3>
-                      <p className="text-sm text-gray-600">{request.sender?.profession}</p>
-                      <p className="text-xs text-gray-500">{request.sender?.city}, {request.sender?.county}</p>
+                      <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{request.sender?.full_name}</h3>
+                      <p className="text-xs sm:text-sm text-gray-600">{request.sender?.profession}</p>
+                      <p className="text-[11px] sm:text-xs text-gray-500">{request.sender?.city}, {request.sender?.county}</p>
                     </div>
                   </div>
                   <div className="flex space-x-2" onClick={(e) => e.stopPropagation()}>
                     <button
                       onClick={() => handleAcceptRequest(request.id)}
-                      className="px-3 py-1 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
+                      className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-green-600 text-white rounded-lg hover:bg-green-700"
                     >
                       Accept
                     </button>
                     <button
                       onClick={() => handleRejectRequest(request.id)}
-                      className="px-3 py-1 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
+                      className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-red-600 text-white rounded-lg hover:bg-red-700"
                     >
                       Reject
                     </button>
@@ -1582,17 +1598,17 @@ function ConnectionsManager({
               {sentRequests.map(request => (
                 <div 
                   key={request.id} 
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => request.receiver?.id && handleProfileClick(request.receiver.id)}
                 >
                   <div className="flex items-center space-x-3 flex-1">
-                    <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
                       {request.receiver?.full_name?.charAt(0) || 'U'}
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900">{request.receiver?.full_name}</h3>
-                      <p className="text-sm text-gray-600">{request.receiver?.profession}</p>
-                      <p className="text-xs text-gray-500">{request.receiver?.city}, {request.receiver?.county}</p>
+                      <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{request.receiver?.full_name}</h3>
+                      <p className="text-xs sm:text-sm text-gray-600">{request.receiver?.profession}</p>
+                      <p className="text-[11px] sm:text-xs text-gray-500">{request.receiver?.city}, {request.receiver?.county}</p>
                     </div>
                   </div>
                   <button
@@ -1600,7 +1616,7 @@ function ConnectionsManager({
                       e.stopPropagation()
                       handleCancelRequest(request.id)
                     }}
-                    className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                    className="px-2 sm:px-3 py-1 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
                   >
                     Cancel
                   </button>
@@ -1623,17 +1639,17 @@ function ConnectionsManager({
                   {suggested.map(profile => (
                     <div 
                       key={profile.id} 
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
                       onClick={() => handleProfileClick(profile.id)}
                     >
                       <div className="flex items-center space-x-3 flex-1">
-                        <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
                           {profile.full_name?.charAt(0) || 'U'}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900">{profile.full_name}</h3>
-                          <p className="text-sm text-gray-600">{profile.profession}</p>
-                          <p className="text-xs text-gray-500">{profile.city}, {profile.county}</p>
+                          <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{profile.full_name}</h3>
+                          <p className="text-xs sm:text-sm text-gray-600">{profile.profession}</p>
+                          <p className="text-[11px] sm:text-xs text-gray-500">{profile.city}, {profile.county}</p>
                         </div>
                       </div>
                       <button
@@ -1641,7 +1657,7 @@ function ConnectionsManager({
                           e.stopPropagation()
                           handleSendRequest(profile.id)
                         }}
-                        className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                        className="px-2 sm:px-3 py-1 text-xs sm:text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                       >
                         Connect
                       </button>
