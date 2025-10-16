@@ -6,7 +6,7 @@ import {
   Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
   Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
   Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
-  UserPlus, UserCheck, Clock, Settings, Eye, Lock, Bell
+  UserPlus, UserCheck, Clock, Settings, Eye, Lock, Bell, Filter
 } from 'lucide-react'
 
 // Supabase Client
@@ -1113,6 +1113,20 @@ const cancelConnectionRequest = async (connectionId: string) => {
                 geocodeLocation={geocodeLocation}
                 onProfileClick={(id: string) => setSelectedProfileId(id)}
               />
+              {/* Floating Filters button on map */}
+              <button
+                onClick={() => {
+                  try {
+                    const evt = new CustomEvent('toggleFiltersDrawer')
+                    window.dispatchEvent(evt)
+                  } catch {}
+                }}
+                className="md:hidden absolute top-3 left-3 z-[500] bg-white/90 backdrop-blur border border-gray-200 shadow-md rounded-full px-3 py-2 flex items-center gap-2 text-gray-700 hover:bg-white"
+                aria-label="Open Filters"
+              >
+                <Filter className="w-4 h-4" />
+                <span className="text-sm">Filters</span>
+              </button>
             </div>
           </>
         ) : activeView === 'community' ? (
@@ -2397,6 +2411,13 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
   const [isProfessionOpen, setIsProfessionOpen] = useState(false)
   const [isLanguagesOpen, setIsLanguagesOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
+  const drawerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = () => setIsFiltersExpanded(prev => !prev)
+    window.addEventListener('toggleFiltersDrawer', handler as any)
+    return () => window.removeEventListener('toggleFiltersDrawer', handler as any)
+  }, [])
 
   const calculateExperience = (month?: string, year?: string) => {
     if (!year) return null
@@ -2447,7 +2468,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
         </button>
 
         {isFiltersExpanded && (
-          <div className="fixed inset-0 z-50 md:static md:z-auto">
+          <div className="fixed inset-0 z-50 md:static md:z-auto" ref={drawerRef}>
             <div className="absolute inset-0 bg-black/40 md:hidden" onClick={() => setIsFiltersExpanded(false)}></div>
             <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85%] bg-white shadow-xl md:shadow-none md:relative md:w-auto px-4 pb-4 pt-16 md:pt-0 space-y-3 overflow-y-auto">
             {/* Profession Filter - Compact */}
