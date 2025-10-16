@@ -320,9 +320,102 @@ function AccountDropdown({
   )
 }
 
-// Settings Component
+function MobileBottomNav({ 
+  activeView, 
+  setActiveView, 
+  setSelectedProfileId, 
+  setIsConnectionsOpen, 
+  setIsAuthModalOpen, 
+  currentUser,
+  unreadMessagesCount,
+  setIsMessagesOverlayOpen
+}: { 
+  activeView: string
+  setActiveView: (view: 'map' | 'community') => void
+  setSelectedProfileId: (id: string | null) => void
+  setIsConnectionsOpen: (open: boolean) => void
+  setIsAuthModalOpen: (open: boolean) => void
+  currentUser: any
+  unreadMessagesCount: number
+  setIsMessagesOverlayOpen: (open: boolean) => void
+}) {
+  return (
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around items-center p-2 z-40 md:hidden">
+      <button
+        onClick={() => {
+          setActiveView('map')
+          setSelectedProfileId(null)
+        }}
+        className={`flex flex-col items-center p-2 ${activeView === 'map' ? 'text-blue-600' : 'text-gray-600'}`}
+      >
+        <MapPin className="w-5 h-5" />
+        <span className="text-xs mt-1">Map</span>
+      </button>
+      
+      <button
+        onClick={() => {
+          setActiveView('community')
+          setSelectedProfileId(null)
+        }}
+        className={`flex flex-col items-center p-2 ${activeView === 'community' ? 'text-blue-600' : 'text-gray-600'}`}
+      >
+        <Users className="w-5 h-5" />
+        <span className="text-xs mt-1">Community</span>
+      </button>
+
+      <button
+        onClick={() => setIsMessagesOverlayOpen(true)}
+        className="flex flex-col items-center p-2 text-gray-600 relative"
+      >
+        <MessageSquare className="w-5 h-5" />
+        <span className="text-xs mt-1">Messages</span>
+        {unreadMessagesCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+            {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+          </span>
+        )}
+      </button>
+
+      {currentUser && (
+        <button
+          onClick={() => setIsConnectionsOpen(true)}
+          className="flex flex-col items-center p-2 text-gray-600"
+        >
+          <UserPlus className="w-5 h-5" />
+          <span className="text-xs mt-1">Network</span>
+        </button>
+      )}
+
+      <button
+        onClick={() => setIsAuthModalOpen(true)}
+        className="flex flex-col items-center p-2 text-gray-600"
+      >
+        <User className="w-5 h-5" />
+        <span className="text-xs mt-1">Account</span>
+      </button>
+    </div>
+  )
+}
+
 function SettingsComponent({ onClose }: { onClose: () => void }) {
   const [activeSection, setActiveSection] = useState<'account' | 'security' | 'visibility' | 'privacy' | 'notifications'>('account')
+  const [settings, setSettings] = useState({
+    email_notifications: true,
+    push_notifications: true,
+    profile_visibility: 'public',
+    language: 'english',
+    timezone: 'Europe/London',
+    email_connection_requests: true,
+    email_messages: true,
+    email_community_posts: false,
+    push_messages: true,
+    push_connection_activity: false,
+    two_factor_enabled: false,
+    data_export_requested: false
+  })
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [currentUser, setCurrentUser] = useState<any>(null)
 
   const sections = [
     { id: 'account', name: 'Account preferences', icon: Settings },
@@ -331,6 +424,212 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     { id: 'privacy', name: 'Data privacy', icon: ShieldAlert },
     { id: 'notifications', name: 'Notifications', icon: Bell }
   ]
+
+  useEffect(() => {
+    initializeUser()
+    loadSettings()
+  }, [])
+
+  const initializeUser = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUser(user)
+  }
+
+  const loadSettings = async () => {
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
+    try {
+      // Try to get user settings from database
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+      if (!error && data) {
+        setSettings({
+          email_notifications: data.email_notifications ?? true,
+          push_notifications: data.push_notifications ?? true,
+          profile_visibility: data.profile_visibility || 'public',
+          language: data.language || 'english',
+          timezone: data.timezone || 'Europe/London',
+          email_connection_requests: data.email_connection_requests ?? true,
+          email_messages: data.email_messages ?? true,
+          email_community_posts: data.email_community_posts ?? false,
+          push_messages: data.push_messages ?? true,
+          push_connection_activity: data.push_connection_activity ?? false,
+          two_factor_enabled: data.two_factor_enabled ?? false,
+          data_export_requested: data.data_export_requested ?? false
+        })
+      }
+    } catch (err) {
+      console.error('Error loading settings:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const saveSettings = async (updates: Partial<typeof settings>) => {
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      setSaving(false)
+      return
+    }
+
+    try {
+      const newSettings = { ...settings, ...updates }
+      
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert({
+          id: user.id,
+          ...newSettings,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'id'
+        })
+
+      if (error) {
+        console.error('Error saving settings:', error)
+        alert('Error saving settings. Please try again.')
+      } else {
+        setSettings(newSettings)
+        // Show success feedback
+        const successEvent = new CustomEvent('showToast', {
+          detail: { message: 'Settings saved successfully!', type: 'success' }
+        })
+        window.dispatchEvent(successEvent)
+      }
+    } catch (err) {
+      console.error('Error saving settings:', err)
+      alert('Error saving settings. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleChangePassword = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    const { error } = await supabase.auth.resetPasswordForEmail(user.email!, {
+      redirectTo: `${window.location.origin}/update-password`,
+    })
+
+    if (error) {
+      alert('Error sending password reset email. Please try again.')
+    } else {
+      alert('Password reset email sent! Please check your inbox.')
+    }
+  }
+
+  const handleEnable2FA = async () => {
+    // This would integrate with a proper 2FA service
+    alert('Two-factor authentication setup would be implemented here with a proper authentication service.')
+  }
+
+  const handleRequestDataExport = async () => {
+    setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      setSaving(false)
+      return
+    }
+
+    try {
+      // In a real app, this would trigger a backend process to prepare data export
+      await saveSettings({ data_export_requested: true })
+      alert('Data export requested! You will receive an email with your data within 24 hours.')
+    } catch (err) {
+      console.error('Error requesting data export:', err)
+      alert('Error requesting data export. Please try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!confirm('Are you sure you want to delete your account? This action cannot be undone and all your data will be permanently lost.')) {
+      return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    try {
+      // First, delete user data from profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id)
+
+      if (profileError) {
+        console.error('Error deleting profile:', profileError)
+      }
+
+      // Then delete user settings
+      const { error: settingsError } = await supabase
+        .from('user_settings')
+        .delete()
+        .eq('id', user.id)
+
+      if (settingsError) {
+        console.error('Error deleting settings:', settingsError)
+      }
+
+      // Finally, delete the auth user
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.id)
+
+      if (authError) {
+        console.error('Error deleting auth user:', authError)
+        alert('Error deleting account. Please contact support.')
+      } else {
+        alert('Account deleted successfully. You will be signed out.')
+        onClose()
+        // Trigger sign out
+        await supabase.auth.signOut()
+        window.location.reload()
+      }
+    } catch (err) {
+      console.error('Error deleting account:', err)
+      alert('Error deleting account. Please contact support.')
+    }
+  }
+
+  const languages = [
+    { value: 'english', label: 'English' },
+    { value: 'turkish', label: 'Turkish' },
+    { value: 'spanish', label: 'Spanish' },
+    { value: 'french', label: 'French' },
+    { value: 'german', label: 'German' }
+  ]
+
+  const timezones = [
+    { value: 'Europe/London', label: '(GMT+00:00) London' },
+    { value: 'Europe/Istanbul', label: '(GMT+03:00) Istanbul' },
+    { value: 'America/New_York', label: '(GMT-05:00) New York' },
+    { value: 'Europe/Paris', label: '(GMT+01:00) Paris' },
+    { value: 'Asia/Dubai', label: '(GMT+04:00) Dubai' }
+  ]
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-6xl h-[80vh] overflow-hidden flex items-center justify-center">
+          <div className="animate-spin h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -381,18 +680,34 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Language
                       </label>
-                      <select className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2">
-                        <option>English</option>
-                        <option>Turkish</option>
+                      <select 
+                        className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2"
+                        value={settings.language}
+                        onChange={(e) => saveSettings({ language: e.target.value })}
+                        disabled={saving}
+                      >
+                        {languages.map(lang => (
+                          <option key={lang.value} value={lang.value}>
+                            {lang.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Time Zone
                       </label>
-                      <select className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2">
-                        <option>(GMT+00:00) London</option>
-                        <option>(GMT+03:00) Istanbul</option>
+                      <select 
+                        className="w-full max-w-xs border border-gray-300 rounded-lg px-3 py-2"
+                        value={settings.timezone}
+                        onChange={(e) => saveSettings({ timezone: e.target.value })}
+                        disabled={saving}
+                      >
+                        {timezones.map(tz => (
+                          <option key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </option>
+                        ))}
                       </select>
                     </div>
                   </div>
@@ -401,13 +716,25 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Communication Preferences</h4>
                   <div className="space-y-3">
-                    <label className="flex items-center">
-                      <input type="checkbox" className="rounded border-gray-300 mr-2" defaultChecked />
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">Email notifications</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_notifications}
+                        onChange={(e) => saveSettings({ email_notifications: e.target.checked })}
+                        disabled={saving}
+                      />
                     </label>
-                    <label className="flex items-center">
-                      <input type="checkbox" className="rounded border-gray-300 mr-2" defaultChecked />
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">Push notifications</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_notifications}
+                        onChange={(e) => saveSettings({ push_notifications: e.target.checked })}
+                        disabled={saving}
+                      />
                     </label>
                   </div>
                 </div>
@@ -421,7 +748,11 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
               <div className="space-y-4">
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Password</h4>
-                  <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                  <button 
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                    onClick={handleChangePassword}
+                    disabled={saving}
+                  >
                     Change Password
                   </button>
                 </div>
@@ -429,8 +760,12 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Two-Factor Authentication</h4>
                   <p className="text-sm text-gray-600 mb-3">Add an extra layer of security to your account</p>
-                  <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                    Enable 2FA
+                  <button 
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100"
+                    onClick={handleEnable2FA}
+                    disabled={saving || settings.two_factor_enabled}
+                  >
+                    {settings.two_factor_enabled ? '2FA Enabled' : 'Enable 2FA'}
                   </button>
                 </div>
               </div>
@@ -445,15 +780,36 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                   <h4 className="font-semibold text-gray-900 mb-4">Profile Visibility</h4>
                   <div className="space-y-3">
                     <label className="flex items-center">
-                      <input type="radio" name="visibility" className="mr-2" defaultChecked />
+                      <input 
+                        type="radio" 
+                        name="visibility" 
+                        className="mr-2" 
+                        checked={settings.profile_visibility === 'public'}
+                        onChange={() => saveSettings({ profile_visibility: 'public' })}
+                        disabled={saving}
+                      />
                       <span className="text-sm text-gray-700">Public - Anyone can see your profile</span>
                     </label>
                     <label className="flex items-center">
-                      <input type="radio" name="visibility" className="mr-2" />
+                      <input 
+                        type="radio" 
+                        name="visibility" 
+                        className="mr-2" 
+                        checked={settings.profile_visibility === 'network'}
+                        onChange={() => saveSettings({ profile_visibility: 'network' })}
+                        disabled={saving}
+                      />
                       <span className="text-sm text-gray-700">Network - Only your connections can see your profile</span>
                     </label>
                     <label className="flex items-center">
-                      <input type="radio" name="visibility" className="mr-2" />
+                      <input 
+                        type="radio" 
+                        name="visibility" 
+                        className="mr-2" 
+                        checked={settings.profile_visibility === 'private'}
+                        onChange={() => saveSettings({ profile_visibility: 'private' })}
+                        disabled={saving}
+                      />
                       <span className="text-sm text-gray-700">Private - Only you can see your profile</span>
                     </label>
                   </div>
@@ -469,15 +825,23 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Data Export</h4>
                   <p className="text-sm text-gray-600 mb-3">Download a copy of your data</p>
-                  <button className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                    Request Data Export
+                  <button 
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100"
+                    onClick={handleRequestDataExport}
+                    disabled={saving || settings.data_export_requested}
+                  >
+                    {settings.data_export_requested ? 'Export Requested' : 'Request Data Export'}
                   </button>
                 </div>
                 
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Account Deletion</h4>
                   <p className="text-sm text-gray-600 mb-3">Permanently delete your account and all data</p>
-                  <button className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                  <button 
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300"
+                    onClick={handleDeleteAccount}
+                    disabled={saving}
+                  >
                     Delete Account
                   </button>
                 </div>
@@ -492,17 +856,35 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Email Notifications</h4>
                   <div className="space-y-3">
-                    <label className="flex items-center justify-between w-full">
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">New connection requests</span>
-                      <input type="checkbox" className="rounded border-gray-300" defaultChecked />
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_connection_requests}
+                        onChange={(e) => saveSettings({ email_connection_requests: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
                     </label>
-                    <label className="flex items-center justify-between w-full">
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">Messages</span>
-                      <input type="checkbox" className="rounded border-gray-300" defaultChecked />
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_messages}
+                        onChange={(e) => saveSettings({ email_messages: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
                     </label>
-                    <label className="flex items-center justify-between w-full">
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">Community posts</span>
-                      <input type="checkbox" className="rounded border-gray-300" />
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_community_posts}
+                        onChange={(e) => saveSettings({ email_community_posts: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
                     </label>
                   </div>
                 </div>
@@ -510,17 +892,37 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Push Notifications</h4>
                   <div className="space-y-3">
-                    <label className="flex items-center justify-between w-full">
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">New messages</span>
-                      <input type="checkbox" className="rounded border-gray-300" defaultChecked />
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_messages}
+                        onChange={(e) => saveSettings({ push_messages: e.target.checked })}
+                        disabled={saving || !settings.push_notifications}
+                      />
                     </label>
-                    <label className="flex items-center justify-between w-full">
+                    <label className="flex items-center justify-between w-full max-w-md">
                       <span className="text-sm text-gray-700">Connection activity</span>
-                      <input type="checkbox" className="rounded border-gray-300" />
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_connection_activity}
+                        onChange={(e) => saveSettings({ push_connection_activity: e.target.checked })}
+                        disabled={saving || !settings.push_notifications}
+                      />
                     </label>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* Saving Indicator */}
+          {saving && (
+            <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2">
+              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+              Saving...
             </div>
           )}
         </div>
@@ -559,6 +961,9 @@ function App() {
   // New state for settings
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   
+  // New state for CV Maker
+  const [isCVMakerOpen, setIsCVMakerOpen] = useState(false)
+  
   // Cache
   const profileCacheRef = useRef<{ [key: string]: { data: any, timestamp: number } }>({})
   const loadingProfileRef = useRef<{ [key: string]: boolean }>({})
@@ -594,6 +999,16 @@ function App() {
 
     window.addEventListener('openProfileDetail', handleOpenProfileDetail as EventListener)
     return () => window.removeEventListener('openProfileDetail', handleOpenProfileDetail as EventListener)
+  }, [])
+
+  // CV Maker açmak için event listener
+  useEffect(() => {
+    const handleOpenCVMaker = () => {
+      setIsCVMakerOpen(true)
+    }
+
+    window.addEventListener('openCVMaker', handleOpenCVMaker)
+    return () => window.removeEventListener('openCVMaker', handleOpenCVMaker)
   }, [])
 
   // Update page title when unread count changes
@@ -1343,6 +1758,26 @@ const cancelConnectionRequest = async (connectionId: string) => {
       {isSettingsOpen && (
         <SettingsComponent onClose={() => setIsSettingsOpen(false)} />
       )}
+
+      {/* CV Maker Modal */}
+      {isCVMakerOpen && (
+        <CVMaker 
+          userProfile={userProfile} 
+          onClose={() => setIsCVMakerOpen(false)} 
+        />
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav
+        activeView={activeView}
+        setActiveView={setActiveView}
+        setSelectedProfileId={setSelectedProfileId}
+        setIsConnectionsOpen={setIsConnectionsOpen}
+        setIsAuthModalOpen={setIsAuthModalOpen}
+        currentUser={currentUser}
+        unreadMessagesCount={unreadMessagesCount}
+        setIsMessagesOverlayOpen={setIsMessagesOverlayOpen}
+      />
 
       {/* Notification Styles */}
       <style>{`
@@ -2782,7 +3217,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <p className="text-xs text-blue-600 font-medium">{therapist.profession}</p>
                             {experience && (
-                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">{experience} yrs</span>
+                              <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">{experience}</span>
                             )}
                           </div>
                           {therapist.city && (
@@ -2870,7 +3305,7 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
                     </p>
                     {experience !== '0' && (
                       <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded-full font-medium">
-                        {experience} yrs
+                        {experience}
                       </span>
                     )}
                   </div>
@@ -3140,7 +3575,7 @@ function ProfileDetailPage({
         updateData.languages = formData.languages
       } else if (section === 'availability') {
         updateData.availability = formData.availability
-      }
+      } 
       
       const { error } = await supabase
         .from('profiles')
@@ -3231,6 +3666,15 @@ function ProfileDetailPage({
           >
             <Edit2 className="w-4 h-4" />
             Edit Profile
+          </button>
+          
+          {/* CV Maker butonunu buraya ekleyin */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('openCVMaker'))}
+            className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors"
+          >
+            <Briefcase className="w-4 h-4" />
+            Generate CV
           </button>
         </div>
       )
@@ -4081,36 +4525,69 @@ function ProfileDetailPage({
 }
 
 function CommunityComponent() {
-  const posts = [
-    {
-      id: 1,
-      author: 'Sarah Johnson',
-      profession: 'Physiotherapist',
-      title: 'Best practices for sports injury rehabilitation',
-      content: 'Looking for advice on modern approaches to ACL rehabilitation...',
-      replies: 12,
-      time: '2 hours ago'
-    },
-    {
-      id: 2,
-      author: 'Ahmed Hassan',
-      profession: 'Occupational Therapist',
-      title: 'Pediatric OT resources in Birmingham area',
-      content: 'Does anyone know good resources for sensory integration therapy for children?',
-      replies: 8,
-      time: '5 hours ago'
+  const [posts, setPosts] = useState<any[]>([])
+  const [showNewPostModal, setShowNewPostModal] = useState(false)
+  const [newPost, setNewPost] = useState({ title: '', content: '' })
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    loadPosts()
+  }, [])
+
+  const loadPosts = async () => {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        user:profiles(full_name, profession),
+        replies:post_replies(count)
+      `)
+      .order('created_at', { ascending: false })
+
+    if (!error && data) {
+      setPosts(data)
     }
-  ]
+  }
+
+  const createPost = async () => {
+    if (!newPost.title.trim() || !newPost.content.trim()) return
+    
+    setLoading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      alert('Please sign in to create posts')
+      return
+    }
+
+    const { error } = await supabase
+      .from('posts')
+      .insert({
+        user_id: user.id,
+        title: newPost.title,
+        content: newPost.content
+      })
+
+    if (!error) {
+      setNewPost({ title: '', content: '' })
+      setShowNewPostModal(false)
+      loadPosts()
+    }
+    setLoading(false)
+  }
 
   return (
-    <div className="flex-1 bg-gray-50 p-6 overflow-y-auto">
+    <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <Users className="w-6 h-6 mr-2 text-blue-600" />
             <h2 className="text-2xl font-bold text-gray-900">Community</h2>
           </div>
-          <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <button 
+            onClick={() => setShowNewPostModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+          >
             <Plus className="w-4 h-4 mr-2" />
             New Post
           </button>
@@ -4118,24 +4595,182 @@ function CommunityComponent() {
 
         <div className="space-y-4">
           {posts.map(post => (
-            <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div key={post.id} className="bg-white rounded-lg p-4 md:p-6 shadow-sm border border-gray-200">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">{post.title}</h3>
                   <p className="text-sm text-gray-600">
-                    by <span className="font-medium">{post.author}</span> • {post.profession} • {post.time}
+                    by <span className="font-medium">{post.user?.full_name}</span> • {post.user?.profession} • {new Date(post.created_at).toLocaleDateString()}
                   </p>
                 </div>
               </div>
               
-              <p className="text-gray-700 mb-4">{post.content}</p>
+              <p className="text-gray-700 mb-4 whitespace-pre-line">{post.content}</p>
               
               <div className="flex items-center text-sm text-gray-500">
                 <MessageSquare className="w-4 h-4 mr-1" />
-                {post.replies} replies
+                {post.replies?.[0]?.count || 0} replies
               </div>
             </div>
           ))}
+          
+          {posts.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No posts yet</h3>
+              <p className="text-gray-500">Be the first to start a discussion!</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* New Post Modal */}
+      {showNewPostModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Create New Post</h3>
+              <button onClick={() => setShowNewPostModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <input
+                type="text"
+                placeholder="Post Title"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                value={newPost.title}
+                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+              />
+              
+              <textarea
+                placeholder="What would you like to share with the community?"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 min-h-[200px]"
+                value={newPost.content}
+                onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+              />
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={createPost}
+                  disabled={loading || !newPost.title.trim() || !newPost.content.trim()}
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                >
+                  {loading ? 'Posting...' : 'Post'}
+                </button>
+                <button
+                  onClick={() => setShowNewPostModal(false)}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
+  const [loading, setLoading] = useState(false)
+
+  const generatePDF = async () => {
+    setLoading(true)
+    try {
+      // This would integrate with a PDF generation service
+      // For now, we'll create a simple HTML-based CV
+      const cvContent = `
+        <div class="cv">
+          <h1>${userProfile.full_name}</h1>
+          <h2>${userProfile.profession}</h2>
+          ${userProfile.about_me ? `<p>${userProfile.about_me}</p>` : ''}
+          
+          ${userProfile.work_experience?.length > 0 ? `
+          <h3>Work Experience</h3>
+          ${userProfile.work_experience.map((exp: any) => `
+            <div class="experience">
+              <h4>${exp.title} - ${exp.organization}</h4>
+              <p>${exp.start_date} - ${exp.end_date || 'Present'}</p>
+              ${exp.description ? `<p>${exp.description}</p>` : ''}
+            </div>
+          `).join('')}
+          ` : ''}
+          
+          ${userProfile.qualifications?.length > 0 ? `
+          <h3>Qualifications</h3>
+          ${userProfile.qualifications.map((qual: any) => `
+            <div class="qualification">
+              <h4>${qual.title}</h4>
+              <p>${qual.institution} - ${qual.year}</p>
+            </div>
+          `).join('')}
+          ` : ''}
+        </div>
+      `
+
+      // Open print dialog for now - in production, use a library like jsPDF
+      const printWindow = window.open('', '_blank')
+      printWindow?.document.write(`
+        <html>
+          <head>
+            <title>CV - ${userProfile.full_name}</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 40px; }
+              .cv { max-width: 800px; margin: 0 auto; }
+              h1 { color: #2563eb; margin-bottom: 5px; }
+              h2 { color: #4b5563; margin-top: 0; }
+              .experience, .qualification { margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>${cvContent}</body>
+        </html>
+      `)
+      printWindow?.document.close()
+      printWindow?.print()
+      
+    } catch (error) {
+      console.error('Error generating CV:', error)
+      alert('Error generating CV')
+    }
+    setLoading(false)
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-2xl p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">CV Maker</h2>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            Generate a professional CV based on your profile information.
+          </p>
+          
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h3 className="font-semibold mb-2">Included Information:</h3>
+            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+              <li>Personal Information & Contact Details</li>
+              <li>Professional Summary</li>
+              <li>Work Experience ({userProfile.work_experience?.length || 0} positions)</li>
+              <li>Qualifications ({userProfile.qualifications?.length || 0} items)</li>
+              <li>Specialties & Languages</li>
+            </ul>
+          </div>
+
+          <button
+            onClick={generatePDF}
+            disabled={loading}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+          >
+            {loading ? 'Generating CV...' : 'Generate & Download CV'}
+          </button>
         </div>
       </div>
     </div>
@@ -4394,6 +5029,8 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         updateData.contact_email = formData.contactEmail
         updateData.phone = formData.phone
         updateData.website = formData.website
+      } else if (section === 'name') {
+        updateData.full_name = `${formData.firstName} ${formData.lastName}`.trim();
       }
       
       const { error } = await supabase
@@ -4706,898 +5343,933 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                 </div>
               </div>
   
-              <div className="space-y-3">
-                {/* Email Section - Editable */}
-                <div 
-                  className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-1">Email</p>
-                      {editingSection === 'email' ? (
+              {/* Name Section */}
+              <div 
+                className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Name</p>
+                    {editingSection === 'name' ? (
+                      <div className="space-y-2">
+                        <input 
+                          type="text"
+                          placeholder="First Name"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                          value={formData.firstName}
+                          onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
+                        />
+                        <input 
+                          type="text"
+                          placeholder="Last Name"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                          value={formData.lastName}
+                          onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                        />
+                      </div>
+                    ) : (
+                      <p className="text-sm font-medium text-gray-900">{userProfile?.full_name}</p>
+                    )}
+                  </div>
+                  {editingSection === 'name' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('name')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('name')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+  
+              {/* Email Section */}
+              <div 
+                className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Email</p>
+                    {editingSection === 'email' ? (
+                      <input 
+                        type="email"
+                        placeholder="Email"
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-gray-900">{currentUser.email}</p>
+                    )}
+                  </div>
+                  {editingSection === 'email' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('email')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('email')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+  
+              {/* About Me Section */}
+              <div 
+                className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 relative group hover:bg-blue-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-blue-900 mb-2">📝 About Me</p>
+                    {editingSection === 'about' ? (
+                      <textarea
+                        placeholder="Tell others about yourself, your experience, and approach..."
+                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg min-h-[120px]"
+                        value={formData.aboutMe}
+                        onChange={(e) => setFormData({ ...formData, aboutMe: e.target.value })}
+                      />
+                    ) : (
+                      userProfile?.about_me ? (
+                        <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{userProfile.about_me}</p>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">Click edit to add information about yourself</p>
+                      )
+                    )}
+                  </div>
+                  {editingSection === 'about' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('about')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('about')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+  
+              {/* Contact Info Section */}
+              <div 
+                className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 relative group hover:bg-purple-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-purple-900 mb-2">📞 Contact Info</p>
+                    {editingSection === 'contact' ? (
+                      <div className="space-y-2">
                         <input 
                           type="email"
-                          placeholder="Email"
+                          placeholder="Contact Email"
                           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                          value={formData.email}
-                          onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                          value={formData.contactEmail}
+                          onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
                         />
-                      ) : (
-                        <p className="text-sm font-medium text-gray-900">{currentUser.email}</p>
-                      )}
-                    </div>
-                    {editingSection === 'email' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('email')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => startEditing('email')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-  
-                {/* About Me Section */}
-                <div 
-                  className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 relative group hover:bg-blue-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-blue-900 mb-2">📝 About Me</p>
-                      {editingSection === 'about' ? (
-                        <textarea
-                          placeholder="Tell others about yourself, your experience, and approach..."
-                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg min-h-[120px]"
-                          value={formData.aboutMe}
-                          onChange={(e) => setFormData({ ...formData, aboutMe: e.target.value })}
+                        <input 
+                          type="tel"
+                          placeholder="Phone Number"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                          value={formData.phone}
+                          onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         />
-                      ) : (
-                        userProfile?.about_me ? (
-                          <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{userProfile.about_me}</p>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">Click edit to add information about yourself</p>
-                        )
-                      )}
-                    </div>
-                    {editingSection === 'about' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('about')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        <input 
+                          type="url"
+                          placeholder="Website (https://...)"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                          value={formData.website}
+                          onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                        />
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing('about')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-  
-                {/* Contact Info Section */}
-                <div 
-                  className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 relative group hover:bg-purple-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-purple-900 mb-2">📞 Contact Info</p>
-                      {editingSection === 'contact' ? (
-                        <div className="space-y-2">
-                          <input 
-                            type="email"
-                            placeholder="Contact Email"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                            value={formData.contactEmail}
-                            onChange={(e) => setFormData({ ...formData, contactEmail: e.target.value })}
-                          />
-                          <input 
-                            type="tel"
-                            placeholder="Phone Number"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                            value={formData.phone}
-                            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                          />
-                          <input 
-                            type="url"
-                            placeholder="Website (https://...)"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                            value={formData.website}
-                            onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                          />
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          {userProfile?.contact_email ? (
-                            <p className="text-sm text-gray-700">📧 {userProfile.contact_email}</p>
-                          ) : null}
-                          {userProfile?.phone ? (
-                            <p className="text-sm text-gray-700">📞 {userProfile.phone}</p>
-                          ) : null}
-                          {userProfile?.website ? (
-                            <a href={userProfile.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline block">
-                              🌐 {userProfile.website}
-                            </a>
-                          ) : null}
-                          {!userProfile?.contact_email && !userProfile?.phone && !userProfile?.website && (
-                            <p className="text-sm text-gray-500 italic">Add contact information</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {editingSection === 'contact' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('contact')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                      <div className="space-y-1">
+                        {userProfile?.contact_email ? (
+                          <p className="text-sm text-gray-700">📧 {userProfile.contact_email}</p>
+                        ) : null}
+                        {userProfile?.phone ? (
+                          <p className="text-sm text-gray-700">📞 {userProfile.phone}</p>
+                        ) : null}
+                        {userProfile?.website ? (
+                          <a href={userProfile.website} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline block">
+                            🌐 {userProfile.website}
+                          </a>
+                        ) : null}
+                        {!userProfile?.contact_email && !userProfile?.phone && !userProfile?.website && (
+                          <p className="text-sm text-gray-500 italic">Add contact information</p>
+                        )}
                       </div>
-                    ) : (
-                      <button
-                        onClick={() => startEditing('contact')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
                     )}
                   </div>
-                </div>
-  
-                {/* Registration Number Section */}
-                <div 
-                  className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-1">Registration & Experience</p>
-                      {editingSection === 'registration' ? (
-                        <div className="space-y-2">
-                          <input 
-                            type="text"
-                            placeholder="Registration Number"
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
-                            value={formData.registrationNumber}
-                            onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
-                          />
-                          <div className="grid grid-cols-3 gap-2">
-                            <select
-                              className="px-2 py-2 text-sm border border-gray-300 rounded"
-                              value={formData.experienceDay}
-                              onChange={(e) => setFormData({ ...formData, experienceDay: e.target.value })}
-                            >
-                              <option value="">Day</option>
-                              {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                                <option key={day} value={day}>{day}</option>
-                              ))}
-                            </select>
-                            <select
-                              className="px-2 py-2 text-sm border border-gray-300 rounded"
-                              value={formData.experienceMonth}
-                              onChange={(e) => setFormData({ ...formData, experienceMonth: e.target.value })}
-                            >
-                              <option value="">Month</option>
-                              {months.map(month => (
-                                <option key={month} value={month}>{month}</option>
-                              ))}
-                            </select>
-                            <select
-                              className="px-2 py-2 text-sm border border-gray-300 rounded"
-                              value={formData.experienceYear}
-                              onChange={(e) => setFormData({ ...formData, experienceYear: e.target.value })}
-                            >
-                              <option value="">Year</option>
-                              {Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                                <option key={year} value={year}>{year}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-gray-900">{userProfile?.regulator_number || 'Not set'}</p>
-                          {(userProfile?.experience_day || userProfile?.experience_month || userProfile?.experience_year) && (
-                            <p className="text-xs text-gray-600 mt-1">
-                              Since {userProfile.experience_day} {userProfile.experience_month} {userProfile.experience_year}
-                            </p>
-                          )}
-                        </>
-                      )}
+                  {editingSection === 'contact' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('contact')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('contact')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+  
+              {/* CV Maker Button */}
+              <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
+                <p className="text-sm font-bold text-amber-900 mb-2">📄 CV Maker</p>
+                <p className="text-sm text-amber-800 mb-3">Generate a professional CV from your profile information</p>
+                <button
+                  onClick={() => window.dispatchEvent(new CustomEvent('openCVMaker'))}
+                  className="w-full py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors"
+                >
+                  Generate CV
+                </button>
+              </div>
+  
+              {/* Registration Number Section */}
+              <div 
+                className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Registration & Experience</p>
                     {editingSection === 'registration' ? (
-                      <div className="flex gap-1 ml-2">
+                      <div className="space-y-2">
+                        <input 
+                          type="text"
+                          placeholder="Registration Number"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg"
+                          value={formData.registrationNumber}
+                          onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <p className="text-sm font-medium text-gray-900">{userProfile?.regulator_number || 'Not set'}</p>
+                        {userProfile?.experience_year && (
+                          <p className="text-xs text-gray-600 mt-1">
+                            {userProfile.experience_year} years of experience
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {editingSection === 'registration' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('registration')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('registration')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+  
+              {/* Qualifications Section */}
+              <div 
+                className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 relative group hover:bg-amber-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-amber-900 mb-2">🎓 Qualifications & Certifications</p>
+                    {editingSection === 'qualifications' ? (
+                      <div className="space-y-3">
+                        {formData.qualifications.map((qual: any, index: number) => (
+                          <div key={index} className="bg-white border border-gray-300 rounded-lg p-3 space-y-2">
+                            <input 
+                              type="text"
+                              placeholder="Qualification Title"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              value={qual.title || ''}
+                              onChange={(e) => {
+                                const updated = [...formData.qualifications]
+                                updated[index].title = e.target.value
+                                setFormData({ ...formData, qualifications: updated })
+                              }}
+                            />
+                            <input 
+                              type="text"
+                              placeholder="Institution"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                              value={qual.institution || ''}
+                              onChange={(e) => {
+                                const updated = [...formData.qualifications]
+                                updated[index].institution = e.target.value
+                                setFormData({ ...formData, qualifications: updated })
+                              }}
+                            />
+                            <div className="flex gap-2">
+                              <input 
+                                type="text"
+                                placeholder="Year"
+                                className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
+                                value={qual.year || ''}
+                                onChange={(e) => {
+                                  const updated = [...formData.qualifications]
+                                  updated[index].year = e.target.value
+                                  setFormData({ ...formData, qualifications: updated })
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formData.qualifications.filter((_, i) => i !== index)
+                                  setFormData({ ...formData, qualifications: updated })
+                                }}
+                                className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                         <button
-                          onClick={() => saveSection('registration')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                          type="button"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              qualifications: [...formData.qualifications, { title: '', institution: '', year: '' }]
+                            })
+                          }}
+                          className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600"
                         >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
+                          + Add Qualification
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing('registration')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      userProfile?.qualifications && userProfile.qualifications.length > 0 ? (
+                        <div className="space-y-2">
+                          {userProfile.qualifications.map((qual: any, index: number) => (
+                            <div key={index} className="text-sm">
+                              <p className="font-semibold text-gray-900">{qual.title}</p>
+                              <p className="text-gray-600">{qual.institution} • {qual.year}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 italic">Click edit to add qualifications</p>
+                      )
                     )}
                   </div>
+                  {editingSection === 'qualifications' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('qualifications')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('qualifications')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
+              </div>
   
-                {/* Qualifications Section */}
-                <div 
-                  className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 relative group hover:bg-amber-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-amber-900 mb-2">🎓 Qualifications & Certifications</p>
-                      {editingSection === 'qualifications' ? (
-                        <div className="space-y-3">
-                          {formData.qualifications.map((qual: any, index: number) => (
+              {/* Work Experience Section */}
+              <div 
+                className="bg-emerald-50 border-2 border-emerald-200 rounded-lg p-4 relative group hover:bg-emerald-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-emerald-900 mb-2">💼 Work Experience</p>
+                    {editingSection === 'experience' ? (
+                      <div className="space-y-3">
+                        {formData.workExperience.map((exp: any, index: number) => {
+                          const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
+                          return (
                             <div key={index} className="bg-white border border-gray-300 rounded-lg p-3 space-y-2">
                               <input 
                                 type="text"
-                                placeholder="Qualification Title"
+                                placeholder="Job Title"
                                 className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                value={qual.title || ''}
+                                value={exp.title || ''}
                                 onChange={(e) => {
-                                  const updated = [...formData.qualifications]
+                                  const updated = [...formData.workExperience]
                                   updated[index].title = e.target.value
-                                  setFormData({ ...formData, qualifications: updated })
+                                  setFormData({ ...formData, workExperience: updated })
                                 }}
                               />
-                              <input 
-                                type="text"
-                                placeholder="Institution"
-                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                value={qual.institution || ''}
-                                onChange={(e) => {
-                                  const updated = [...formData.qualifications]
-                                  updated[index].institution = e.target.value
-                                  setFormData({ ...formData, qualifications: updated })
-                                }}
-                              />
-                              <div className="flex gap-2">
+                              
+                              {/* Organization Input with Auto-complete */}
+                              <div className="relative" ref={organizationRef}>
                                 <input 
                                   type="text"
-                                  placeholder="Year"
-                                  className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
-                                  value={qual.year || ''}
+                                  placeholder="Organization"
+                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                  value={exp.organization || ''}
                                   onChange={(e) => {
-                                    const updated = [...formData.qualifications]
-                                    updated[index].year = e.target.value
-                                    setFormData({ ...formData, qualifications: updated })
+                                    const updated = [...formData.workExperience]
+                                    updated[index].organization = e.target.value
+                                    setFormData({ ...formData, workExperience: updated })
+                                    handleOrganizationSearch(e.target.value, index)
+                                  }}
+                                  onKeyDown={(e) => handleOrganizationKeyDown(e, index)}
+                                  onFocus={() => {
+                                    if (exp.organization) {
+                                      handleOrganizationSearch(exp.organization, index)
+                                    }
                                   }}
                                 />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = formData.qualifications.filter((_, i) => i !== index)
-                                    setFormData({ ...formData, qualifications: updated })
+                                {showOrganizationSuggestions && organizationSuggestions.length > 0 && (
+                                  <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                                    {organizationSuggestions.map((org, idx) => (
+                                      <div
+                                        key={org}
+                                        className={`px-3 py-2 cursor-pointer ${
+                                          idx === activeOrganizationSuggestionIndex 
+                                            ? 'bg-blue-100 text-blue-800' 
+                                            : 'hover:bg-gray-100'
+                                        }`}
+                                        onClick={() => handleOrganizationSelect(org, index)}
+                                      >
+                                        {org}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+  
+                              <div className="grid grid-cols-2 gap-2">
+                                <input 
+                                  type="date"
+                                  placeholder="Start Date"
+                                  className="px-2 py-1 text-sm border border-gray-300 rounded"
+                                  value={exp.start_date || ''}
+                                  onChange={(e) => {
+                                    const updated = [...formData.workExperience]
+                                    updated[index].start_date = e.target.value
+                                    setFormData({ ...formData, workExperience: updated })
                                   }}
-                                  className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
-                                >
-                                  Remove
-                                </button>
+                                />
+                                <div className="flex gap-2">
+                                  <input 
+                                    type="date"
+                                    placeholder={isCurrentJob ? "Present" : "End Date"}
+                                    className={`flex-1 px-2 py-1 text-sm border border-gray-300 rounded ${isCurrentJob ? 'bg-gray-100' : ''}`}
+                                    value={isCurrentJob ? "" : (exp.end_date || '')}
+                                    disabled={isCurrentJob}
+                                    onChange={(e) => {
+                                      const updated = [...formData.workExperience]
+                                      updated[index].end_date = e.target.value
+                                      setFormData({ ...formData, workExperience: updated })
+                                    }}
+                                  />
+                                </div>
                               </div>
+                              <label className="flex items-center gap-2 text-xs">
+                                <input 
+                                  type="checkbox"
+                                  checked={isCurrentJob}
+                                  onChange={(e) => {
+                                    const updated = [...formData.workExperience]
+                                    updated[index].end_date = e.target.checked ? 'Present' : ''
+                                    setFormData({ ...formData, workExperience: updated })
+                                  }}
+                                />
+                                <span className="text-gray-700">I currently work here</span>
+                              </label>
+                              <textarea
+                                placeholder="Description (optional)"
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                                rows={2}
+                                value={exp.description || ''}
+                                onChange={(e) => {
+                                  const updated = [...formData.workExperience]
+                                  updated[index].description = e.target.value
+                                  setFormData({ ...formData, workExperience: updated })
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = formData.workExperience.filter((_, i) => i !== index)
+                                  setFormData({ ...formData, workExperience: updated })
+                                }}
+                                className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
+                              >
+                                Remove
+                              </button>
                             </div>
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData({
-                                ...formData,
-                                qualifications: [...formData.qualifications, { title: '', institution: '', year: '' }]
-                              })
-                            }}
-                            className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600"
-                          >
-                            + Add Qualification
-                          </button>
-                        </div>
-                      ) : (
-                        userProfile?.qualifications && userProfile.qualifications.length > 0 ? (
-                          <div className="space-y-2">
-                            {userProfile.qualifications.map((qual: any, index: number) => (
-                              <div key={index} className="text-sm">
-                                <p className="font-semibold text-gray-900">{qual.title}</p>
-                                <p className="text-gray-600">{qual.institution} • {qual.year}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">Click edit to add qualifications</p>
-                        )
-                      )}
-                    </div>
-                    {editingSection === 'qualifications' ? (
-                      <div className="flex gap-1 ml-2">
+                          )
+                        })}
                         <button
-                          onClick={() => saveSection('qualifications')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                          type="button"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              workExperience: [...formData.workExperience, { title: '', organization: '', start_date: '', end_date: '', description: '' }]
+                            })
+                          }}
+                          className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600"
                         >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
+                          + Add Experience
                         </button>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing('qualifications')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-  
-                {/* Work Experience Section */}
-                <div 
-                  className="bg-emerald-50 border-2 border-emerald-200 rounded-lg p-4 relative group hover:bg-emerald-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-emerald-900 mb-2">💼 Work Experience</p>
-                      {editingSection === 'experience' ? (
+                      userProfile?.work_experience && userProfile.work_experience.length > 0 ? (
                         <div className="space-y-3">
-                          {formData.workExperience.map((exp: any, index: number) => {
+                          {userProfile.work_experience.map((exp: any, index: number) => {
                             const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
+                            const startDate = exp.start_date ? new Date(exp.start_date) : null
+                            const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date) : null)
+                            
+                            let duration = ''
+                            if (startDate && endDate) {
+                              const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
+                              const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365.25))
+                              const diffMonths = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44))
+                              const diffDays = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 30.44)) / (1000 * 60 * 60 * 24))
+                              
+                              if (diffYears > 0) {
+                                duration = `${diffYears} yr${diffYears > 1 ? 's' : ''}`
+                                if (diffMonths > 0) {
+                                  duration += ` ${diffMonths} mo${diffMonths > 1 ? 's' : ''}`
+                                }
+                              } else if (diffMonths > 0) {
+                                duration = `${diffMonths} mo${diffMonths > 1 ? 's' : ''}`
+                                if (diffDays > 0) {
+                                  duration += ` ${diffDays} day${diffDays > 1 ? 's' : ''}`
+                                }
+                              } else {
+                                duration = `${diffDays} day${diffDays > 1 ? 's' : ''}`
+                              }
+                            }
+  
                             return (
-                              <div key={index} className="bg-white border border-gray-300 rounded-lg p-3 space-y-2">
-                                <input 
-                                  type="text"
-                                  placeholder="Job Title"
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                  value={exp.title || ''}
-                                  onChange={(e) => {
-                                    const updated = [...formData.workExperience]
-                                    updated[index].title = e.target.value
-                                    setFormData({ ...formData, workExperience: updated })
-                                  }}
-                                />
-                                
-                                {/* Organization Input with Auto-complete */}
-                                <div className="relative" ref={organizationRef}>
-                                  <input 
-                                    type="text"
-                                    placeholder="Organization"
-                                    className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                    value={exp.organization || ''}
-                                    onChange={(e) => {
-                                      const updated = [...formData.workExperience]
-                                      updated[index].organization = e.target.value
-                                      setFormData({ ...formData, workExperience: updated })
-                                      handleOrganizationSearch(e.target.value, index)
-                                    }}
-                                    onKeyDown={(e) => handleOrganizationKeyDown(e, index)}
-                                    onFocus={() => {
-                                      if (exp.organization) {
-                                        handleOrganizationSearch(exp.organization, index)
-                                      }
-                                    }}
-                                  />
-                                  {showOrganizationSuggestions && organizationSuggestions.length > 0 && (
-                                    <div className="absolute z-10 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
-                                      {organizationSuggestions.map((org, idx) => (
-                                        <div
-                                          key={org}
-                                          className={`px-3 py-2 cursor-pointer ${
-                                            idx === activeOrganizationSuggestionIndex 
-                                              ? 'bg-blue-100 text-blue-800' 
-                                              : 'hover:bg-gray-100'
-                                          }`}
-                                          onClick={() => handleOrganizationSelect(org, index)}
-                                        >
-                                          {org}
-                                        </div>
-                                      ))}
-                                    </div>
+                              <div key={index} className="bg-white border border-gray-200 rounded-lg p-3">
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <p className="font-semibold text-gray-900">{exp.title}</p>
+                                    <p className="text-blue-600 text-sm">{exp.organization}</p>
+                                    <p className="text-gray-500 text-xs mt-1">
+                                      {exp.start_date} - {exp.end_date || 'Present'} {duration && `• ${duration}`}
+                                    </p>
+                                  </div>
+                                  {exp.description && (
+                                    <button
+                                      onClick={() => toggleItem(index)}
+                                      className="ml-2 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                                    >
+                                      <ChevronDown className={`w-4 h-4 transition-transform ${expandedItems[index] ? 'rotate-180' : ''}`} />
+                                    </button>
                                   )}
                                 </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                  <input 
-                                    type="date"
-                                    placeholder="Start Date"
-                                    className="px-2 py-1 text-sm border border-gray-300 rounded"
-                                    value={exp.start_date || ''}
-                                    onChange={(e) => {
-                                      const updated = [...formData.workExperience]
-                                      updated[index].start_date = e.target.value
-                                      setFormData({ ...formData, workExperience: updated })
-                                    }}
-                                  />
-                                  <div className="flex gap-2">
-                                    <input 
-                                      type="date"
-                                      placeholder={isCurrentJob ? "Present" : "End Date"}
-                                      className={`flex-1 px-2 py-1 text-sm border border-gray-300 rounded ${isCurrentJob ? 'bg-gray-100' : ''}`}
-                                      value={isCurrentJob ? "" : (exp.end_date || '')}
-                                      disabled={isCurrentJob}
-                                      onChange={(e) => {
-                                        const updated = [...formData.workExperience]
-                                        updated[index].end_date = e.target.value
-                                        setFormData({ ...formData, workExperience: updated })
-                                      }}
-                                    />
+                                {exp.description && expandedItems[index] && (
+                                  <div className="mt-3 pt-3 border-t border-gray-100">
+                                    <p className="text-sm text-gray-700 whitespace-pre-line">{exp.description}</p>
                                   </div>
-                                </div>
-                                <label className="flex items-center gap-2 text-xs">
-                                  <input 
-                                    type="checkbox"
-                                    checked={isCurrentJob}
-                                    onChange={(e) => {
-                                      const updated = [...formData.workExperience]
-                                      updated[index].end_date = e.target.checked ? 'Present' : ''
-                                      setFormData({ ...formData, workExperience: updated })
-                                    }}
-                                  />
-                                  <span className="text-gray-700">I currently work here</span>
-                                </label>
-                                <textarea
-                                  placeholder="Description (optional)"
-                                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
-                                  rows={2}
-                                  value={exp.description || ''}
-                                  onChange={(e) => {
-                                    const updated = [...formData.workExperience]
-                                    updated[index].description = e.target.value
-                                    setFormData({ ...formData, workExperience: updated })
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updated = formData.workExperience.filter((_, i) => i !== index)
-                                    setFormData({ ...formData, workExperience: updated })
-                                  }}
-                                  className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
-                                >
-                                  Remove
-                                </button>
+                                )}
                               </div>
                             )
                           })}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFormData({
-                                ...formData,
-                                workExperience: [...formData.workExperience, { title: '', organization: '', start_date: '', end_date: '', description: '' }]
-                              })
-                            }}
-                            className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600"
-                          >
-                            + Add Experience
-                          </button>
                         </div>
                       ) : (
-                        userProfile?.work_experience && userProfile.work_experience.length > 0 ? (
-                          <div className="space-y-3">
-                            {userProfile.work_experience.map((exp: any, index: number) => {
-                              const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
-                              const startDate = exp.start_date ? new Date(exp.start_date) : null
-                              const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date) : null)
-                              
-                              let duration = ''
-                              if (startDate && endDate) {
-                                const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-                                const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365.25))
-                                const diffMonths = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44))
-                                const diffDays = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 30.44)) / (1000 * 60 * 60 * 24))
-                                
-                                if (diffYears > 0) {
-                                  duration = `${diffYears} yr${diffYears > 1 ? 's' : ''}`
-                                  if (diffMonths > 0) {
-                                    duration += ` ${diffMonths} mo${diffMonths > 1 ? 's' : ''}`
-                                  }
-                                } else if (diffMonths > 0) {
-                                  duration = `${diffMonths} mo${diffMonths > 1 ? 's' : ''}`
-                                  if (diffDays > 0) {
-                                    duration += ` ${diffDays} day${diffDays > 1 ? 's' : ''}`
-                                  }
-                                } else {
-                                  duration = `${diffDays} day${diffDays > 1 ? 's' : ''}`
-                                }
-                              }
-
-                              return (
-                                <div key={index} className="bg-white border border-gray-200 rounded-lg p-3">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                      <p className="font-semibold text-gray-900">{exp.title}</p>
-                                      <p className="text-blue-600 text-sm">{exp.organization}</p>
-                                      <p className="text-gray-500 text-xs mt-1">
-                                        {exp.start_date} - {exp.end_date || 'Present'} {duration && `• ${duration}`}
-                                      </p>
-                                    </div>
-                                    {exp.description && (
-                                      <button
-                                        onClick={() => toggleItem(index)}
-                                        className="ml-2 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
-                                      >
-                                        <ChevronDown className={`w-4 h-4 transition-transform ${expandedItems[index] ? 'rotate-180' : ''}`} />
-                                      </button>
-                                    )}
-                                  </div>
-                                  {exp.description && expandedItems[index] && (
-                                    <div className="mt-3 pt-3 border-t border-gray-100">
-                                      <p className="text-sm text-gray-700 whitespace-pre-line">{exp.description}</p>
-                                    </div>
-                                  )}
-                                </div>
-                              )
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500 italic">Click edit to add work experience</p>
-                        )
-                      )}
-                    </div>
-                    {editingSection === 'experience' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('experience')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => startEditing('experience')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-5 h-5" />
-                      </button>
+                        <p className="text-sm text-gray-500 italic">Click edit to add work experience</p>
+                      )
                     )}
                   </div>
+                  {editingSection === 'experience' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('experience')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('experience')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-5 h-5" />
+                    </button>
+                  )}
                 </div>
-
-                {/* Specialties Section */}
-                <div 
-                  className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-2">Specialties</p>
-                      {editingSection === 'specialties' ? (
-                        <div className="relative" ref={specialtiesRef}>
-                          <button 
-                            type="button"
-                            onClick={() => setDropdowns({ ...dropdowns, specialties: !dropdowns.specialties })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg flex justify-between items-center"
-                          >
-                            <span>{formData.specialties.length ? `${formData.specialties.length} selected` : 'Select'}</span>
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                          {dropdowns.specialties && (
-                            <div className="absolute w-full bg-white border border-gray-300 mt-1 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50">
-                              {specialtiesOptions.map((s) => (
-                                <label key={s} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                                  <input 
-                                    type="checkbox"
-                                    checked={formData.specialties.includes(s)}
-                                    onChange={() => {
-                                      setFormData({
-                                        ...formData,
-                                        specialties: formData.specialties.includes(s)
-                                          ? formData.specialties.filter((x) => x !== s)
-                                          : [...formData.specialties, s]
-                                      })
-                                    }}
-                                    className="mr-2"
-                                  />
-                                  <span className="text-xs">{s}</span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                          {formData.specialties.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {formData.specialties.map((s) => (
-                                <span key={s} className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
-                                  {s}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {userProfile?.specialties && userProfile.specialties.length > 0 ? (
-                            userProfile.specialties.map((s: string) => (
-                              <span key={s} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+              </div>
+  
+              {/* Specialties Section */}
+              <div 
+                className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-2">Specialties</p>
+                    {editingSection === 'specialties' ? (
+                      <div className="relative" ref={specialtiesRef}>
+                        <button 
+                          type="button"
+                          onClick={() => setDropdowns({ ...dropdowns, specialties: !dropdowns.specialties })}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg flex justify-between items-center"
+                        >
+                          <span>{formData.specialties.length ? `${formData.specialties.length} selected` : 'Select'}</span>
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                        {dropdowns.specialties && (
+                          <div className="absolute w-full bg-white border border-gray-300 mt-1 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50">
+                            {specialtiesOptions.map((s) => (
+                              <label key={s} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  checked={formData.specialties.includes(s)}
+                                  onChange={() => {
+                                    setFormData({
+                                      ...formData,
+                                      specialties: formData.specialties.includes(s)
+                                        ? formData.specialties.filter((x) => x !== s)
+                                        : [...formData.specialties, s]
+                                    })
+                                  }}
+                                  className="mr-2"
+                                />
+                                <span className="text-xs">{s}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {formData.specialties.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {formData.specialties.map((s) => (
+                              <span key={s} className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">
                                 {s}
                               </span>
-                            ))
-                          ) : (
-                            <p className="text-sm text-gray-500">No specialties set</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {editingSection === 'specialties' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('specialties')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing('specialties')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        {userProfile?.specialties && userProfile.specialties.length > 0 ? (
+                          userProfile.specialties.map((s: string) => (
+                            <span key={s} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs">
+                              {s}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-500">No specialties set</p>
+                        )}
+                      </div>
                     )}
                   </div>
+                  {editingSection === 'specialties' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('specialties')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('specialties')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-
-                {/* Languages Section */}
-                <div 
-                  className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-2">Languages</p>
-                      {editingSection === 'languages' ? (
-                        <div className="relative" ref={languagesRef}>
-                          <button 
-                            type="button"
-                            onClick={() => setDropdowns({ ...dropdowns, languages: !dropdowns.languages })}
-                            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg flex justify-between items-center"
-                          >
-                            <span>{formData.languages.length ? `${formData.languages.length} selected` : 'Select'}</span>
-                            <ChevronDown className="w-3 h-3" />
-                          </button>
-                          {dropdowns.languages && (
-                            <div className="absolute w-full bg-white border border-gray-300 mt-1 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50">
-                              {languageOptions.map((lang) => (
-                                <label key={lang} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                                  <input 
-                                    type="checkbox"
-                                    checked={formData.languages.includes(lang)}
-                                    onChange={() => {
-                                      setFormData({
-                                        ...formData,
-                                        languages: formData.languages.includes(lang)
-                                          ? formData.languages.filter((x) => x !== lang)
-                                          : [...formData.languages, lang]
-                                      })
-                                    }}
-                                    className="mr-2"
-                                  />
-                                  <span className="text-xs">{lang}</span>
-                                </label>
-                              ))}
-                            </div>
-                          )}
-                          {formData.languages.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {formData.languages.map((l) => (
-                                <span key={l} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">
-                                  {l}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {userProfile?.languages && userProfile.languages.length > 0 ? (
-                            userProfile.languages.map((l: string) => (
-                              <span key={l} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+              </div>
+  
+              {/* Languages Section */}
+              <div 
+                className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-2">Languages</p>
+                    {editingSection === 'languages' ? (
+                      <div className="relative" ref={languagesRef}>
+                        <button 
+                          type="button"
+                          onClick={() => setDropdowns({ ...dropdowns, languages: !dropdowns.languages })}
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg flex justify-between items-center"
+                        >
+                          <span>{formData.languages.length ? `${formData.languages.length} selected` : 'Select'}</span>
+                          <ChevronDown className="w-3 h-3" />
+                        </button>
+                        {dropdowns.languages && (
+                          <div className="absolute w-full bg-white border border-gray-300 mt-1 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50">
+                            {languageOptions.map((lang) => (
+                              <label key={lang} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                                <input 
+                                  type="checkbox"
+                                  checked={formData.languages.includes(lang)}
+                                  onChange={() => {
+                                    setFormData({
+                                      ...formData,
+                                      languages: formData.languages.includes(lang)
+                                        ? formData.languages.filter((x) => x !== lang)
+                                        : [...formData.languages, lang]
+                                    })
+                                  }}
+                                  className="mr-2"
+                                />
+                                <span className="text-xs">{lang}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                        {formData.languages.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {formData.languages.map((l) => (
+                              <span key={l} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">
                                 {l}
                               </span>
-                            ))
-                          ) : (
-                            <p className="text-sm text-gray-500">No languages set</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {editingSection === 'languages' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('languages')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing('languages')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex flex-wrap gap-1">
+                        {userProfile?.languages && userProfile.languages.length > 0 ? (
+                          userProfile.languages.map((l: string) => (
+                            <span key={l} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">
+                              {l}
+                            </span>
+                          ))
+                        ) : (
+                          <p className="text-sm text-gray-500">No languages set</p>
+                        )}
+                      </div>
                     )}
                   </div>
+                  {editingSection === 'languages' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('languages')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('languages')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
-
-                {/* Location Section */}
-                <div 
-                  className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
-                  onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
-                  onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500 mb-1">Location</p>
-                      {editingSection === 'location' ? (
-                        <div className="space-y-2">
-                          <div className="relative" ref={locationRef}>
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
-                            <input 
-                              type="text" 
-                              placeholder="Search location..." 
-                              className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg"
-                              value={locationSearch}
-                              onChange={(e) => {
-                                setLocationSearch(e.target.value)
-                                if (e.target.value.length < 3) {
-                                  setFormData({ ...formData, city: '', county: '', lat: null, lng: null })
-                                }
-                              }}
-                            />
-                            {showLocationSuggestions && locationSuggestions.length > 0 && (
-                              <div className="absolute w-full bg-white border border-gray-300 mt-1 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50">
-                                {locationSuggestions.map((suggestion, index) => (
-                                  <button
-                                    key={index}
-                                    type="button"
-                                    onClick={() => handleLocationSelect(suggestion)}
-                                    className="w-full text-left px-3 py-2 hover:bg-gray-50 text-xs"
-                                  >
-                                    <div className="font-medium">{suggestion.address.city || suggestion.address.town}</div>
-                                    <div className="text-gray-500 truncate">{suggestion.display_name}</div>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          {formData.city && formData.county && (
-                            <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-xs">
-                              <p className="font-medium text-green-900">✅ {formData.city}, {formData.county}</p>
+              </div>
+  
+              {/* Location Section */}
+              <div 
+                className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
+                onMouseEnter={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.remove('hidden')}
+                onMouseLeave={(e) => e.currentTarget.querySelector('.edit-icon')?.classList.add('hidden')}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <p className="text-xs text-gray-500 mb-1">Location</p>
+                    {editingSection === 'location' ? (
+                      <div className="space-y-2">
+                        <div className="relative" ref={locationRef}>
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-3 h-3" />
+                          <input 
+                            type="text" 
+                            placeholder="Search location..." 
+                            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-300 rounded-lg"
+                            value={locationSearch}
+                            onChange={(e) => {
+                              setLocationSearch(e.target.value)
+                              if (e.target.value.length < 3) {
+                                setFormData({ ...formData, city: '', county: '', lat: null, lng: null })
+                              }
+                            }}
+                          />
+                          {showLocationSuggestions && locationSuggestions.length > 0 && (
+                            <div className="absolute w-full bg-white border border-gray-300 mt-1 rounded-lg shadow-lg max-h-40 overflow-y-auto z-50">
+                              {locationSuggestions.map((suggestion, index) => (
+                                <button
+                                  key={index}
+                                  type="button"
+                                  onClick={() => handleLocationSelect(suggestion)}
+                                  className="w-full text-left px-3 py-2 hover:bg-gray-50 text-xs"
+                                >
+                                  <div className="font-medium">{suggestion.address.city || suggestion.address.town}</div>
+                                  <div className="text-gray-500 truncate">{suggestion.display_name}</div>
+                                </button>
+                              ))}
                             </div>
                           )}
-                          <label className="flex items-center gap-2 text-xs">
-                            <input 
-                              type="checkbox" 
-                              checked={formData.offersRemote}
-                              onChange={(e) => setFormData({ ...formData, offersRemote: e.target.checked })}
-                            />
-                            Offers remote sessions
-                          </label>
                         </div>
-                      ) : (
-                        <>
-                          <p className="text-sm font-medium text-gray-900">
-                            {userProfile?.city && userProfile?.county 
-                              ? `${userProfile.city}, ${userProfile.county}` 
-                              : 'Not set'}
-                          </p>
-                          {userProfile?.offers_remote && (
-                            <p className="text-xs text-green-600 font-medium mt-1">✅ Offers Remote Sessions</p>
-                          )}
-                        </>
-                      )}
-                    </div>
-                    {editingSection === 'location' ? (
-                      <div className="flex gap-1 ml-2">
-                        <button
-                          onClick={() => saveSection('location')}
-                          disabled={loading}
-                          className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                        >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={cancelEditing}
-                          className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                        {formData.city && formData.county && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-2 text-xs">
+                            <p className="font-medium text-green-900">✅ {formData.city}, {formData.county}</p>
+                          </div>
+                        )}
+                        <label className="flex items-center gap-2 text-xs">
+                          <input 
+                            type="checkbox" 
+                            checked={formData.offersRemote}
+                            onChange={(e) => setFormData({ ...formData, offersRemote: e.target.checked })}
+                          />
+                          Offers remote sessions
+                        </label>
                       </div>
                     ) : (
-                      <button
-                        onClick={() => startEditing('location')}
-                        className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <>
+                        <p className="text-sm font-medium text-gray-900">
+                          {userProfile?.city && userProfile?.county 
+                            ? `${userProfile.city}, ${userProfile.county}` 
+                            : 'Not set'}
+                        </p>
+                        {userProfile?.offers_remote && (
+                          <p className="text-xs text-green-600 font-medium mt-1">✅ Offers Remote Sessions</p>
+                        )}
+                      </>
                     )}
                   </div>
+                  {editingSection === 'location' ? (
+                    <div className="flex gap-1 ml-2">
+                      <button
+                        onClick={() => saveSection('location')}
+                        disabled={loading}
+                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => startEditing('location')}
+                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
   
@@ -5676,41 +6348,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
                     />
                   )}
-
-                  {/* Experience - Gün, Ay, Yıl */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <select
-                      className="px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                      value={formData.experienceDay}
-                      onChange={(e) => setFormData({ ...formData, experienceDay: e.target.value })}
-                    >
-                      <option value="">Day</option>
-                      {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                        <option key={day} value={day}>{day}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                      value={formData.experienceMonth}
-                      onChange={(e) => setFormData({ ...formData, experienceMonth: e.target.value })}
-                    >
-                      <option value="">Month</option>
-                      {months.map(month => (
-                        <option key={month} value={month}>{month}</option>
-                      ))}
-                    </select>
-                    <select
-                      className="px-3 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                      value={formData.experienceYear}
-                      onChange={(e) => setFormData({ ...formData, experienceYear: e.target.value })}
-                    >
-                      <option value="">Year</option>
-                      {Array.from({ length: 50 }, (_, i) => new Date().getFullYear() - i).map(year => (
-                        <option key={year} value={year}>{year}</option>
-                      ))}
-                    </select>
-                  </div>
-
+  
                   <div className="relative" ref={specialtiesRef}>
                     <button 
                       type="button"
