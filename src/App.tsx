@@ -1048,28 +1048,26 @@ const cancelConnectionRequest = async (connectionId: string) => {
                   setActiveView('map')
                   setSelectedProfileId(null)
                 }}
-              className={`flex items-center justify-center flex-1 min-w-[140px] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
                   activeView === 'map' && !selectedProfileId
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
-                <MapPin className="w-4 h-4 mr-2" />
-                Map
+                <MapPin className="w-5 h-5" />
               </button>
               <button
                 onClick={() => {
                   setActiveView('community')
                   setSelectedProfileId(null)
                 }}
-              className={`flex items-center justify-center flex-1 min-w-[140px] px-3 sm:px-4 py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
                   activeView === 'community' && !selectedProfileId
                     ? 'bg-blue-100 text-blue-700'
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
                 }`}
               >
-                <Users className="w-4 h-4 mr-2" />
-                Community
+                <Users className="w-5 h-5" />
               </button>
             </nav>
             
@@ -1077,10 +1075,9 @@ const cancelConnectionRequest = async (connectionId: string) => {
             {currentUser && (
               <button
                 onClick={() => setIsConnectionsOpen(true)}
-                className="hidden md:flex items-center px-4 py-2 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                className="hidden md:flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
               >
-                <Users className="w-4 h-4 mr-2" />
-                Network
+                <Users className="w-5 h-5" />
               </button>
             )}
             
@@ -1133,7 +1130,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
               therapists={filteredTherapists}
             />
             
-            <div className="flex-1 relative min-h-[50vh] md:min-h-0">
+            <div className="flex-1 relative min-h-[75vh] md:min-h-0">
               <MapComponent 
                 therapists={filteredTherapists}
                 geocodeLocation={geocodeLocation}
@@ -2446,8 +2443,8 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
         </div>
       </div>
 
-      {/* Filters - Collapsible */}
-      <div className="border-b">
+      {/* Filters - Collapsible as drawer on mobile */}
+      <div className="border-b md:border-0">
         <button
           onClick={() => setIsFiltersExpanded(!isFiltersExpanded)}
           className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
@@ -2457,7 +2454,9 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
         </button>
 
         {isFiltersExpanded && (
-          <div className="px-4 pb-4 space-y-3">
+          <div className="fixed inset-0 z-50 md:static md:z-auto">
+            <div className="absolute inset-0 bg-black/40 md:hidden" onClick={() => setIsFiltersExpanded(false)}></div>
+            <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85%] bg-white shadow-xl md:shadow-none md:relative md:w-auto px-4 pb-4 pt-16 md:pt-0 space-y-3 overflow-y-auto">
             {/* Profession Filter - Compact */}
             <div>
               <label className="block text-xs font-medium text-gray-700 mb-1">Profession</label>
@@ -2665,6 +2664,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
                   )
                 })}
               </div>
+            </div>
             </div>
           </div>
         )}
