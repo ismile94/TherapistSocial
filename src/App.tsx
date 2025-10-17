@@ -1692,7 +1692,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
       </div>
 
       {/* Messages Overlay (LinkedIn-style) */}
-      <div className="fixed bottom-0 right-4 z-[1000] ">
+      <div className="fixed bottom-0 right-4 z-[1000] hidden md:block">
         <div className="relative">
           {/* Bildirim göstergesi */}
           {unreadMessagesCount > 0 && (
@@ -1789,6 +1789,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
       )}
 
       {/* Mobile Bottom Navigation */}
+      <div className="md:hidden">
       <MobileBottomNav
         activeView={activeView}
         setActiveView={setActiveView}
@@ -1799,6 +1800,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
         unreadMessagesCount={unreadMessagesCount}
         setIsMessagesOverlayOpen={setIsMessagesOverlayOpen}
       />
+      </div>
 
       {/* Notification Styles */}
       <style>{`
