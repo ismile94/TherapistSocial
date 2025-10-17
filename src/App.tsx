@@ -405,6 +405,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     email_notifications: true,
     push_notifications: true,
     profile_visibility: 'public',
+    message_permissions: 'network', // Yeni eklendi
     language: 'english',
     timezone: 'Europe/London',
     email_connection_requests: true,
@@ -412,8 +413,8 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     email_community_posts: false,
     push_messages: true,
     push_connection_activity: false,
-    two_factor_enabled: false,
-    data_export_requested: false
+    two_factor_enabled: false
+    // data_export_requested kaldırıldı - schema hatasını önlemek için
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -447,7 +448,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     }
 
     try {
-      // Try to get user settings from database
+      // Veritabanından kullanıcı ayarlarını al
       const { data, error } = await supabase
         .from('user_settings')
         .select('*')
@@ -459,6 +460,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
           email_notifications: data.email_notifications ?? true,
           push_notifications: data.push_notifications ?? true,
           profile_visibility: data.profile_visibility || 'public',
+          message_permissions: data.message_permissions || 'network', // Yeni eklendi
           language: data.language || 'english',
           timezone: data.timezone || 'Europe/London',
           email_connection_requests: data.email_connection_requests ?? true,
@@ -466,8 +468,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
           email_community_posts: data.email_community_posts ?? false,
           push_messages: data.push_messages ?? true,
           push_connection_activity: data.push_connection_activity ?? false,
-          two_factor_enabled: data.two_factor_enabled ?? false,
-          data_export_requested: data.data_export_requested ?? false
+          two_factor_enabled: data.two_factor_enabled ?? false
         })
       }
     } catch (err) {
@@ -504,7 +505,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         alert('Error saving settings. Please try again.')
       } else {
         setSettings(newSettings)
-        // Show success feedback
+        // Başarılı geri bildirim göster
         const successEvent = new CustomEvent('showToast', {
           detail: { message: 'Settings saved successfully!', type: 'success' }
         })
@@ -534,29 +535,8 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   }
 
   const handleEnable2FA = async () => {
-    // This would integrate with a proper 2FA service
+    // Bu, uygun bir 2FA servisi ile entegre edilecek
     alert('Two-factor authentication setup would be implemented here with a proper authentication service.')
-  }
-
-  const handleRequestDataExport = async () => {
-    setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      setSaving(false)
-      return
-    }
-
-    try {
-      // In a real app, this would trigger a backend process to prepare data export
-      await saveSettings({ data_export_requested: true })
-      alert('Data export requested! You will receive an email with your data within 24 hours.')
-    } catch (err) {
-      console.error('Error requesting data export:', err)
-      alert('Error requesting data export. Please try again.')
-    } finally {
-      setSaving(false)
-    }
   }
 
   const handleDeleteAccount = async () => {
@@ -568,7 +548,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     if (!user) return
 
     try {
-      // First, delete user data from profiles table
+      // Önce, kullanıcı verilerini profiles tablosundan sil
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
@@ -578,7 +558,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         console.error('Error deleting profile:', profileError)
       }
 
-      // Then delete user settings
+      // Sonra kullanıcı ayarlarını sil
       const { error: settingsError } = await supabase
         .from('user_settings')
         .delete()
@@ -588,7 +568,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         console.error('Error deleting settings:', settingsError)
       }
 
-      // Finally, delete the auth user
+      // Son olarak, auth kullanıcısını sil
       const { error: authError } = await supabase.auth.admin.deleteUser(user.id)
 
       if (authError) {
@@ -597,7 +577,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
       } else {
         alert('Account deleted successfully. You will be signed out.')
         onClose()
-        // Trigger sign out
+        // Çıkış yap
         await supabase.auth.signOut()
         window.location.reload()
       }
@@ -816,6 +796,46 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                     </label>
                   </div>
                 </div>
+
+                {/* Yeni: Mesajlaşma İzinleri Bölümü */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Messaging Permissions</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="message_permissions" 
+                        className="mr-2" 
+                        checked={settings.message_permissions === 'public'}
+                        onChange={() => saveSettings({ message_permissions: 'public' })}
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700">Public - Anyone can message me</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="message_permissions" 
+                        className="mr-2" 
+                        checked={settings.message_permissions === 'network'}
+                        onChange={() => saveSettings({ message_permissions: 'network' })}
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700">Network - Only my connections can message me</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="message_permissions" 
+                        className="mr-2" 
+                        checked={settings.message_permissions === 'private'}
+                        onChange={() => saveSettings({ message_permissions: 'private' })}
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700">Private - No one can message me</span>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -824,18 +844,6 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-gray-900">Data Privacy</h3>
               <div className="space-y-4">
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h4 className="font-semibold text-gray-900 mb-4">Data Export</h4>
-                  <p className="text-sm text-gray-600 mb-3">Download a copy of your data</p>
-                  <button 
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100"
-                    onClick={handleRequestDataExport}
-                    disabled={saving || settings.data_export_requested}
-                  >
-                    {settings.data_export_requested ? 'Export Requested' : 'Request Data Export'}
-                  </button>
-                </div>
-                
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Account Deletion</h4>
                   <p className="text-sm text-gray-600 mb-3">Permanently delete your account and all data</p>
@@ -4537,17 +4545,44 @@ function CommunityComponent() {
   }, [])
 
   const loadPosts = async () => {
-    const { data, error } = await supabase
-      .from('posts')
-      .select(`
-        *,
-        user:profiles(full_name, profession),
-        replies:post_replies(count)
-      `)
-      .order('created_at', { ascending: false })
+    try {
+      // First, get posts with user info
+      const { data: postsData, error: postsError } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          user:profiles!user_id(full_name, profession)
+        `)
+        .order('created_at', { ascending: false })
 
-    if (!error && data) {
-      setPosts(data)
+      if (postsError) {
+        console.error('Error loading posts:', postsError)
+        return
+      }
+
+      if (!postsData) {
+        setPosts([])
+        return
+      }
+
+      // Then get reply counts for each post
+      const postsWithReplies = await Promise.all(
+        postsData.map(async (post) => {
+          const { count, error: countError } = await supabase
+            .from('post_replies')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id)
+
+          return {
+            ...post,
+            replies: [{ count: countError ? 0 : count }]
+          }
+        })
+      )
+
+      setPosts(postsWithReplies)
+    } catch (err) {
+      console.error('Error loading community posts:', err)
     }
   }
 
@@ -4562,21 +4597,50 @@ function CommunityComponent() {
       return
     }
 
-    const { error } = await supabase
-      .from('posts')
-      .insert({
-        user_id: user.id,
-        title: newPost.title,
-        content: newPost.content
-      })
+    try {
+      const { error } = await supabase
+        .from('posts')
+        .insert({
+          user_id: user.id,  // Make sure this column exists in your database
+          title: newPost.title.trim(),
+          content: newPost.content.trim()
+        })
 
-    if (!error) {
+      if (error) {
+        console.error('Error creating post:', error)
+        alert('Failed to create post. Please try again.')
+        return
+      }
+
       setNewPost({ title: '', content: '' })
       setShowNewPostModal(false)
-      loadPosts()
+      await loadPosts() // Reload posts to show the new one
+      
+    } catch (err) {
+      console.error('Error creating post:', err)
+      alert('Failed to create post. Please try again.')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
+
+  // Update the database schema check - add this helper function
+  const checkDatabaseSchema = async () => {
+    // This would be called during development to verify the schema
+    const { data: tables, error } = await supabase
+      .from('information_schema.tables')
+      .select('table_name')
+      .eq('table_schema', 'public')
+    
+    if (!error) {
+      console.log('Available tables:', tables)
+    }
+  }
+
+  // Call this once to check schema
+  useEffect(() => {
+    checkDatabaseSchema()
+  }, [])
 
   return (
     <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
@@ -4588,7 +4652,7 @@ function CommunityComponent() {
           </div>
           <button 
             onClick={() => setShowNewPostModal(true)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-4 h-4 mr-2" />
             New Post
@@ -4602,7 +4666,9 @@ function CommunityComponent() {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">{post.title}</h3>
                   <p className="text-sm text-gray-600">
-                    by <span className="font-medium">{post.user?.full_name}</span> • {post.user?.profession} • {new Date(post.created_at).toLocaleDateString()}
+                    by <span className="font-medium">{post.user?.full_name || 'Unknown User'}</span> 
+                    {post.user?.profession && ` • ${post.user.profession}`} 
+                    • {new Date(post.created_at).toLocaleDateString()}
                   </p>
                 </div>
               </div>
@@ -4632,7 +4698,11 @@ function CommunityComponent() {
           <div className="bg-white rounded-2xl w-full max-w-2xl p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold text-gray-900">Create New Post</h3>
-              <button onClick={() => setShowNewPostModal(false)} className="text-gray-400 hover:text-gray-600">
+              <button 
+                onClick={() => setShowNewPostModal(false)} 
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={loading}
+              >
                 <X className="w-6 h-6" />
               </button>
             </div>
@@ -4641,29 +4711,39 @@ function CommunityComponent() {
               <input
                 type="text"
                 placeholder="Post Title"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
                 value={newPost.title}
                 onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+                disabled={loading}
               />
               
               <textarea
                 placeholder="What would you like to share with the community?"
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 min-h-[200px]"
+                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px] transition-colors"
                 value={newPost.content}
                 onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+                disabled={loading}
               />
               
               <div className="flex gap-3">
                 <button
                   onClick={createPost}
                   disabled={loading || !newPost.title.trim() || !newPost.content.trim()}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                  className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center gap-2"
                 >
-                  {loading ? 'Posting...' : 'Post'}
+                  {loading ? (
+                    <>
+                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                      Posting...
+                    </>
+                  ) : (
+                    'Post'
+                  )}
                 </button>
                 <button
                   onClick={() => setShowNewPostModal(false)}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  disabled={loading}
+                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
                 >
                   Cancel
                 </button>
@@ -4679,6 +4759,22 @@ function CommunityComponent() {
 function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
   const [loading, setLoading] = useState(false)
   const [cvStyle, setCvStyle] = useState<'modern' | 'professional' | 'creative'>('modern')
+  const [selectedSections, setSelectedSections] = useState({
+    personal: true,
+    summary: true,
+    experience: true,
+    qualifications: true,
+    specialties: true,
+    languages: true,
+    additional: true
+  })
+
+  const toggleSection = (section: string) => {
+    setSelectedSections(prev => ({
+      ...prev,
+      [section]: !prev[section as keyof typeof prev]
+    }))
+  }
 
   const generatePDF = async () => {
     setLoading(true)
@@ -4695,21 +4791,23 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
               <meta charset="UTF-8">
               <style>
                 ${getCVStyles(cvStyle)}
+                ${getPrintStyles()}
               </style>
             </head>
             <body>
               <div class="cv-container">
                 ${cvContent}
               </div>
+              <script>
+                window.onload = function() {
+                  window.print();
+                  setTimeout(() => window.close(), 1000);
+                }
+              </script>
             </body>
           </html>
         `)
         printWindow.document.close()
-        
-        // Yazdırma öncesi kısa bir gecikme ekleyelim
-        setTimeout(() => {
-          printWindow.print()
-        }, 500)
       }
       
     } catch (error) {
@@ -4719,67 +4817,157 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     setLoading(false)
   }
 
-  const generateCVContent = () => {
-    return `
-      <!-- Header Section -->
-      <header class="cv-header">
-        <div class="header-content">
-          <h1 class="name">${userProfile.full_name || 'Professional Therapist'}</h1>
-          <h2 class="title">${userProfile.profession || 'Therapist'}</h2>
-          <div class="contact-info">
-            ${userProfile.contact_email ? `<div class="contact-item"><span class="icon">✉️</span> ${userProfile.contact_email}</div>` : ''}
-            ${userProfile.phone ? `<div class="contact-item"><span class="icon">📞</span> ${userProfile.phone}</div>` : ''}
-            ${userProfile.city ? `<div class="contact-item"><span class="icon">📍</span> ${userProfile.city}, ${userProfile.county}</div>` : ''}
-            ${userProfile.website ? `<div class="contact-item"><span class="icon">🌐</span> ${userProfile.website}</div>` : ''}
-          </div>
-        </div>
-      </header>
+  const getPrintStyles = () => `
+    @media print {
+      @page {
+        margin: 15mm;
+        size: A4;
+      }
+      
+      body {
+        margin: 0;
+        padding: 0;
+        background: white !important;
+        font-size: 12pt;
+        line-height: 1.4;
+      }
+      
+      .cv-container {
+        max-width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        background: white !important;
+      }
+      
+      .cv-section {
+        break-inside: avoid;
+        margin-bottom: 1.5rem;
+        page-break-inside: avoid;
+      }
+      
+      .experience-item {
+        break-inside: avoid;
+        page-break-inside: avoid;
+        margin-bottom: 1rem;
+      }
+      
+      .qualification-item {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      
+      .cv-header {
+        margin: 0 0 2rem 0 !important;
+        padding: 2rem 0 !important;
+      }
+      
+      .skills-container, .languages-container {
+        break-inside: avoid;
+      }
+      
+      /* Ensure sections don't break awkwardly */
+      .section-content {
+        break-inside: avoid;
+      }
+      
+      /* Reduce spacing for print */
+      .cv-section {
+        padding: 0.5rem 0;
+      }
+      
+      .experience-item, .qualification-item {
+        padding: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+    }
+    
+    /* Smart page breaking */
+    .page-break {
+      page-break-before: always;
+    }
+    
+    .avoid-break {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+  `
 
-      <!-- Main Content -->
-      <main class="cv-main">
-        <!-- Professional Summary -->
-        ${userProfile.about_me ? `
-        <section class="cv-section">
+  const generateCVContent = () => {
+    let content = ''
+    
+    // Header Section
+    if (selectedSections.personal) {
+      content += `
+        <header class="cv-header">
+          <div class="header-content">
+            <h1 class="name">${userProfile.full_name || 'Professional Therapist'}</h1>
+            <h2 class="title">${userProfile.profession || 'Therapist'}</h2>
+            <div class="contact-info">
+              ${userProfile.contact_email ? `<div class="contact-item"><span class="icon">✉️</span> ${userProfile.contact_email}</div>` : ''}
+              ${userProfile.phone ? `<div class="contact-item"><span class="icon">📞</span> ${userProfile.phone}</div>` : ''}
+              ${userProfile.city ? `<div class="contact-item"><span class="icon">📍</span> ${userProfile.city}, ${userProfile.county}</div>` : ''}
+              ${userProfile.website ? `<div class="contact-item"><span class="icon">🌐</span> ${userProfile.website}</div>` : ''}
+            </div>
+          </div>
+        </header>
+      `
+    }
+
+    // Main Content
+    content += `<main class="cv-main">`
+
+    // Professional Summary
+    if (selectedSections.summary && userProfile.about_me) {
+      content += `
+        <section class="cv-section avoid-break">
           <h3 class="section-title">Professional Summary</h3>
           <div class="section-content">
             <p class="summary-text">${formatParagraphs(userProfile.about_me)}</p>
           </div>
         </section>
-        ` : ''}
+      `
+    }
 
-        <!-- Work Experience -->
-        ${userProfile.work_experience?.length > 0 ? `
+    // Work Experience
+    if (selectedSections.experience && userProfile.work_experience?.length > 0) {
+      content += `
         <section class="cv-section">
           <h3 class="section-title">Work Experience</h3>
           <div class="section-content">
-            ${userProfile.work_experience.map((exp: any) => `
-              <div class="experience-item">
-                <div class="experience-header">
-                  <h4 class="job-title">${exp.title || 'Position'}</h4>
-                  <span class="date-range">${formatDate(exp.start_date)} - ${exp.end_date?.toLowerCase() === 'present' ? 'Present' : formatDate(exp.end_date)}</span>
-                </div>
-                <div class="company">${exp.organization || 'Organization'}</div>
-                ${exp.description ? `
-                  <div class="job-description">
-                    ${formatParagraphs(exp.description)}
+            ${userProfile.work_experience.map((exp: any, index: number) => {
+              const isLast = index === userProfile.work_experience.length - 1
+              return `
+                <div class="experience-item ${isLast ? '' : 'avoid-break'}">
+                  <div class="experience-header">
+                    <h4 class="job-title">${exp.title || 'Position'}</h4>
+                    <span class="date-range">${formatDate(exp.start_date)} - ${exp.end_date?.toLowerCase() === 'present' ? 'Present' : formatDate(exp.end_date)}</span>
                   </div>
-                ` : ''}
-                ${calculateDuration(exp.start_date, exp.end_date) ? `
-                  <div class="duration">${calculateDuration(exp.start_date, exp.end_date)}</div>
-                ` : ''}
-              </div>
-            `).join('')}
+                  <div class="company">${exp.organization || 'Organization'}</div>
+                  ${exp.description ? `
+                    <div class="job-description">
+                      ${formatParagraphs(exp.description)}
+                    </div>
+                  ` : ''}
+                  ${calculateDuration(exp.start_date, exp.end_date) ? `
+                    <div class="duration">${calculateDuration(exp.start_date, exp.end_date)}</div>
+                  ` : ''}
+                </div>
+              `
+            }).join('')}
           </div>
         </section>
-        ` : ''}
+      `
+    }
 
-        <!-- Qualifications -->
-        ${userProfile.qualifications?.length > 0 ? `
+    // Qualifications
+    if (selectedSections.qualifications && userProfile.qualifications?.length > 0) {
+      content += `
         <section class="cv-section">
           <h3 class="section-title">Qualifications & Certifications</h3>
           <div class="section-content">
             ${userProfile.qualifications.map((qual: any) => `
-              <div class="qualification-item">
+              <div class="qualification-item avoid-break">
                 <div class="qualification-header">
                   <h4 class="qualification-title">${qual.title || 'Qualification'}</h4>
                   <span class="qualification-year">${qual.year || ''}</span>
@@ -4789,11 +4977,13 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             `).join('')}
           </div>
         </section>
-        ` : ''}
+      `
+    }
 
-        <!-- Specialties -->
-        ${userProfile.specialties?.length > 0 ? `
-        <section class="cv-section">
+    // Specialties
+    if (selectedSections.specialties && userProfile.specialties?.length > 0) {
+      content += `
+        <section class="cv-section avoid-break">
           <h3 class="section-title">Areas of Specialization</h3>
           <div class="section-content">
             <div class="skills-container">
@@ -4803,11 +4993,13 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             </div>
           </div>
         </section>
-        ` : ''}
+      `
+    }
 
-        <!-- Languages -->
-        ${userProfile.languages?.length > 0 ? `
-        <section class="cv-section">
+    // Languages
+    if (selectedSections.languages && userProfile.languages?.length > 0) {
+      content += `
+        <section class="cv-section avoid-break">
           <h3 class="section-title">Languages</h3>
           <div class="section-content">
             <div class="languages-container">
@@ -4817,10 +5009,13 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             </div>
           </div>
         </section>
-        ` : ''}
+      `
+    }
 
-        <!-- Additional Information -->
-        <section class="cv-section">
+    // Additional Information
+    if (selectedSections.additional) {
+      content += `
+        <section class="cv-section avoid-break">
           <h3 class="section-title">Additional Information</h3>
           <div class="section-content">
             <div class="additional-info">
@@ -4830,13 +5025,19 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             </div>
           </div>
         </section>
-      </main>
+      `
+    }
 
-      <!-- Footer -->
+    content += `</main>`
+
+    // Footer
+    content += `
       <footer class="cv-footer">
         <p>Generated by UK Therapist Network • ${new Date().toLocaleDateString()}</p>
       </footer>
     `
+
+    return content
   }
 
   const getCVStyles = (style: string) => {
@@ -5165,10 +5366,9 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     return baseStyles + (styleVariants[style as keyof typeof styleVariants] || styleVariants.modern)
   }
 
-  // Yardımcı fonksiyonlar
+  // Helper functions
   const formatParagraphs = (text: string) => {
     if (!text) return ''
-    // Paragraf yapısını koru ve <br> ile değiştir
     return text.split('\n').filter(para => para.trim()).map(para => 
       `<p style="margin-bottom: 0.75rem;">${para.trim()}</p>`
     ).join('')
@@ -5278,6 +5478,32 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             </div>
           </div>
 
+          {/* Section Selection */}
+          <div className="mb-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-3">Include Sections</h3>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {[
+                { id: 'personal', label: 'Personal Info', default: true },
+                { id: 'summary', label: 'Professional Summary', default: true },
+                { id: 'experience', label: 'Work Experience', default: true },
+                { id: 'qualifications', label: 'Qualifications', default: true },
+                { id: 'specialties', label: 'Specialties', default: true },
+                { id: 'languages', label: 'Languages', default: true },
+                { id: 'additional', label: 'Additional Info', default: true }
+              ].map((section) => (
+                <label key={section.id} className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedSections[section.id as keyof typeof selectedSections]}
+                    onChange={() => toggleSection(section.id)}
+                    className="rounded border-gray-300"
+                  />
+                  <span className="text-sm font-medium text-gray-700">{section.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           {/* Included Information */}
           <div className="bg-gray-50 rounded-lg p-4 mb-6">
             <h3 className="font-semibold mb-3 text-gray-900">Included Information:</h3>
@@ -5345,6 +5571,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             </h4>
             <p className="text-sm text-blue-700">
               For best results, use the "Print" dialog and save as PDF. Choose "A4" paper size and disable headers/footers for a clean look.
+              The CV is optimized to avoid awkward page breaks and make efficient use of space.
             </p>
           </div>
         </div>
