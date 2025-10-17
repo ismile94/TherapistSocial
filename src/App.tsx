@@ -1691,8 +1691,8 @@ const cancelConnectionRequest = async (connectionId: string) => {
       ))}
       </div>
 
-      {/* Messages Overlay (LinkedIn-style) */}
-      <div className="fixed bottom-0 right-4 z-[1000] hidden md:block">
+      {/* Messages Overlay */}
+      <div className="fixed bottom-0 z-[1000] w-full md:w-auto right-0 md:right-4">
         <div className="relative">
           {/* Bildirim göstergesi */}
           {unreadMessagesCount > 0 && (
@@ -1708,54 +1708,52 @@ const cancelConnectionRequest = async (connectionId: string) => {
             </div>
           )}
           
-          <div className={`msg-overlay-list-bubble ml4 msg-overlay-list-bubble ${isMessagesOverlayOpen ? '' : ''}`}>
+          <div
+            className="bg-white border border-gray-300 rounded-t-lg shadow-2xl overflow-hidden md:rounded-lg"
+            style={{ width: '100%', maxWidth: '360px' }}
+          >
             <div
-              className="bg-white border border-gray-300 rounded-t-lg shadow-2xl overflow-hidden"
-              style={{ width: '360px' }}
+              className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
+              onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
             >
-              <div
-                className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
-                onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
-              >
-                <div className="flex items-center space-x-2">
-                  <MessageSquare className="w-4 h-4 opacity-90" />
-                  <span className="font-medium text-sm tracking-wide">Messaging</span>
-                </div>
-                {unreadMessagesCount > 0 && (
-                  <span className="bg-white text-blue-700 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                  </span>
-                )}
+              <div className="flex items-center space-x-2">
+                <MessageSquare className="w-4 h-4 opacity-90" />
+                <span className="font-medium text-sm tracking-wide">Messaging</span>
               </div>
-
-              {isMessagesOverlayOpen && (
-                <div
-                  className="fixed inset-0 bg-white z-50 flex flex-col"
-                  style={{ maxHeight: '100vh' }}
-                >
-                  <div className="flex-1 overflow-y-auto">
-                    <ConversationsList
-                      currentUserId={currentUser?.id || ''}
-                      onSelectConversation={(conv: Conversation) => openChatBox(conv)}
-                      selectedConversationId={undefined}
-                      onUnreadCountChange={setUnreadMessagesCount}
-                      conversationMetadata={conversationMetadata}
-                      onUpdateMetadata={updateConversationMetadata}
-                      compact
-                      playNotificationSound={playNotificationSound}
-                    />
-                  </div>
-
-                  {/* Kapatma butonu */}
-                  <button
-                    onClick={() => setIsMessagesOverlayOpen(false)}
-                    className="absolute top-2 right-2 text-gray-500"
-                  >
-                    ✕
-                  </button>
-                </div>
+              {unreadMessagesCount > 0 && (
+                <span className="bg-white text-blue-700 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                </span>
               )}
             </div>
+
+            {isMessagesOverlayOpen && (
+              <div
+                className="fixed inset-0 bg-white z-50 flex flex-col md:fixed md:inset-auto md:bottom-0 md:right-4 md:w-96 md:h-96 md:rounded-lg"
+                style={{ maxHeight: '100vh' }}
+              >
+                <div className="flex-1 overflow-y-auto">
+                  <ConversationsList
+                    currentUserId={currentUser?.id || ''}
+                    onSelectConversation={(conv: Conversation) => openChatBox(conv)}
+                    selectedConversationId={undefined}
+                    onUnreadCountChange={setUnreadMessagesCount}
+                    conversationMetadata={conversationMetadata}
+                    onUpdateMetadata={updateConversationMetadata}
+                    compact
+                    playNotificationSound={playNotificationSound}
+                  />
+                </div>
+
+                {/* Kapatma butonu */}
+                <button
+                  onClick={() => setIsMessagesOverlayOpen(false)}
+                  className="absolute top-2 right-2 text-gray-500 z-10"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
