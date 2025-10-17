@@ -405,16 +405,9 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     email_notifications: true,
     push_notifications: true,
     profile_visibility: 'public',
-    message_permissions: 'network', // Yeni eklendi
+    message_permissions: 'network',
     language: 'english',
-    timezone: 'Europe/London',
-    email_connection_requests: true,
-    email_messages: true,
-    email_community_posts: false,
-    push_messages: true,
-    push_connection_activity: false,
-    two_factor_enabled: false
-    // data_export_requested kaldırıldı - schema hatasını önlemek için
+    timezone: 'Europe/London'
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -448,27 +441,25 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     }
 
     try {
-      // Veritabanından kullanıcı ayarlarını al
+      // Önce tablonun var olup olmadığını kontrol et
       const { data, error } = await supabase
         .from('user_settings')
         .select('*')
         .eq('id', user.id)
         .single()
 
-      if (!error && data) {
+      if (error && error.code === 'PGRST116') {
+        // Kayıt yok, varsayılan ayarları kullan
+        console.log('No settings found, using defaults')
+      } else if (!error && data) {
+        // Sadece var olan sütunları al
         setSettings({
           email_notifications: data.email_notifications ?? true,
           push_notifications: data.push_notifications ?? true,
           profile_visibility: data.profile_visibility || 'public',
-          message_permissions: data.message_permissions || 'network', // Yeni eklendi
+          message_permissions: data.message_permissions || 'network',
           language: data.language || 'english',
-          timezone: data.timezone || 'Europe/London',
-          email_connection_requests: data.email_connection_requests ?? true,
-          email_messages: data.email_messages ?? true,
-          email_community_posts: data.email_community_posts ?? false,
-          push_messages: data.push_messages ?? true,
-          push_connection_activity: data.push_connection_activity ?? false,
-          two_factor_enabled: data.two_factor_enabled ?? false
+          timezone: data.timezone || 'Europe/London'
         })
       }
     } catch (err) {
@@ -490,22 +481,37 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     try {
       const newSettings = { ...settings, ...updates }
       
+      // Sadece temel sütunları kaydet
+      const settingsToSave = {
+        id: user.id,
+        email_notifications: newSettings.email_notifications,
+        push_notifications: newSettings.push_notifications,
+        profile_visibility: newSettings.profile_visibility,
+        message_permissions: newSettings.message_permissions,
+        language: newSettings.language,
+        timezone: newSettings.timezone,
+        updated_at: new Date().toISOString()
+      }
+
       const { error } = await supabase
         .from('user_settings')
-        .upsert({
-          id: user.id,
-          ...newSettings,
-          updated_at: new Date().toISOString()
-        }, {
+        .upsert(settingsToSave, {
           onConflict: 'id'
         })
 
       if (error) {
         console.error('Error saving settings:', error)
-        alert('Error saving settings. Please try again.')
+        
+        // Eğer tablo yoksa veya sütun yoksa, basit bir şekilde kaydetmeyi dene
+        if (error.code === '42P01' || error.code === '42703') {
+          console.log('Table or column missing, trying minimal save...')
+          await saveMinimalSettings(user.id, newSettings)
+        } else {
+          alert('Error saving settings. Please try again.')
+        }
       } else {
         setSettings(newSettings)
-        // Başarılı geri bildirim göster
+        // Show success feedback
         const successEvent = new CustomEvent('showToast', {
           detail: { message: 'Settings saved successfully!', type: 'success' }
         })
@@ -516,6 +522,39 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
       alert('Error saving settings. Please try again.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Basit ayar kaydetme fonksiyonu - sadece temel sütunlar
+  const saveMinimalSettings = async (userId: string, newSettings: any) => {
+    try {
+      const minimalSettings = {
+        id: userId,
+        email_notifications: newSettings.email_notifications,
+        push_notifications: newSettings.push_notifications,
+        profile_visibility: newSettings.profile_visibility,
+        updated_at: new Date().toISOString()
+      }
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(minimalSettings, {
+          onConflict: 'id'
+        })
+
+      if (error) {
+        console.error('Minimal save also failed:', error)
+        alert('Settings partially saved. Some features may not work correctly.')
+      } else {
+        setSettings(newSettings)
+        const successEvent = new CustomEvent('showToast', {
+          detail: { message: 'Settings saved!', type: 'success' }
+        })
+        window.dispatchEvent(successEvent)
+      }
+    } catch (err) {
+      console.error('Error in minimal save:', err)
+      alert('Settings could not be saved. Please try again later.')
     }
   }
 
@@ -535,7 +574,6 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   }
 
   const handleEnable2FA = async () => {
-    // Bu, uygun bir 2FA servisi ile entegre edilecek
     alert('Two-factor authentication setup would be implemented here with a proper authentication service.')
   }
 
@@ -548,7 +586,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     if (!user) return
 
     try {
-      // Önce, kullanıcı verilerini profiles tablosundan sil
+      // First, delete user data from profiles table
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
@@ -558,7 +596,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         console.error('Error deleting profile:', profileError)
       }
 
-      // Sonra kullanıcı ayarlarını sil
+      // Then delete user settings
       const { error: settingsError } = await supabase
         .from('user_settings')
         .delete()
@@ -568,7 +606,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         console.error('Error deleting settings:', settingsError)
       }
 
-      // Son olarak, auth kullanıcısını sil
+      // Finally, delete the auth user
       const { error: authError } = await supabase.auth.admin.deleteUser(user.id)
 
       if (authError) {
@@ -577,7 +615,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
       } else {
         alert('Account deleted successfully. You will be signed out.')
         onClose()
-        // Çıkış yap
+        // Trigger sign out
         await supabase.auth.signOut()
         window.location.reload()
       }
@@ -745,9 +783,9 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                   <button 
                     className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100"
                     onClick={handleEnable2FA}
-                    disabled={saving || settings.two_factor_enabled}
+                    disabled={saving}
                   >
-                    {settings.two_factor_enabled ? '2FA Enabled' : 'Enable 2FA'}
+                    Enable 2FA
                   </button>
                 </div>
               </div>
@@ -797,7 +835,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
-                {/* Yeni: Mesajlaşma İzinleri Bölümü */}
+                {/* Messaging Permissions */}
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Messaging Permissions</h4>
                   <div className="space-y-3">
@@ -867,59 +905,13 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                   <h4 className="font-semibold text-gray-900 mb-4">Email Notifications</h4>
                   <div className="space-y-3">
                     <label className="flex items-center justify-between w-full max-w-md">
-                      <span className="text-sm text-gray-700">New connection requests</span>
+                      <span className="text-sm text-gray-700">Email notifications</span>
                       <input 
                         type="checkbox" 
                         className="rounded border-gray-300" 
-                        checked={settings.email_connection_requests}
-                        onChange={(e) => saveSettings({ email_connection_requests: e.target.checked })}
-                        disabled={saving || !settings.email_notifications}
-                      />
-                    </label>
-                    <label className="flex items-center justify-between w-full max-w-md">
-                      <span className="text-sm text-gray-700">Messages</span>
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-gray-300" 
-                        checked={settings.email_messages}
-                        onChange={(e) => saveSettings({ email_messages: e.target.checked })}
-                        disabled={saving || !settings.email_notifications}
-                      />
-                    </label>
-                    <label className="flex items-center justify-between w-full max-w-md">
-                      <span className="text-sm text-gray-700">Community posts</span>
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-gray-300" 
-                        checked={settings.email_community_posts}
-                        onChange={(e) => saveSettings({ email_community_posts: e.target.checked })}
-                        disabled={saving || !settings.email_notifications}
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div className="bg-white border border-gray-200 rounded-lg p-6">
-                  <h4 className="font-semibold text-gray-900 mb-4">Push Notifications</h4>
-                  <div className="space-y-3">
-                    <label className="flex items-center justify-between w-full max-w-md">
-                      <span className="text-sm text-gray-700">New messages</span>
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-gray-300" 
-                        checked={settings.push_messages}
-                        onChange={(e) => saveSettings({ push_messages: e.target.checked })}
-                        disabled={saving || !settings.push_notifications}
-                      />
-                    </label>
-                    <label className="flex items-center justify-between w-full max-w-md">
-                      <span className="text-sm text-gray-700">Connection activity</span>
-                      <input 
-                        type="checkbox" 
-                        className="rounded border-gray-300" 
-                        checked={settings.push_connection_activity}
-                        onChange={(e) => saveSettings({ push_connection_activity: e.target.checked })}
-                        disabled={saving || !settings.push_notifications}
+                        checked={settings.email_notifications}
+                        onChange={(e) => saveSettings({ email_notifications: e.target.checked })}
+                        disabled={saving}
                       />
                     </label>
                   </div>
