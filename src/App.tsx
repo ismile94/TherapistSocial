@@ -5167,6 +5167,8 @@ function CommunityComponent() {
       is_public: true
     } as PostMetadata
   })
+  const [selectedUserProfile, setSelectedUserProfile] = useState<any>(null)
+  const [selectedPost, setSelectedPost] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [editingPost, setEditingPost] = useState<any>(null)
   const [comments, setComments] = useState<{ [postId: string]: any[] }>({})
@@ -5775,6 +5777,74 @@ function CommunityComponent() {
       console.error('Error unfollowing post:', err)
     }
   }
+
+  const addEditAttachment = () => {
+  if (attachmentInput.trim() && !editForm.metadata.attachments.includes(attachmentInput.trim())) {
+    setEditForm({
+      ...editForm,
+      metadata: {
+        ...editForm.metadata,
+        attachments: [...editForm.metadata.attachments, attachmentInput.trim()]
+      }
+    })
+    setAttachmentInput('')
+  }
+}
+
+const removeEditAttachment = (attachmentToRemove: string) => {
+  setEditForm({
+    ...editForm,
+    metadata: {
+      ...editForm.metadata,
+      attachments: editForm.metadata.attachments.filter(attachment => attachment !== attachmentToRemove)
+    }
+  })
+}
+
+const addEditCoAuthor = () => {
+  if (coAuthorInput.trim() && !editForm.metadata.co_authors.includes(coAuthorInput.trim())) {
+    setEditForm({
+      ...editForm,
+      metadata: {
+        ...editForm.metadata,
+        co_authors: [...editForm.metadata.co_authors, coAuthorInput.trim()]
+      }
+    })
+    setCoAuthorInput('')
+  }
+}
+
+const removeEditCoAuthor = (coAuthorToRemove: string) => {
+  setEditForm({
+    ...editForm,
+    metadata: {
+      ...editForm.metadata,
+      co_authors: editForm.metadata.co_authors.filter(coAuthor => coAuthor !== coAuthorToRemove)
+    }
+  })
+}
+
+    const viewUserProfile = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single()
+
+    if (error) throw error
+    setSelectedUserProfile(data)
+  } catch (err) {
+    console.error('Error loading user profile:', err)
+  }
+}
+
+const viewPostDetail = (post: CommunityPost) => {
+  setSelectedPost(post)
+  if (!expandedPosts.includes(post.id)) {
+    loadComments(post.id)
+  }
+}
 
   const addComment = async (postId: string, parentReplyId: string | null = null) => {
     const commentText = parentReplyId ? replyContents[parentReplyId] : newComments[postId]
@@ -6387,19 +6457,34 @@ function CommunityComponent() {
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold">
-                      {post.user?.full_name?.charAt(0) || 'U'}
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{post.user?.full_name}</h3>
-                      <p className="text-sm text-gray-600">
-                        {post.user?.profession} • {formatTime(post.created_at)}
-                        {post.updated_at && post.updated_at !== post.created_at && (
-                          <span className="text-gray-400"> (edited)</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
+  <button
+    onClick={() => viewUserProfile(post.user_id || post.user?.id)}
+    className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors cursor-pointer"
+  >
+    {post.user?.full_name?.charAt(0) || 'U'}
+  </button>
+  <div>
+    <button
+      onClick={() => viewUserProfile(post.user_id || post.user?.id)}
+      className="font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
+    >
+      {post.user?.full_name}
+    </button>
+    <p className="text-sm text-gray-600">
+      {post.user?.profession} • {formatTime(post.created_at)}
+      {post.updated_at && post.updated_at !== post.created_at && (
+        <span className="text-gray-400"> (edited)</span>
+      )}
+    </p>
+  </div>
+</div>
+
+<button
+  onClick={() => viewPostDetail(post)}
+  className="text-xl font-bold text-gray-900 mb-2 hover:text-blue-600 transition-colors cursor-pointer text-left w-full"
+>
+  {post.title}
+</button>
                   
                   <h4 className="text-xl font-bold text-gray-900 mb-2">{post.title}</h4>
                   
@@ -6998,86 +7083,86 @@ function CommunityComponent() {
               </div>
   
               {/* Attachments */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Attachments & Links
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add file URLs or links..."
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={attachmentInput}
-                    onChange={(e) => setAttachmentInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAttachment())}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={addAttachment}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-                {newPost.metadata.attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {newPost.metadata.attachments.map((attachment, index) => (
-                      <span 
-                        key={index} 
-                        className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
-                      >
-                        Attachment {index + 1}
-                        <X 
-                          className="w-3 h-3 ml-2 cursor-pointer" 
-                          onClick={() => removeAttachment(attachment)} 
-                        />
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-  
-              {/* Co-authors */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Co-authors / Mentions
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Mention other users by username..."
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={coAuthorInput}
-                    onChange={(e) => setCoAuthorInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCoAuthor())}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={addCoAuthor}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-                {newPost.metadata.co_authors.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {newPost.metadata.co_authors.map(coAuthor => (
-                      <span 
-                        key={coAuthor} 
-                        className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
-                      >
-                        @{coAuthor}
-                        <X 
-                          className="w-3 h-3 ml-2 cursor-pointer" 
-                          onClick={() => removeCoAuthor(coAuthor)} 
-                        />
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Attachments & Links
+  </label>
+  <div className="flex gap-2">
+    <input
+      type="text"
+      placeholder="Add file URLs or links..."
+      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      value={attachmentInput}
+      onChange={(e) => setAttachmentInput(e.target.value)}
+      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditAttachment())}
+      disabled={loading}
+    />
+    <button
+      type="button"
+      onClick={addEditAttachment}
+      className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+    >
+      Add
+    </button>
+  </div>
+  {editForm.metadata.attachments.length > 0 && (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {editForm.metadata.attachments.map((attachment, index) => (
+        <span 
+          key={index} 
+          className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
+        >
+          Attachment {index + 1}
+          <X 
+            className="w-3 h-3 ml-2 cursor-pointer" 
+            onClick={() => removeEditAttachment(attachment)} 
+          />
+        </span>
+      ))}
+    </div>
+  )}
+</div>
+
+{/* Co-authors */}
+<div>
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Co-authors / Mentions
+  </label>
+  <div className="flex gap-2">
+    <input
+      type="text"
+      placeholder="Mention other users by username..."
+      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      value={coAuthorInput}
+      onChange={(e) => setCoAuthorInput(e.target.value)}
+      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditCoAuthor())}
+      disabled={loading}
+    />
+    <button
+      type="button"
+      onClick={addEditCoAuthor}
+      className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+    >
+      Add
+    </button>
+  </div>
+  {editForm.metadata.co_authors.length > 0 && (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {editForm.metadata.co_authors.map(coAuthor => (
+        <span 
+          key={coAuthor} 
+          className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
+        >
+          @{coAuthor}
+          <X 
+            className="w-3 h-3 ml-2 cursor-pointer" 
+            onClick={() => removeEditCoAuthor(coAuthor)} 
+          />
+        </span>
+      ))}
+    </div>
+  )}
+</div>
   
               {/* Privacy */}
               <div>
@@ -7475,6 +7560,184 @@ function CommunityComponent() {
         </div>
       )}
     </div>
+      {/* User Profile Modal */}
+{selectedUserProfile && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center p-6 border-b border-gray-200">
+        <h3 className="text-xl font-bold text-gray-900">User Profile</h3>
+        <button 
+          onClick={() => setSelectedUserProfile(null)} 
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-6">
+        {/* Profile Header */}
+        <div className="flex items-center gap-4">
+          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+            {selectedUserProfile.full_name?.charAt(0) || 'U'}
+          </div>
+          <div>
+            <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
+            <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+          </div>
+        </div>
+
+        {/* Profile Details */}
+        <div className="space-y-4">
+          {selectedUserProfile.specialties && selectedUserProfile.specialties.length > 0 && (
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Specialties</h5>
+              <div className="flex flex-wrap gap-2">
+                {selectedUserProfile.specialties.map((specialty: string) => (
+                  <span key={specialty} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                    {specialty}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedUserProfile.languages && selectedUserProfile.languages.length > 0 && (
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Languages</h5>
+              <div className="flex flex-wrap gap-2">
+                {selectedUserProfile.languages.map((language: string) => (
+                  <span key={language} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                    {language}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {selectedUserProfile.bio && (
+            <div>
+              <h5 className="text-sm font-medium text-gray-700 mb-2">Bio</h5>
+              <p className="text-gray-700">{selectedUserProfile.bio}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Post Detail Modal */}
+{selectedPost && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4">
+    <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+        <h3 className="text-xl font-bold text-gray-900">Post Details</h3>
+        <button 
+          onClick={() => setSelectedPost(null)} 
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="p-6">
+        {/* Post Header */}
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => {
+              viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
+              setSelectedPost(null)
+            }}
+            className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors"
+          >
+            {selectedPost.user?.full_name?.charAt(0) || 'U'}
+          </button>
+          <div>
+            <button
+              onClick={() => {
+                viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
+                setSelectedPost(null)
+              }}
+              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-lg"
+            >
+              {selectedPost.user?.full_name}
+            </button>
+            <p className="text-sm text-gray-600">
+              {selectedPost.user?.profession} • {formatTime(selectedPost.created_at)}
+              {selectedPost.updated_at && selectedPost.updated_at !== selectedPost.created_at && (
+                <span className="text-gray-400"> (edited)</span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Post Title */}
+        <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h2>
+
+        {/* Post Metadata */}
+        {renderPostMetadata(selectedPost)}
+
+        {/* Post Settings Indicators */}
+        <div className="flex flex-wrap gap-3 text-xs text-gray-500 my-4">
+          {postSettings[selectedPost.id]?.comments_disabled && (
+            <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
+              <MessageSquare className="w-3 h-3" />
+              Comments disabled
+            </span>
+          )}
+          {postSettings[selectedPost.id]?.muted && (
+            <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
+              <Bell className="w-3 h-3" />
+              Notifications muted
+            </span>
+          )}
+          {followingPosts.includes(selectedPost.id) && (
+            <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+              <Bell className="w-3 h-3" />
+              Following
+            </span>
+          )}
+        </div>
+
+        {/* Post Content */}
+        <p className="text-gray-700 mb-6 whitespace-pre-line text-lg leading-relaxed">{selectedPost.content}</p>
+
+        {/* Attachments */}
+        {selectedPost.post_metadata.attachments && selectedPost.post_metadata.attachments.length > 0 && (
+          <div className="mb-6">
+            <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
+            <div className="flex flex-wrap gap-2">
+              {selectedPost.post_metadata.attachments.map((attachment: string, index: number) => (
+                <a 
+                  key={index}
+                  href={attachment}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 hover:text-blue-700 underline"
+                >
+                  Attachment {index + 1}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Co-authors */}
+        {selectedPost.post_metadata.co_authors && selectedPost.post_metadata.co_authors.length > 0 && (
+          <div className="mb-6">
+            <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
+            <p className="text-sm text-gray-600">{selectedPost.post_metadata.co_authors.join(', ')}</p>
+          </div>
+        )}
+
+        {/* Comments Section - Tam kodu yukarıdaki post feed'deki comments section ile aynı */}
+        <div className="border-t border-gray-200 pt-6">
+          {/* Comments burada - önceki kodunuzdaki comments section'ı kopyalayın */}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
   )
 }
 
