@@ -3613,11 +3613,9 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
     return diffYears.toFixed(1)
   }
 
-  const professions = [
-'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
+  const professions = ['Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
   'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
-  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
-  ]
+  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist']
 
   const languages = [
   'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
