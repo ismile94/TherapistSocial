@@ -7663,7 +7663,7 @@ return (
           </div>
         </div>
       </div>
-    )}
+    }
 
     {/* User Profile Modal */}
     {selectedUserProfile && (
