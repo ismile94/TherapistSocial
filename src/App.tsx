@@ -5231,7 +5231,7 @@ function CommunityComponent() {
   const [attachmentInput, setAttachmentInput] = useState('')
   const [coAuthorInput, setCoAuthorInput] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
-const [editForm, setEditForm] = useState<{
+  const [editForm, setEditForm] = useState<{
   id: string;
   title: string;
   content: string;
@@ -7679,7 +7679,7 @@ return (
           </div>
         </div>
       </div>
-    }
+    )}
 
     {/* User Profile Modal */}
     {selectedUserProfile && (
@@ -7993,7 +7993,6 @@ return (
     )}
   </div>
  )}
-}
 }
 
 function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
