@@ -77,7 +77,7 @@ interface FeedFilters {
 // Seçenek listeleri
 const PROFESSION_OPTIONS = [
   'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
-  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
+  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist',
   'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
 ]
 
@@ -209,6 +209,17 @@ interface ConversationMetadata {
   isMuted: boolean
   isStarred: boolean
   isArchived: boolean
+}
+
+interface Comment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  parent_reply_id?: string | null;
+  user: Profile;
+  replies?: Comment[];
 }
 
 function calculateTotalExperience(workExperience: any[]): string {
@@ -5192,11 +5203,11 @@ function CommunityComponent() {
       is_public: true
     } as PostMetadata
   })
-  const [selectedUserProfile, setSelectedUserProfile] = useState<any>(null)
-  const [selectedPost, setSelectedPost] = useState<any>(null)
+  const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
+  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const [loading, setLoading] = useState(false)
-  const [editingPost, setEditingPost] = useState<any>(null)
-  const [comments, setComments] = useState<{ [postId: string]: any[] }>({})
+  const [editingPost, setEditingPost] = useState<CommunityPost | null>(null)
+  const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({})
   const [newComments, setNewComments] = useState<{ [postId: string]: string }>({})
   const [replyingTo, setReplyingTo] = useState<{ [postId: string]: string | null }>({})
   const [replyContents, setReplyContents] = useState<{ [commentId: string]: string }>({})
@@ -5220,23 +5231,28 @@ function CommunityComponent() {
   const [attachmentInput, setAttachmentInput] = useState('')
   const [coAuthorInput, setCoAuthorInput] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
-  const [editForm, setEditForm] = useState({
-    id: '',
-    title: '',
-    content: '',
-    metadata: {
-      professions: [] as string[],
-      clinical_areas: [] as string[],
-      content_type: '',
-      tags: [] as string[],
-      audience_level: '',
-      related_conditions: [] as string[],
-      language: 'English',
-      attachments: [] as string[],
-      co_authors: [] as string[],
-      is_public: true
-    } as PostMetadata
-  })
+const [editForm, setEditForm] = useState<{
+  id: string;
+  title: string;
+  content: string;
+  metadata: PostMetadata;
+}>({
+  id: '',
+  title: '',
+  content: '',
+  metadata: {
+    professions: [],
+    clinical_areas: [],
+    content_type: '',
+    tags: [],
+    audience_level: '',
+    related_conditions: [],
+    language: 'English',
+    attachments: [],
+    co_authors: [],
+    is_public: true
+  }
+})
   const session = useSession()
   const user = session?.user
 
@@ -5509,7 +5525,7 @@ function CommunityComponent() {
         (data || []).map(async (post) => {
           const { count: repliesCount } = await supabase
             .from('post_replies')
-            .select('*', { count: 'exact', head: true })
+            .select('*', { count: 'exact', head: false })
             .eq('post_id', post.id)
 
           setPostSettings(prev => ({
