@@ -8265,258 +8265,194 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
 
   const getCVStyles = (style: string) => {
     const baseStyles = `
-      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-      
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-      
-      body {
-        font-family: 'Inter', sans-serif;
-        line-height: 1.6;
-        color: #333;
-        background: #fff;
-      }
-      
-      .cv-container {
-        max-width: 210mm;
-        margin: 0 auto;
-        padding: 20mm;
-        background: white;
-        box-shadow: 0 0 20px rgba(0,0,0,0.1);
-      }
-      
-      .cv-header {
-        border-bottom: 3px solid #2563eb;
-        padding-bottom: 1.5rem;
-        margin-bottom: 2rem;
-      }
-      
-      .header-content {
-        text-align: center;
-      }
-      
-      .name {
-        font-size: 2.5rem;
-        font-weight: 700;
-        color: #1e293b;
-        margin-bottom: 0.5rem;
-        letter-spacing: -0.025em;
-      }
-      
-      .title {
-        font-size: 1.25rem;
-        font-weight: 500;
-        color: #2563eb;
-        margin-bottom: 1rem;
-      }
-      
-      .contact-info {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        gap: 1rem;
-        font-size: 0.9rem;
-        color: #64748b;
-      }
-      
-      .contact-item {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-      }
-      
-      .icon {
-        font-size: 0.8rem;
-      }
-      
-      .cv-section {
-        margin-bottom: 2rem;
-      }
-      
-      .section-title {
-        font-size: 1.25rem;
-        font-weight: 600;
-        color: #1e293b;
-        margin-bottom: 1rem;
-        padding-bottom: 0.5rem;
-        border-bottom: 2px solid #e2e8f0;
-        position: relative;
-      }
-      
-      .section-title::after {
-        content: '';
-        position: absolute;
-        bottom: -2px;
-        left: 0;
-        width: 60px;
-        height: 2px;
-        background: #2563eb;
-      }
-      
-      .section-content {
-        padding-left: 1rem;
-      }
-      
-      .experience-item {
-        margin-bottom: 1.5rem;
-        padding: 1rem;
-        background: #f8fafc;
-        border-radius: 8px;
-        border-left: 4px solid #2563eb;
-      }
-      
-      .experience-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.5rem;
-      }
-      
-      .job-title {
-        font-size: 1.1rem;
-        font-weight: 600;
-        color: #1e293b;
-      }
-      
-      .date-range {
-        font-size: 0.9rem;
-        color: #64748b;
-        font-weight: 500;
-        white-space: nowrap;
-      }
-      
-      .company {
-        font-size: 1rem;
-        color: #2563eb;
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-      }
-      
-      .job-description {
-        color: #475569;
-        line-height: 1.6;
-        margin-bottom: 0.5rem;
-      }
-      
-      .duration {
-        font-size: 0.85rem;
-        color: #94a3b8;
-        font-style: italic;
-      }
-      
-      .qualification-item {
-        margin-bottom: 1rem;
-        padding: 1rem;
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-      }
-      
-      .qualification-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 0.25rem;
-      }
-      
-      .qualification-title {
-        font-size: 1rem;
-        font-weight: 600;
-        color: #1e293b;
-      }
-      
-      .qualification-year {
-        font-size: 0.9rem;
-        color: #64748b;
-        font-weight: 500;
-      }
-      
-      .institution {
-        color: #2563eb;
-        font-size: 0.95rem;
-      }
-      
-      .skills-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-      }
-      
-      .skill-tag {
-        background: #dbeafe;
-        color: #1e40af;
-        padding: 0.4rem 0.8rem;
-        border-radius: 20px;
-        font-size: 0.85rem;
-        font-weight: 500;
-        border: 1px solid #bfdbfe;
-      }
-      
-      .languages-container {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-      }
-      
-      .language-item {
-        background: #f1f5f9;
-        color: #475569;
-        padding: 0.5rem 1rem;
-        border-radius: 6px;
-        font-size: 0.9rem;
-        font-weight: 500;
-      }
-      
-      .additional-info {
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-      }
-      
-      .info-item {
-        color: #475569;
-        font-size: 0.95rem;
-      }
-      
-      .summary-text {
-        color: #475569;
-        line-height: 1.7;
-        font-size: 1rem;
-      }
-      
-      .cv-footer {
-        margin-top: 3rem;
-        padding-top: 1rem;
-        border-top: 1px solid #e2e8f0;
-        text-align: center;
-        color: #94a3b8;
-        font-size: 0.85rem;
-      }
-      
-      /* Print Styles */
-      @media print {
-        body {
-          background: white !important;
-        }
-        
-        .cv-container {
-          box-shadow: none;
-          padding: 0;
-          max-width: 100%;
-        }
-        
-        .experience-item {
-          break-inside: avoid;
-        }
-        
-        .qualification-item {
-          break-inside: avoid;
-        }
-      }
-    `
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+  
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    line-height: 1.4;
+    color: #333;
+    background: #fff;
+  }
+
+  .cv-container {
+    max-width: 210mm;
+    margin: 0 auto;
+    padding: 12mm 15mm;
+    background: white;
+    box-shadow: 0 0 10px rgba(0,0,0,0.05);
+  }
+
+  .cv-header {
+    border-bottom: 2px solid #2563eb;
+    padding-bottom: 1rem;
+    margin-bottom: 1.2rem;
+  }
+
+  .header-content {
+    text-align: center;
+  }
+
+  .name {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin-bottom: 0.25rem;
+  }
+
+  .title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #2563eb;
+    margin-bottom: 0.5rem;
+  }
+
+  .contact-info {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .cv-section {
+    margin-bottom: 1rem;
+  }
+
+  .section-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin-bottom: 0.5rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid #e2e8f0;
+    position: relative;
+  }
+
+  .section-title::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    width: 40px;
+    height: 2px;
+    background: #2563eb;
+  }
+
+  .section-content {
+    padding-left: 0.5rem;
+  }
+
+  .experience-item {
+    margin-bottom: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    background: #f8fafc;
+    border-radius: 5px;
+    border-left: 3px solid #2563eb;
+  }
+
+  .job-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .date-range {
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .company {
+    font-size: 0.9rem;
+    color: #2563eb;
+    font-weight: 500;
+    margin-bottom: 0.3rem;
+  }
+
+  .job-description {
+    font-size: 0.85rem;
+    color: #475569;
+    line-height: 1.4;
+  }
+
+  .qualification-item {
+    margin-bottom: 0.6rem;
+    padding: 0.6rem;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+  }
+
+  .qualification-title {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .qualification-year {
+    font-size: 0.8rem;
+    color: #64748b;
+  }
+
+  .skills-container, .languages-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+  }
+
+  .skill-tag, .language-item {
+    background: #e0f2fe;
+    color: #075985;
+    padding: 0.3rem 0.6rem;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .info-item {
+    font-size: 0.85rem;
+    color: #475569;
+  }
+
+  .summary-text {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: #475569;
+  }
+
+  .cv-footer {
+    margin-top: 1.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #e2e8f0;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 0.75rem;
+  }
+
+  @media print {
+    body {
+      background: white !important;
+      font-size: 11pt;
+    }
+
+    .cv-container {
+      box-shadow: none;
+      padding: 0;
+      max-width: 100%;
+    }
+
+    .cv-section, .experience-item, .qualification-item {
+      break-inside: avoid;
+    }
+  }
+`
+
 
     const styleVariants = {
       modern: `
