@@ -76,9 +76,9 @@ interface FeedFilters {
 
 // Seçenek listeleri
 const PROFESSION_OPTIONS = [
-  'Physiotherapist', 'Occupational Therapist', 'Speech & Language Therapist',
-  'Dietitian', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist',
-  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant'
+  'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
+  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
+  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
 ]
 
 const CLINICAL_AREA_OPTIONS = [
@@ -115,9 +115,22 @@ const RELATED_CONDITIONS_OPTIONS = [
 ]
 
 const LANGUAGE_OPTIONS = [
-  'English', 'Turkish', 'Spanish', 'French', 'German', 'Italian',
-  'Portuguese', 'Arabic', 'Hindi', 'Urdu', 'Polish', 'Romanian'
-]
+  'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
+  // Eklenen diller:
+  'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
+  'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
+  'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
+  'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
+  'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
+  'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
+  'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
+  // Ve yeni eklenen 110+ dil:
+  'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
+  'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
+  'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
+  'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
+  'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
+];
 
 interface Profile {
   id: string
@@ -3590,17 +3603,29 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
   }
 
   const professions = [
-    'Physiotherapist',
-    'Occupational Therapist',
-    'Speech & Language Therapist',
-    'Dietitian',
-    'Podiatrist',
+'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
+  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
+  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
   ]
 
   const languages = [
-    'English', 'Turkish', 'Spanish', 'French', 'German', 'Italian',
-    'Portuguese', 'Arabic', 'Hindi', 'Urdu', 'Polish', 'Romanian',
-  ]
+  'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
+  // Eklenen diller:
+  'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
+  'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
+  'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
+  'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
+  'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
+  'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
+  'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
+  // Ve yeni eklenen 110+ dil:
+  'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
+  'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
+  'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
+  'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
+  'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
+];
+
 
   return (
     <div className="w-full md:w-80 bg-white shadow-sm border-r flex flex-col overflow-hidden">
@@ -9100,11 +9125,9 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
   }, [locationSearch])
 
   const professions = [
-    'Physiotherapist',
-    'Occupational Therapist',
-    'Speech & Language Therapist',
-    'Dietitian',
-    'Podiatrist'
+'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
+  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
+  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
   ]
 
   const specialtiesOptions = [
@@ -9114,9 +9137,22 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
   ]
 
   const languageOptions = [
-    'English', 'Turkish', 'Spanish', 'French', 'German', 'Italian',
-    'Portuguese', 'Arabic', 'Hindi', 'Urdu', 'Polish', 'Romanian'
-  ]
+  'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
+  // Eklenen diller:
+  'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
+  'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
+  'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
+  'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
+  'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
+  'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
+  'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
+  // Ve yeni eklenen 110+ dil:
+  'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
+  'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
+  'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
+  'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
+  'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
+];
 
   const months = [
     'January', 'February', 'March', 'April', 'May', 'June',
