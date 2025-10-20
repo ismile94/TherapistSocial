@@ -6153,77 +6153,696 @@ const viewPostDetail = (post: CommunityPost) => {
     )
   }
 
-  return (
-    <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center">
-            <Users className="w-6 h-6 mr-2 text-blue-600" />
-            <h2 className="text-2xl font-bold text-gray-900">Professional Community</h2>
-          </div>
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            >
-              <Filter className="w-4 h-4 mr-2" />
-              Filters
-              {Object.values(feedFilters).flat().length > 0 && (
-                <span className="ml-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                  {Object.values(feedFilters).flat().length}
-                </span>
-              )}
-            </button>
-            <button 
-              onClick={() => setShowNewPostModal(true)}
-              className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              New Post
-            </button>
-          </div>
+return (
+  <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
+    <div className="max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center">
+          <Users className="w-6 h-6 mr-2 text-blue-600" />
+          <h2 className="text-2xl font-bold text-gray-900">Professional Community</h2>
         </div>
-  
-        {/* Filters Panel */}
-        {showFilters && (
-          <div className="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Filter Posts</h3>
-              <button 
-                onClick={clearAllFilters}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+        <div className="flex items-center gap-3">
+          <button 
+            onClick={() => setShowFilters(!showFilters)}
+            className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            Filters
+            {Object.values(feedFilters).flat().length > 0 && (
+              <span className="ml-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                {Object.values(feedFilters).flat().length}
+              </span>
+            )}
+          </button>
+          <button 
+            onClick={() => setShowNewPostModal(true)}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            New Post
+          </button>
+        </div>
+      </div>
+
+      {/* Filters Panel */}
+      {showFilters && (
+        <div className="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Filter Posts</h3>
+            <button 
+              onClick={clearAllFilters}
+              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              Clear all
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Profession Filter */}
+            <div className="relative" ref={filterDropdownRefs.professions}>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Profession
+              </label>
+              <button
+                onClick={() => setFilterDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
+                className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
               >
-                Clear all
+                <span className="text-sm text-gray-700">
+                  {feedFilters.professions.length > 0 
+                    ? `${feedFilters.professions.length} selected` 
+                    : 'All professions'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
               </button>
+              {filterDropdowns.professions && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {PROFESSION_OPTIONS.map(profession => (
+                    <label key={profession} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={feedFilters.professions.includes(profession)}
+                        onChange={() => toggleFilter('professions', profession)}
+                        className="mr-2 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{profession}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
             </div>
-  
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {/* Profession Filter */}
-              <div className="relative" ref={filterDropdownRefs.professions}>
+
+            {/* Clinical Areas Filter */}
+            <div className="relative" ref={filterDropdownRefs.clinical_areas}>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Clinical Areas
+              </label>
+              <button
+                onClick={() => setFilterDropdowns(prev => ({ ...prev, clinical_areas: !prev.clinical_areas }))}
+                className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+              >
+                <span className="text-sm text-gray-700">
+                  {feedFilters.clinical_areas.length > 0 
+                    ? `${feedFilters.clinical_areas.length} selected` 
+                    : 'All areas'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </button>
+              {filterDropdowns.clinical_areas && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {CLINICAL_AREA_OPTIONS.map(area => (
+                    <label key={area} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={feedFilters.clinical_areas.includes(area)}
+                        onChange={() => toggleFilter('clinical_areas', area)}
+                        className="mr-2 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{area}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Content Type Filter */}
+            <div className="relative" ref={filterDropdownRefs.content_types}>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Content Type
+              </label>
+              <button
+                onClick={() => setFilterDropdowns(prev => ({ ...prev, content_types: !prev.content_types }))}
+                className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+              >
+                <span className="text-sm text-gray-700">
+                  {feedFilters.content_types.length > 0 
+                    ? `${feedFilters.content_types.length} selected` 
+                    : 'All types'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </button>
+              {filterDropdowns.content_types && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {CONTENT_TYPE_OPTIONS.map(type => (
+                    <label key={type} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={feedFilters.content_types.includes(type)}
+                        onChange={() => toggleFilter('content_types', type)}
+                        className="mr-2 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{type}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Audience Level Filter */}
+            <div className="relative" ref={filterDropdownRefs.audience_levels}>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Audience Level
+              </label>
+              <button
+                onClick={() => setFilterDropdowns(prev => ({ ...prev, audience_levels: !prev.audience_levels }))}
+                className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+              >
+                <span className="text-sm text-gray-700">
+                  {feedFilters.audience_levels.length > 0 
+                    ? `${feedFilters.audience_levels.length} selected` 
+                    : 'All levels'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </button>
+              {filterDropdowns.audience_levels && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {AUDIENCE_LEVEL_OPTIONS.map(level => (
+                    <label key={level} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={feedFilters.audience_levels.includes(level)}
+                        onChange={() => toggleFilter('audience_levels', level)}
+                        className="mr-2 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{level}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Language Filter */}
+            <div className="relative" ref={filterDropdownRefs.languages}>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Language
+              </label>
+              <button
+                onClick={() => setFilterDropdowns(prev => ({ ...prev, languages: !prev.languages }))}
+                className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+              >
+                <span className="text-sm text-gray-700">
+                  {feedFilters.languages.length > 0 
+                    ? `${feedFilters.languages.length} selected` 
+                    : 'All languages'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </button>
+              {filterDropdowns.languages && (
+                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  {LANGUAGE_OPTIONS.map(language => (
+                    <label key={language} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={feedFilters.languages.includes(language)}
+                        onChange={() => toggleFilter('languages', language)}
+                        className="mr-2 rounded border-gray-300"
+                      />
+                      <span className="text-sm text-gray-700">{language}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Toggle Filters */}
+            <div className="space-y-3">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={feedFilters.show_only_my_profession}
+                  onChange={(e) => setFeedFilters(prev => ({ 
+                    ...prev, 
+                    show_only_my_profession: e.target.checked 
+                  }))}
+                  className="mr-2 rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">Show only my profession</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={feedFilters.show_only_my_network}
+                  onChange={(e) => setFeedFilters(prev => ({ 
+                    ...prev, 
+                    show_only_my_network: e.target.checked 
+                  }))}
+                  className="mr-2 rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">Show only my network</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Active Filters */}
+          {Object.values(feedFilters).flat().length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-medium text-gray-700 mb-2">Active Filters:</h4>
+              <div className="flex flex-wrap gap-2">
+                {feedFilters.professions.map(profession => (
+                  <span key={profession} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs flex items-center">
+                    {profession}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => toggleFilter('professions', profession)}
+                    />
+                  </span>
+                ))}
+                {feedFilters.clinical_areas.map(area => (
+                  <span key={area} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs flex items-center">
+                    {area}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => toggleFilter('clinical_areas', area)}
+                    />
+                  </span>
+                ))}
+                {feedFilters.content_types.map(type => (
+                  <span key={type} className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs flex items-center">
+                    {type}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => toggleFilter('content_types', type)}
+                    />
+                  </span>
+                ))}
+                {feedFilters.audience_levels.map(level => (
+                  <span key={level} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs flex items-center">
+                    {level}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => toggleFilter('audience_levels', level)}
+                    />
+                  </span>
+                ))}
+                {feedFilters.languages.map(language => (
+                  <span key={language} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs flex items-center">
+                    {language}
+                    <X 
+                      className="w-3 h-3 ml-1 cursor-pointer" 
+                      onClick={() => toggleFilter('languages', language)}
+                    />
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Posts Feed */}
+      <div className="space-y-4">
+        {posts.map(post => (
+          <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            {/* Post Header with Menu */}
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <button
+                    onClick={() => viewUserProfile(post.user_id || post.user?.id)}
+                    className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors cursor-pointer"
+                  >
+                    {post.user?.full_name?.charAt(0) || 'U'}
+                  </button>
+                  <div>
+                    <button
+                      onClick={() => viewUserProfile(post.user_id || post.user?.id)}
+                      className="font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
+                    >
+                      {post.user?.full_name}
+                    </button>
+                    <p className="text-sm text-gray-600">
+                      {post.user?.profession} • {formatTime(post.created_at)}
+                      {post.updated_at && post.updated_at !== post.created_at && (
+                        <span className="text-gray-400"> (edited)</span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => viewPostDetail(post)}
+                  className="text-xl font-bold text-gray-900 mb-2 hover:text-blue-600 transition-colors cursor-pointer text-left w-full"
+                >
+                  {post.title}
+                </button>
+                
+                {/* Post Metadata */}
+                {renderPostMetadata(post)}
+                
+                {/* Post Settings Indicators */}
+                <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
+                  {postSettings[post.id]?.comments_disabled && (
+                    <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
+                      <MessageSquare className="w-3 h-3" />
+                      Comments disabled
+                    </span>
+                  )}
+                  {postSettings[post.id]?.muted && (
+                    <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
+                      <Bell className="w-3 h-3" />
+                      Notifications muted
+                    </span>
+                  )}
+                  {followingPosts.includes(post.id) && (
+                    <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                      <Bell className="w-3 h-3" />
+                      Following
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Menu Button and Dropdown */}
+              <div className="relative" ref={menuRef}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuPost(activeMenuPost === post.id ? null : post.id);
+                  }}
+                  className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition-colors"
+                >
+                  <MoreHorizontal className="w-5 h-5 text-gray-500" />
+                </button>
+
+                {activeMenuPost === post.id && (
+                  <div className="absolute right-0 top-10 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-2">
+                    {isPostOwner(post) ? (
+                      <>
+                        <button
+                          onClick={(e) => handleMenuAction('edit', post.id, e)}
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4 mr-3 text-blue-600" />
+                          Edit Post
+                        </button>
+                        <button
+                          onClick={(e) => handleMenuAction('toggle_comments', post.id, e)}
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <MessageSquare className="w-4 h-4 mr-3 text-green-600" />
+                          {postSettings[post.id]?.comments_disabled ? 'Enable Comments' : 'Disable Comments'}
+                        </button>
+                        <button
+                          onClick={(e) => handleMenuAction('toggle_mute', post.id, e)}
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Bell className="w-4 h-4 mr-3 text-orange-600" />
+                          {postSettings[post.id]?.muted ? 'Enable Notifications' : 'Mute Notifications'}
+                        </button>
+                        <div className="border-t border-gray-100 my-1"></div>
+                        <button
+                          onClick={(e) => handleMenuAction('delete', post.id, e)}
+                          className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4 mr-3" />
+                          Delete Post
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={(e) => handleMenuAction('follow', post.id, e)}
+                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        <Bell className="w-4 h-4 mr-3 text-purple-600" />
+                        {followingPosts.includes(post.id) ? 'Unfollow Post' : 'Follow Post'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <p className="text-gray-700 mb-4 whitespace-pre-line">{post.content}</p>
+
+            {/* Attachments */}
+            {post.post_metadata.attachments && post.post_metadata.attachments.length > 0 && (
+              <div className="mt-3">
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
+                <div className="flex flex-wrap gap-2">
+                  {post.post_metadata.attachments.map((attachment, index) => (
+                    <a 
+                      key={index}
+                      href={attachment}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-700 underline"
+                    >
+                      Attachment {index + 1}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Co-authors */}
+            {post.post_metadata.co_authors && post.post_metadata.co_authors.length > 0 && (
+              <div className="mt-3">
+                <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
+                <p className="text-sm text-gray-600">{post.post_metadata.co_authors.join(', ')}</p>
+              </div>
+            )}
+
+            {/* Comments Section */}
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center text-sm text-gray-500">
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  {post.replies_count} comments
+                </div>
+
+                <button
+                  onClick={() => togglePostExpansion(post.id)}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {expandedPosts.includes(post.id) ? 'Hide comments' : 'Show comments'}
+                </button>
+              </div>
+
+              {/* Comment Input */}
+              {expandedPosts.includes(post.id) && user && !postSettings[post.id]?.comments_disabled && (
+                <div className="mb-4">
+                  <textarea
+                    placeholder="Add a comment..."
+                    value={newComments[post.id] || ''}
+                    onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button
+                      onClick={() => addComment(post.id)}
+                      disabled={!newComments[post.id]?.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                    >
+                      Comment
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {expandedPosts.includes(post.id) && postSettings[post.id]?.comments_disabled && (
+                <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="font-medium">Comments are disabled for this post</p>
+                  <p className="text-sm mt-1">The post owner has turned off comments</p>
+                </div>
+              )}
+
+              {expandedPosts.includes(post.id) && !postSettings[post.id]?.comments_disabled && (
+                <div className="space-y-4">
+                  {(comments[post.id] || []).map(comment => (
+                    <div key={comment.id} className="flex gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {comment.user?.full_name?.charAt(0) || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="font-medium text-gray-900">{comment.user?.full_name || 'Unknown User'}</p>
+                              <p className="text-xs text-gray-500">{comment.user?.profession}</p>
+                            </div>
+                            <span className="text-xs text-gray-500">
+                              {formatTime(comment.created_at)}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 mt-2">{comment.content}</p>
+
+                          {user && (
+                            <button
+                              onClick={() => setReplyingTo(prev => ({ 
+                                ...prev, 
+                                [post.id]: replyingTo[post.id] === comment.id ? null : comment.id 
+                              }))}
+                              className="text-xs text-blue-600 hover:text-blue-700 mt-2 font-medium"
+                            >
+                              {replyingTo[post.id] === comment.id ? 'Cancel' : 'Reply'}
+                            </button>
+                          )}
+                        </div>
+
+                        {replyingTo[post.id] === comment.id && user && (
+                          <div className="ml-4 mt-3">
+                            <textarea
+                              placeholder="Write a reply..."
+                              value={replyContents[comment.id] || ''}
+                              onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              rows={2}
+                            />
+                            <div className="flex justify-end mt-2 gap-2">
+                              <button
+                                onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: null }))}
+                                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => addComment(post.id, comment.id)}
+                                disabled={!replyContents[comment.id]?.trim()}
+                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                              >
+                                Reply
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {comment.replies && comment.replies.length > 0 && (
+                          <div className="ml-4 mt-3 space-y-3">
+                            {comment.replies.map((reply: any) => (
+                              <div key={reply.id} className="flex gap-2">
+                                <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                  {reply.user?.full_name?.charAt(0) || 'U'}
+                                </div>
+                                <div className="flex-1 bg-green-50 rounded-lg p-3">
+                                  <div className="flex justify-between items-start mb-1">
+                                    <div>
+                                      <p className="font-medium text-gray-900 text-sm">{reply.user?.full_name || 'Unknown User'}</p>
+                                      <p className="text-xs text-gray-500">{reply.user?.profession}</p>
+                                    </div>
+                                    <span className="text-xs text-gray-500">
+                                      {formatTime(reply.created_at)}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+
+                  {(comments[post.id] || []).length === 0 && (
+                    <div className="text-center py-6 text-gray-500">
+                      <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p>No comments yet</p>
+                      <p className="text-sm mt-1">Be the first to comment!</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {posts.length === 0 && (
+          <div className="text-center py-12">
+            <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {Object.values(feedFilters).flat().length > 0 ? 'No posts match your filters' : 'No posts yet'}
+            </h3>
+            <p className="text-gray-500">
+              {Object.values(feedFilters).flat().length > 0 
+                ? 'Try adjusting your filters to see more posts' 
+                : 'Be the first to start a discussion!'}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+
+    {/* Enhanced New Post Modal */}
+    {showNewPostModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <h3 className="text-xl font-bold text-gray-900">Create New Post</h3>
+            <button 
+              onClick={() => setShowNewPostModal(false)} 
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              disabled={loading}
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Basic Information */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Post Title *
+              </label>
+              <input
+                type="text"
+                placeholder="Enter a clear and descriptive title..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={newPost.title}
+                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Content *
+              </label>
+              <textarea
+                placeholder="Share your knowledge, ask questions, or start a discussion..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px]"
+                value={newPost.content}
+                onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Metadata Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Profession */}
+              <div className="relative" ref={dropdownRefs.professions}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Profession
+                  Relevant Professions *
                 </label>
                 <button
-                  onClick={() => setFilterDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
-                  className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                  onClick={() => setDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
                 >
                   <span className="text-sm text-gray-700">
-                    {feedFilters.professions.length > 0 
-                      ? `${feedFilters.professions.length} selected` 
-                      : 'All professions'}
+                    {newPost.metadata.professions.length > 0 
+                      ? `${newPost.metadata.professions.length} selected` 
+                      : 'Select professions'}
                   </span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
-                {filterDropdowns.professions && (
+                {dropdowns.professions && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {PROFESSION_OPTIONS.map(profession => (
-                      <label key={profession} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <label key={profession} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={feedFilters.professions.includes(profession)}
-                          onChange={() => toggleFilter('professions', profession)}
-                          className="mr-2 rounded border-gray-300"
+                          checked={newPost.metadata.professions.includes(profession)}
+                          onChange={(e) => {
+                            const updatedProfessions = e.target.checked
+                              ? [...newPost.metadata.professions, profession]
+                              : newPost.metadata.professions.filter(p => p !== profession)
+                            setNewPost({
+                              ...newPost,
+                              metadata: { ...newPost.metadata, professions: updatedProfessions }
+                            })
+                          }}
+                          className="mr-3 rounded border-gray-300"
                         />
                         <span className="text-sm text-gray-700">{profession}</span>
                       </label>
@@ -6231,32 +6850,40 @@ const viewPostDetail = (post: CommunityPost) => {
                   </div>
                 )}
               </div>
-  
-              {/* Clinical Areas Filter */}
-              <div className="relative" ref={filterDropdownRefs.clinical_areas}>
+
+              {/* Clinical Areas */}
+              <div className="relative" ref={dropdownRefs.clinical_areas}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Clinical Areas
+                  Clinical Areas *
                 </label>
                 <button
-                  onClick={() => setFilterDropdowns(prev => ({ ...prev, clinical_areas: !prev.clinical_areas }))}
-                  className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                  onClick={() => setDropdowns(prev => ({ ...prev, clinical_areas: !prev.clinical_areas }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
                 >
                   <span className="text-sm text-gray-700">
-                    {feedFilters.clinical_areas.length > 0 
-                      ? `${feedFilters.clinical_areas.length} selected` 
-                      : 'All areas'}
+                    {newPost.metadata.clinical_areas.length > 0 
+                      ? `${newPost.metadata.clinical_areas.length} selected` 
+                      : 'Select clinical areas'}
                   </span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
-                {filterDropdowns.clinical_areas && (
+                {dropdowns.clinical_areas && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {CLINICAL_AREA_OPTIONS.map(area => (
-                      <label key={area} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <label key={area} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={feedFilters.clinical_areas.includes(area)}
-                          onChange={() => toggleFilter('clinical_areas', area)}
-                          className="mr-2 rounded border-gray-300"
+                          checked={newPost.metadata.clinical_areas.includes(area)}
+                          onChange={(e) => {
+                            const updatedAreas = e.target.checked
+                              ? [...newPost.metadata.clinical_areas, area]
+                              : newPost.metadata.clinical_areas.filter(a => a !== area)
+                            setNewPost({
+                              ...newPost,
+                              metadata: { ...newPost.metadata, clinical_areas: updatedAreas }
+                            })
+                          }}
+                          className="mr-3 rounded border-gray-300"
                         />
                         <span className="text-sm text-gray-700">{area}</span>
                       </label>
@@ -6264,1481 +6891,1067 @@ const viewPostDetail = (post: CommunityPost) => {
                   </div>
                 )}
               </div>
-  
-              {/* Content Type Filter */}
-              <div className="relative" ref={filterDropdownRefs.content_types}>
+
+              {/* Content Type */}
+              <div className="relative" ref={dropdownRefs.content_type}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content Type
+                  Content Type *
                 </label>
                 <button
-                  onClick={() => setFilterDropdowns(prev => ({ ...prev, content_types: !prev.content_types }))}
-                  className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                  onClick={() => setDropdowns(prev => ({ ...prev, content_type: !prev.content_type }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
                 >
                   <span className="text-sm text-gray-700">
-                    {feedFilters.content_types.length > 0 
-                      ? `${feedFilters.content_types.length} selected` 
-                      : 'All types'}
+                    {newPost.metadata.content_type || 'Select content type'}
                   </span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
-                {filterDropdowns.content_types && (
+                {dropdowns.content_type && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {CONTENT_TYPE_OPTIONS.map(type => (
-                      <label key={type} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={feedFilters.content_types.includes(type)}
-                          onChange={() => toggleFilter('content_types', type)}
-                          className="mr-2 rounded border-gray-300"
-                        />
-                        <span className="text-sm text-gray-700">{type}</span>
-                      </label>
+                      <button
+                        key={type}
+                        onClick={() => {
+                          setNewPost({
+                            ...newPost,
+                            metadata: { ...newPost.metadata, content_type: type }
+                          })
+                          setDropdowns(prev => ({ ...prev, content_type: false }))
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
+                      >
+                        {type}
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
-  
-              {/* Audience Level Filter */}
-              <div className="relative" ref={filterDropdownRefs.audience_levels}>
+
+              {/* Audience Level */}
+              <div className="relative" ref={dropdownRefs.audience_level}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Audience Level
+                  Audience Level *
                 </label>
                 <button
-                  onClick={() => setFilterDropdowns(prev => ({ ...prev, audience_levels: !prev.audience_levels }))}
-                  className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                  onClick={() => setDropdowns(prev => ({ ...prev, audience_level: !prev.audience_level }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
                 >
                   <span className="text-sm text-gray-700">
-                    {feedFilters.audience_levels.length > 0 
-                      ? `${feedFilters.audience_levels.length} selected` 
-                      : 'All levels'}
+                    {newPost.metadata.audience_level || 'Select audience level'}
                   </span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
-                {filterDropdowns.audience_levels && (
+                {dropdowns.audience_level && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {AUDIENCE_LEVEL_OPTIONS.map(level => (
-                      <label key={level} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={feedFilters.audience_levels.includes(level)}
-                          onChange={() => toggleFilter('audience_levels', level)}
-                          className="mr-2 rounded border-gray-300"
-                        />
-                        <span className="text-sm text-gray-700">{level}</span>
-                      </label>
+                      <button
+                        key={level}
+                        onClick={() => {
+                          setNewPost({
+                            ...newPost,
+                            metadata: { ...newPost.metadata, audience_level: level }
+                          })
+                          setDropdowns(prev => ({ ...prev, audience_level: false }))
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
+                      >
+                        {level}
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
-  
-              {/* Language Filter */}
-              <div className="relative" ref={filterDropdownRefs.languages}>
+
+              {/* Language */}
+              <div className="relative" ref={dropdownRefs.language}>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Language
+                  Language *
                 </label>
                 <button
-                  onClick={() => setFilterDropdowns(prev => ({ ...prev, languages: !prev.languages }))}
-                  className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                  onClick={() => setDropdowns(prev => ({ ...prev, language: !prev.language }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
                 >
                   <span className="text-sm text-gray-700">
-                    {feedFilters.languages.length > 0 
-                      ? `${feedFilters.languages.length} selected` 
-                      : 'All languages'}
+                    {newPost.metadata.language}
                   </span>
                   <ChevronDown className="w-4 h-4 text-gray-400" />
                 </button>
-                {filterDropdowns.languages && (
+                {dropdowns.language && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
                     {LANGUAGE_OPTIONS.map(language => (
-                      <label key={language} className="flex items-center px-3 py-2 hover:bg-gray-50 cursor-pointer">
+                      <button
+                        key={language}
+                        onClick={() => {
+                          setNewPost({
+                            ...newPost,
+                            metadata: { ...newPost.metadata, language }
+                          })
+                          setDropdowns(prev => ({ ...prev, language: false }))
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
+                      >
+                        {language}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Related Conditions */}
+              <div className="relative" ref={dropdownRefs.related_conditions}>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Related Conditions
+                </label>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, related_conditions: !prev.related_conditions }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {newPost.metadata.related_conditions.length > 0 
+                      ? `${newPost.metadata.related_conditions.length} selected` 
+                      : 'Select conditions'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.related_conditions && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {RELATED_CONDITIONS_OPTIONS.map(condition => (
+                      <label key={condition} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={feedFilters.languages.includes(language)}
-                          onChange={() => toggleFilter('languages', language)}
-                          className="mr-2 rounded border-gray-300"
+                          checked={newPost.metadata.related_conditions.includes(condition)}
+                          onChange={(e) => {
+                            const updatedConditions = e.target.checked
+                              ? [...newPost.metadata.related_conditions, condition]
+                              : newPost.metadata.related_conditions.filter(c => c !== condition)
+                            setNewPost({
+                              ...newPost,
+                              metadata: { ...newPost.metadata, related_conditions: updatedConditions }
+                            })
+                          }}
+                          className="mr-3 rounded border-gray-300"
                         />
-                        <span className="text-sm text-gray-700">{language}</span>
+                        <span className="text-sm text-gray-700">{condition}</span>
                       </label>
                     ))}
                   </div>
                 )}
               </div>
-  
-              {/* Toggle Filters */}
-              <div className="space-y-3">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={feedFilters.show_only_my_profession}
-                    onChange={(e) => setFeedFilters(prev => ({ 
-                      ...prev, 
-                      show_only_my_profession: e.target.checked 
-                    }))}
-                    className="mr-2 rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Show only my profession</span>
+            </div>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags & Keywords
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add tags (press Enter to add)"
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={addTag}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {newPost.metadata.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {newPost.metadata.tags.map(tag => (
+                    <span 
+                      key={tag} 
+                      className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center"
+                    >
+                      {tag}
+                      <X 
+                        className="w-3 h-3 ml-2 cursor-pointer" 
+                        onClick={() => removeTag(tag)} 
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Attachments & Links
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add file URLs or links..."
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={attachmentInput}
+                  onChange={(e) => setAttachmentInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAttachment())}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={addAttachment}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {newPost.metadata.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {newPost.metadata.attachments.map((attachment, index) => (
+                    <span 
+                      key={index} 
+                      className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
+                    >
+                      Attachment {index + 1}
+                      <X 
+                        className="w-3 h-3 ml-2 cursor-pointer" 
+                        onClick={() => removeAttachment(attachment)} 
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Co-authors */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Co-authors / Mentions
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Mention other users by username..."
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={coAuthorInput}
+                  onChange={(e) => setCoAuthorInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCoAuthor())}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={addCoAuthor}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {newPost.metadata.co_authors.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {newPost.metadata.co_authors.map(coAuthor => (
+                    <span 
+                      key={coAuthor} 
+                      className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
+                    >
+                      @{coAuthor}
+                      <X 
+                        className="w-3 h-3 ml-2 cursor-pointer" 
+                        onClick={() => removeCoAuthor(coAuthor)} 
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Privacy */}
+            <div>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={newPost.metadata.is_public}
+                  onChange={(e) => setNewPost({
+                    ...newPost,
+                    metadata: { ...newPost.metadata, is_public: e.target.checked }
+                  })}
+                  className="mr-2 rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700">
+                  Make this post public (visible to all healthcare professionals)
+                </span>
+              </label>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={createPost}
+                disabled={loading || !newPost.title.trim() || !newPost.content.trim() || 
+                         !newPost.metadata.professions.length || !newPost.metadata.clinical_areas.length ||
+                         !newPost.metadata.content_type || !newPost.metadata.audience_level}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    Creating Post...
+                  </>
+                ) : (
+                  'Create Post'
+                )}
+              </button>
+              <button
+                onClick={() => setShowNewPostModal(false)}
+                disabled={loading}
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Edit Post Modal */}
+    {editForm.id && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <h3 className="text-xl font-bold text-gray-900">Edit Post</h3>
+            <button 
+              onClick={() => setEditForm({ ...editForm, id: '' })} 
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              disabled={loading}
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Basic Information */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Post Title *
+              </label>
+              <input
+                type="text"
+                placeholder="Enter a clear and descriptive title..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={editForm.title}
+                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                disabled={loading}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Content *
+              </label>
+              <textarea
+                placeholder="Share your knowledge, ask questions, or start a discussion..."
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px]"
+                value={editForm.content}
+                onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
+                disabled={loading}
+              />
+            </div>
+
+            {/* Metadata Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Profession */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Relevant Professions *
                 </label>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={feedFilters.show_only_my_network}
-                    onChange={(e) => setFeedFilters(prev => ({ 
-                      ...prev, 
-                      show_only_my_network: e.target.checked 
-                    }))}
-                    className="mr-2 rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">Show only my network</span>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {editForm.metadata.professions.length > 0 
+                      ? `${editForm.metadata.professions.length} selected` 
+                      : 'Select professions'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.professions && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {PROFESSION_OPTIONS.map(profession => (
+                      <label key={profession} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.metadata.professions.includes(profession)}
+                          onChange={(e) => {
+                            const updatedProfessions = e.target.checked
+                              ? [...editForm.metadata.professions, profession]
+                              : editForm.metadata.professions.filter(p => p !== profession)
+                            setEditForm({
+                              ...editForm,
+                              metadata: { ...editForm.metadata, professions: updatedProfessions }
+                            })
+                          }}
+                          className="mr-3 rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-700">{profession}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Clinical Areas */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Clinical Areas *
                 </label>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, clinical_areas: !prev.clinical_areas }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {editForm.metadata.clinical_areas.length > 0 
+                      ? `${editForm.metadata.clinical_areas.length} selected` 
+                      : 'Select clinical areas'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.clinical_areas && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {CLINICAL_AREA_OPTIONS.map(area => (
+                      <label key={area} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.metadata.clinical_areas.includes(area)}
+                          onChange={(e) => {
+                            const updatedAreas = e.target.checked
+                              ? [...editForm.metadata.clinical_areas, area]
+                              : editForm.metadata.clinical_areas.filter(a => a !== area)
+                            setEditForm({
+                              ...editForm,
+                              metadata: { ...editForm.metadata, clinical_areas: updatedAreas }
+                            })
+                          }}
+                          className="mr-3 rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-700">{area}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Content Type */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Content Type *
+                </label>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, content_type: !prev.content_type }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {editForm.metadata.content_type || 'Select content type'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.content_type && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {CONTENT_TYPE_OPTIONS.map(type => (
+                      <button
+                        key={type}
+                        onClick={() => {
+                          setEditForm({
+                            ...editForm,
+                            metadata: { ...editForm.metadata, content_type: type }
+                          })
+                          setDropdowns(prev => ({ ...prev, content_type: false }))
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Audience Level */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Audience Level *
+                </label>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, audience_level: !prev.audience_level }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {editForm.metadata.audience_level || 'Select audience level'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.audience_level && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {AUDIENCE_LEVEL_OPTIONS.map(level => (
+                      <button
+                        key={level}
+                        onClick={() => {
+                          setEditForm({
+                            ...editForm,
+                            metadata: { ...editForm.metadata, audience_level: level }
+                          })
+                          setDropdowns(prev => ({ ...prev, audience_level: false }))
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
+                      >
+                        {level}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Language */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Language *
+                </label>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, language: !prev.language }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {editForm.metadata.language}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.language && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {LANGUAGE_OPTIONS.map(language => (
+                      <button
+                        key={language}
+                        onClick={() => {
+                          setEditForm({
+                            ...editForm,
+                            metadata: { ...editForm.metadata, language }
+                          })
+                          setDropdowns(prev => ({ ...prev, language: false }))
+                        }}
+                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
+                      >
+                        {language}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Related Conditions */}
+              <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Related Conditions
+                </label>
+                <button
+                  onClick={() => setDropdowns(prev => ({ ...prev, related_conditions: !prev.related_conditions }))}
+                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                >
+                  <span className="text-sm text-gray-700">
+                    {editForm.metadata.related_conditions.length > 0 
+                      ? `${editForm.metadata.related_conditions.length} selected` 
+                      : 'Select conditions'}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+                {dropdowns.related_conditions && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {RELATED_CONDITIONS_OPTIONS.map(condition => (
+                      <label key={condition} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.metadata.related_conditions.includes(condition)}
+                          onChange={(e) => {
+                            const updatedConditions = e.target.checked
+                              ? [...editForm.metadata.related_conditions, condition]
+                              : editForm.metadata.related_conditions.filter(c => c !== condition)
+                            setEditForm({
+                              ...editForm,
+                              metadata: { ...editForm.metadata, related_conditions: updatedConditions }
+                            })
+                          }}
+                          className="mr-3 rounded border-gray-300"
+                        />
+                        <span className="text-sm text-gray-700">{condition}</span>
+                      </label>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
-  
-            {/* Active Filters */}
-            {Object.values(feedFilters).flat().length > 0 && (
-              <div className="mt-4 pt-4 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">Active Filters:</h4>
+
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Tags & Keywords
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add tags (press Enter to add)"
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditTag())}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={addEditTag}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {editForm.metadata.tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {editForm.metadata.tags.map(tag => (
+                    <span 
+                      key={tag} 
+                      className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center"
+                    >
+                      {tag}
+                      <X 
+                        className="w-3 h-3 ml-2 cursor-pointer" 
+                        onClick={() => removeEditTag(tag)} 
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Attachments */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Attachments & Links
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Add file URLs or links..."
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={attachmentInput}
+                  onChange={(e) => setAttachmentInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditAttachment())}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={addEditAttachment}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {editForm.metadata.attachments.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {editForm.metadata.attachments.map((attachment, index) => (
+                    <span 
+                      key={index} 
+                      className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
+                    >
+                      Attachment {index + 1}
+                      <X 
+                        className="w-3 h-3 ml-2 cursor-pointer" 
+                        onClick={() => removeEditAttachment(attachment)} 
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Co-authors */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Co-authors / Mentions
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Mention other users by username..."
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  value={coAuthorInput}
+                  onChange={(e) => setCoAuthorInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditCoAuthor())}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={addEditCoAuthor}
+                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Add
+                </button>
+              </div>
+              {editForm.metadata.co_authors.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {editForm.metadata.co_authors.map(coAuthor => (
+                    <span 
+                      key={coAuthor} 
+                      className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
+                    >
+                      @{coAuthor}
+                      <X 
+                        className="w-3 h-3 ml-2 cursor-pointer" 
+                        onClick={() => removeEditCoAuthor(coAuthor)} 
+                      />
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <button
+                onClick={handleUpdatePost}
+                disabled={loading || !editForm.title.trim() || !editForm.content.trim() || 
+                         !editForm.metadata.professions.length || !editForm.metadata.clinical_areas.length ||
+                         !editForm.metadata.content_type || !editForm.metadata.audience_level}
+                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    Updating Post...
+                  </>
+                ) : (
+                  'Update Post'
+                )}
+              </button>
+              <button
+                onClick={() => setEditForm({ ...editForm, id: '' })}
+                disabled={loading}
+                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* User Profile Modal */}
+    {selectedUserProfile && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center p-6 border-b border-gray-200">
+            <h3 className="text-xl font-bold text-gray-900">User Profile</h3>
+            <button 
+              onClick={() => setSelectedUserProfile(null)} 
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Profile Header */}
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                {selectedUserProfile.full_name?.charAt(0) || 'U'}
+              </div>
+              <div>
+                <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
+                <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+              </div>
+            </div>
+
+            {/* Profile Details */}
+            <div className="space-y-4">
+              {selectedUserProfile.specialties && selectedUserProfile.specialties.length > 0 && (
+                <div>
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Specialties</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedUserProfile.specialties.map((specialty: string) => (
+                      <span key={specialty} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                        {specialty}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedUserProfile.languages && selectedUserProfile.languages.length > 0 && (
+                <div>
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Languages</h5>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedUserProfile.languages.map((language: string) => (
+                      <span key={language} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                        {language}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedUserProfile.bio && (
+                <div>
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Bio</h5>
+                  <p className="text-gray-700">{selectedUserProfile.bio}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Post Detail Modal */}
+    {selectedPost && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4">
+        <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+            <h3 className="text-xl font-bold text-gray-900">Post Details</h3>
+            <button 
+              onClick={() => setSelectedPost(null)} 
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6">
+            {/* Post Header */}
+            <div className="flex items-center gap-3 mb-4">
+              <button
+                onClick={() => {
+                  viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
+                  setSelectedPost(null)
+                }}
+                className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors"
+              >
+                {selectedPost.user?.full_name?.charAt(0) || 'U'}
+              </button>
+              <div>
+                <button
+                  onClick={() => {
+                    viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
+                    setSelectedPost(null)
+                  }}
+                  className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-lg"
+                >
+                  {selectedPost.user?.full_name}
+                </button>
+                <p className="text-sm text-gray-600">
+                  {selectedPost.user?.profession} • {formatTime(selectedPost.created_at)}
+                  {selectedPost.updated_at && selectedPost.updated_at !== selectedPost.created_at && (
+                    <span className="text-gray-400"> (edited)</span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Post Title */}
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h2>
+
+            {/* Post Metadata */}
+            {renderPostMetadata(selectedPost)}
+
+            {/* Post Settings Indicators */}
+            <div className="flex flex-wrap gap-3 text-xs text-gray-500 my-4">
+              {postSettings[selectedPost.id]?.comments_disabled && (
+                <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
+                  <MessageSquare className="w-3 h-3" />
+                  Comments disabled
+                </span>
+              )}
+              {postSettings[selectedPost.id]?.muted && (
+                <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
+                  <Bell className="w-3 h-3" />
+                  Notifications muted
+                </span>
+              )}
+              {followingPosts.includes(selectedPost.id) && (
+                <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                  <Bell className="w-3 h-3" />
+                  Following
+                </span>
+              )}
+            </div>
+
+            {/* Post Content */}
+            <p className="text-gray-700 mb-6 whitespace-pre-line text-lg leading-relaxed">{selectedPost.content}</p>
+
+            {/* Attachments */}
+            {selectedPost.post_metadata.attachments && selectedPost.post_metadata.attachments.length > 0 && (
+              <div className="mb-6">
+                <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
                 <div className="flex flex-wrap gap-2">
-                  {feedFilters.professions.map(profession => (
-                    <span key={profession} className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs flex items-center">
-                      {profession}
-                      <X 
-                        className="w-3 h-3 ml-1 cursor-pointer" 
-                        onClick={() => toggleFilter('professions', profession)}
-                      />
-                    </span>
-                  ))}
-                  {feedFilters.clinical_areas.map(area => (
-                    <span key={area} className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs flex items-center">
-                      {area}
-                      <X 
-                        className="w-3 h-3 ml-1 cursor-pointer" 
-                        onClick={() => toggleFilter('clinical_areas', area)}
-                      />
-                    </span>
-                  ))}
-                  {feedFilters.content_types.map(type => (
-                    <span key={type} className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs flex items-center">
-                      {type}
-                      <X 
-                        className="w-3 h-3 ml-1 cursor-pointer" 
-                        onClick={() => toggleFilter('content_types', type)}
-                      />
-                    </span>
-                  ))}
-                  {feedFilters.audience_levels.map(level => (
-                    <span key={level} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs flex items-center">
-                      {level}
-                      <X 
-                        className="w-3 h-3 ml-1 cursor-pointer" 
-                        onClick={() => toggleFilter('audience_levels', level)}
-                      />
-                    </span>
-                  ))}
-                  {feedFilters.languages.map(language => (
-                    <span key={language} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs flex items-center">
-                      {language}
-                      <X 
-                        className="w-3 h-3 ml-1 cursor-pointer" 
-                        onClick={() => toggleFilter('languages', language)}
-                      />
-                    </span>
+                  {selectedPost.post_metadata.attachments.map((attachment: string, index: number) => (
+                    <a 
+                      key={index}
+                      href={attachment}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-blue-600 hover:text-blue-700 underline"
+                    >
+                      Attachment {index + 1}
+                    </a>
                   ))}
                 </div>
               </div>
             )}
-          </div>
-        )}
-  
-        {/* Posts Feed */}
-        <div className="space-y-4">
-          {posts.map(post => (
-            <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-              {/* Post Header with Menu */}
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-  <button
-    onClick={() => viewUserProfile(post.user_id || post.user?.id)}
-    className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors cursor-pointer"
-  >
-    {post.user?.full_name?.charAt(0) || 'U'}
-  </button>
-  <div>
-    <button
-      onClick={() => viewUserProfile(post.user_id || post.user?.id)}
-      className="font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
-    >
-      {post.user?.full_name}
-    </button>
-    <p className="text-sm text-gray-600">
-      {post.user?.profession} • {formatTime(post.created_at)}
-      {post.updated_at && post.updated_at !== post.created_at && (
-        <span className="text-gray-400"> (edited)</span>
-      )}
-    </p>
-  </div>
-</div>
 
-<button
-  onClick={() => viewPostDetail(post)}
-  className="text-xl font-bold text-gray-900 mb-2 hover:text-blue-600 transition-colors cursor-pointer text-left w-full"
->
-  {post.title}
-</button>
-                  
-                  <h4 className="text-xl font-bold text-gray-900 mb-2">{post.title}</h4>
-                  
-                  {/* Post Metadata */}
-                  {renderPostMetadata(post)}
-                  
-                  {/* Post Settings Indicators */}
-                  <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
-                    {postSettings[post.id]?.comments_disabled && (
-                      <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
-                        <MessageSquare className="w-3 h-3" />
-                        Comments disabled
-                      </span>
-                    )}
-                    {postSettings[post.id]?.muted && (
-                      <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
-                        <Bell className="w-3 h-3" />
-                        Notifications muted
-                      </span>
-                    )}
-                    {followingPosts.includes(post.id) && (
-                      <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                        <Bell className="w-3 h-3" />
-                        Following
-                      </span>
-                    )}
-                  </div>
-                </div>
-  
-                {/* Menu Button and Dropdown */}
-                <div className="relative" ref={menuRef}>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setActiveMenuPost(activeMenuPost === post.id ? null : post.id);
-                    }}
-                    className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition-colors"
-                  >
-                    <MoreHorizontal className="w-5 h-5 text-gray-500" />
-                  </button>
-  
-                  {activeMenuPost === post.id && (
-                    <div className="absolute right-0 top-10 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-2">
-                      {isPostOwner(post) ? (
-                        <>
-                          <button
-                            onClick={(e) => handleMenuAction('edit', post.id, e)}
-                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4 mr-3 text-blue-600" />
-                            Edit Post
-                          </button>
-                          <button
-                            onClick={(e) => handleMenuAction('toggle_comments', post.id, e)}
-                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <MessageSquare className="w-4 h-4 mr-3 text-green-600" />
-                            {postSettings[post.id]?.comments_disabled ? 'Enable Comments' : 'Disable Comments'}
-                          </button>
-                          <button
-                            onClick={(e) => handleMenuAction('toggle_mute', post.id, e)}
-                            className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                          >
-                            <Bell className="w-4 h-4 mr-3 text-orange-600" />
-                            {postSettings[post.id]?.muted ? 'Enable Notifications' : 'Mute Notifications'}
-                          </button>
-                          <div className="border-t border-gray-100 my-1"></div>
-                          <button
-                            onClick={(e) => handleMenuAction('delete', post.id, e)}
-                            className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4 mr-3" />
-                            Delete Post
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          onClick={(e) => handleMenuAction('follow', post.id, e)}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                        >
-                          <Bell className="w-4 h-4 mr-3 text-purple-600" />
-                          {followingPosts.includes(post.id) ? 'Unfollow Post' : 'Follow Post'}
-                        </button>
-                      )}
-                    </div>
-                  )}
+            {/* Co-authors */}
+            {selectedPost.post_metadata.co_authors && selectedPost.post_metadata.co_authors.length > 0 && (
+              <div className="mb-6">
+                <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
+                <p className="text-sm text-gray-600">{selectedPost.post_metadata.co_authors.join(', ')}</p>
+              </div>
+            )}
+
+            {/* Comments Section */}
+            <div className="border-t border-gray-200 pt-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center text-sm text-gray-500">
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  {selectedPost.replies_count} comments
                 </div>
               </div>
-  
-              <p className="text-gray-700 mb-4 whitespace-pre-line">{post.content}</p>
-  
-              {/* Attachments */}
-              {post.post_metadata.attachments && post.post_metadata.attachments.length > 0 && (
-                <div className="mt-3">
-                  <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
-                  <div className="flex flex-wrap gap-2">
-                    {post.post_metadata.attachments.map((attachment, index) => (
-                      <a 
-                        key={index}
-                        href={attachment}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-sm text-blue-600 hover:text-blue-700 underline"
-                      >
-                        Attachment {index + 1}
-                      </a>
-                    ))}
+
+              {/* Comment Input */}
+              {user && !postSettings[selectedPost.id]?.comments_disabled && (
+                <div className="mb-4">
+                  <textarea
+                    placeholder="Add a comment..."
+                    value={newComments[selectedPost.id] || ''}
+                    onChange={(e) => setNewComments(prev => ({ ...prev, [selectedPost.id]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    rows={3}
+                  />
+                  <div className="flex justify-end mt-2">
+                    <button
+                      onClick={() => addComment(selectedPost.id)}
+                      disabled={!newComments[selectedPost.id]?.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                    >
+                      Comment
+                    </button>
                   </div>
                 </div>
               )}
-  
-              {/* Co-authors */}
-              {post.post_metadata.co_authors && post.post_metadata.co_authors.length > 0 && (
-                <div className="mt-3">
-                  <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
-                  <p className="text-sm text-gray-600">{post.post_metadata.co_authors.join(', ')}</p>
+
+              {postSettings[selectedPost.id]?.comments_disabled && (
+                <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="font-medium">Comments are disabled for this post</p>
+                  <p className="text-sm mt-1">The post owner has turned off comments</p>
                 </div>
               )}
-  
-              {/* Comments Section */}
-              <div className="border-t border-gray-200 pt-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center text-sm text-gray-500">
-                    <MessageSquare className="w-4 h-4 mr-1" />
-                    {post.replies_count} comments
-                  </div>
-  
-                  <button
-                    onClick={() => togglePostExpansion(post.id)}
-                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                  >
-                    {expandedPosts.includes(post.id) ? 'Hide comments' : 'Show comments'}
-                  </button>
-                </div>
-  
-                {/* Comment Input */}
-                {expandedPosts.includes(post.id) && user && !postSettings[post.id]?.comments_disabled && (
-                  <div className="mb-4">
-                    <textarea
-                      placeholder="Add a comment..."
-                      value={newComments[post.id] || ''}
-                      onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      rows={3}
-                    />
-                    <div className="flex justify-end mt-2">
-                      <button
-                        onClick={() => addComment(post.id)}
-                        disabled={!newComments[post.id]?.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                      >
-                        Comment
-                      </button>
-                    </div>
-                  </div>
-                )}
-  
-                {expandedPosts.includes(post.id) && postSettings[post.id]?.comments_disabled && (
-                  <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
-                    <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="font-medium">Comments are disabled for this post</p>
-                    <p className="text-sm mt-1">The post owner has turned off comments</p>
-                  </div>
-                )}
-  
-                {expandedPosts.includes(post.id) && !postSettings[post.id]?.comments_disabled && (
-                  <div className="space-y-4">
-                    {(comments[post.id] || []).map(comment => (
-                      <div key={comment.id} className="flex gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                          {comment.user?.full_name?.charAt(0) || 'U'}
-                        </div>
-                        <div className="flex-1">
-                          <div className="bg-gray-50 rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-2">
-                              <div>
-                                <p className="font-medium text-gray-900">{comment.user?.full_name || 'Unknown User'}</p>
-                                <p className="text-xs text-gray-500">{comment.user?.profession}</p>
-                              </div>
-                              <span className="text-xs text-gray-500">
-                                {formatTime(comment.created_at)}
-                              </span>
+
+              {!postSettings[selectedPost.id]?.comments_disabled && (
+                <div className="space-y-4">
+                  {(comments[selectedPost.id] || []).map(comment => (
+                    <div key={comment.id} className="flex gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+                        {comment.user?.full_name?.charAt(0) || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <p className="font-medium text-gray-900">{comment.user?.full_name || 'Unknown User'}</p>
+                              <p className="text-xs text-gray-500">{comment.user?.profession}</p>
                             </div>
-                            <p className="text-gray-700 mt-2">{comment.content}</p>
-  
-                            {user && (
-                              <button
-                                onClick={() => setReplyingTo(prev => ({ 
-                                  ...prev, 
-                                  [post.id]: replyingTo[post.id] === comment.id ? null : comment.id 
-                                }))}
-                                className="text-xs text-blue-600 hover:text-blue-700 mt-2 font-medium"
-                              >
-                                {replyingTo[post.id] === comment.id ? 'Cancel' : 'Reply'}
-                              </button>
-                            )}
+                            <span className="text-xs text-gray-500">
+                              {formatTime(comment.created_at)}
+                            </span>
                           </div>
-  
-                          {replyingTo[post.id] === comment.id && user && (
-                            <div className="ml-4 mt-3">
-                              <textarea
-                                placeholder="Write a reply..."
-                                value={replyContents[comment.id] || ''}
-                                onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                rows={2}
-                              />
-                              <div className="flex justify-end mt-2 gap-2">
-                                <button
-                                  onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: null }))}
-                                  className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => addComment(post.id, comment.id)}
-                                  disabled={!replyContents[comment.id]?.trim()}
-                                  className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                                >
-                                  Reply
-                                </button>
-                              </div>
-                            </div>
-                          )}
-  
-                          {comment.replies && comment.replies.length > 0 && (
-                            <div className="ml-4 mt-3 space-y-3">
-                              {comment.replies.map((reply: any) => (
-                                <div key={reply.id} className="flex gap-2">
-                                  <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                    {reply.user?.full_name?.charAt(0) || 'U'}
-                                  </div>
-                                  <div className="flex-1 bg-green-50 rounded-lg p-3">
-                                    <div className="flex justify-between items-start mb-1">
-                                      <div>
-                                        <p className="font-medium text-gray-900 text-sm">{reply.user?.full_name || 'Unknown User'}</p>
-                                        <p className="text-xs text-gray-500">{reply.user?.profession}</p>
-                                      </div>
-                                      <span className="text-xs text-gray-500">
-                                        {formatTime(reply.created_at)}
-                                      </span>
-                                    </div>
-                                    <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                          <p className="text-gray-700 mt-2">{comment.content}</p>
+
+                          {user && (
+                            <button
+                              onClick={() => setReplyingTo(prev => ({ 
+                                ...prev, 
+                                [selectedPost.id]: replyingTo[selectedPost.id] === comment.id ? null : comment.id 
+                              }))}
+                              className="text-xs text-blue-600 hover:text-blue-700 mt-2 font-medium"
+                            >
+                              {replyingTo[selectedPost.id] === comment.id ? 'Cancel' : 'Reply'}
+                            </button>
                           )}
                         </div>
+
+                        {replyingTo[selectedPost.id] === comment.id && user && (
+                          <div className="ml-4 mt-3">
+                            <textarea
+                              placeholder="Write a reply..."
+                              value={replyContents[comment.id] || ''}
+                              onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              rows={2}
+                            />
+                            <div className="flex justify-end mt-2 gap-2">
+                              <button
+                                onClick={() => setReplyingTo(prev => ({ ...prev, [selectedPost.id]: null }))}
+                                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => addComment(selectedPost.id, comment.id)}
+                                disabled={!replyContents[comment.id]?.trim()}
+                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                              >
+                                Reply
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {comment.replies && comment.replies.length > 0 && (
+                          <div className="ml-4 mt-3 space-y-3">
+                            {comment.replies.map((reply: any) => (
+                              <div key={reply.id} className="flex gap-2">
+                                <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                                  {reply.user?.full_name?.charAt(0) || 'U'}
+                                </div>
+                                <div className="flex-1 bg-green-50 rounded-lg p-3">
+                                  <div className="flex justify-between items-start mb-1">
+                                    <div>
+                                      <p className="font-medium text-gray-900 text-sm">{reply.user?.full_name || 'Unknown User'}</p>
+                                      <p className="text-xs text-gray-500">{reply.user?.profession}</p>
+                                    </div>
+                                    <span className="text-xs text-gray-500">
+                                      {formatTime(reply.created_at)}
+                                    </span>
+                                  </div>
+                                  <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    ))}
-  
-                    {(comments[post.id] || []).length === 0 && (
-                      <div className="text-center py-6 text-gray-500">
-                        <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                        <p>No comments yet</p>
-                        <p className="text-sm mt-1">Be the first to comment!</p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-  
-          {posts.length === 0 && (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {Object.values(feedFilters).flat().length > 0 ? 'No posts match your filters' : 'No posts yet'}
-              </h3>
-              <p className="text-gray-500">
-                {Object.values(feedFilters).flat().length > 0 
-                  ? 'Try adjusting your filters to see more posts' 
-                  : 'Be the first to start a discussion!'}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-  
-      {/* Enhanced New Post Modal */}
-      {showNewPostModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold text-gray-900">Create New Post</h3>
-              <button 
-                onClick={() => setShowNewPostModal(false)} 
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={loading}
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-  
-            <div className="p-6 space-y-6">
-              {/* Basic Information */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Post Title *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter a clear and descriptive title..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={newPost.title}
-                  onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                  disabled={loading}
-                />
-              </div>
-  
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content *
-                </label>
-                <textarea
-                  placeholder="Share your knowledge, ask questions, or start a discussion..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px]"
-                  value={newPost.content}
-                  onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-                  disabled={loading}
-                />
-              </div>
-  
-              {/* Metadata Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Profession */}
-                <div className="relative" ref={dropdownRefs.professions}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Relevant Professions *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {newPost.metadata.professions.length > 0 
-                        ? `${newPost.metadata.professions.length} selected` 
-                        : 'Select professions'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.professions && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {PROFESSION_OPTIONS.map(profession => (
-                        <label key={profession} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={newPost.metadata.professions.includes(profession)}
-                            onChange={(e) => {
-                              const updatedProfessions = e.target.checked
-                                ? [...newPost.metadata.professions, profession]
-                                : newPost.metadata.professions.filter(p => p !== profession)
-                              setNewPost({
-                                ...newPost,
-                                metadata: { ...newPost.metadata, professions: updatedProfessions }
-                              })
-                            }}
-                            className="mr-3 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{profession}</span>
-                        </label>
-                      ))}
                     </div>
-                  )}
-                </div>
-  
-                {/* Clinical Areas */}
-                <div className="relative" ref={dropdownRefs.clinical_areas}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Clinical Areas *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, clinical_areas: !prev.clinical_areas }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {newPost.metadata.clinical_areas.length > 0 
-                        ? `${newPost.metadata.clinical_areas.length} selected` 
-                        : 'Select clinical areas'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.clinical_areas && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {CLINICAL_AREA_OPTIONS.map(area => (
-                        <label key={area} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={newPost.metadata.clinical_areas.includes(area)}
-                            onChange={(e) => {
-                              const updatedAreas = e.target.checked
-                                ? [...newPost.metadata.clinical_areas, area]
-                                : newPost.metadata.clinical_areas.filter(a => a !== area)
-                              setNewPost({
-                                ...newPost,
-                                metadata: { ...newPost.metadata, clinical_areas: updatedAreas }
-                              })
-                            }}
-                            className="mr-3 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{area}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Content Type */}
-                <div className="relative" ref={dropdownRefs.content_type}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Content Type *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, content_type: !prev.content_type }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {newPost.metadata.content_type || 'Select content type'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.content_type && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {CONTENT_TYPE_OPTIONS.map(type => (
-                        <button
-                          key={type}
-                          onClick={() => {
-                            setNewPost({
-                              ...newPost,
-                              metadata: { ...newPost.metadata, content_type: type }
-                            })
-                            setDropdowns(prev => ({ ...prev, content_type: false }))
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Audience Level */}
-                <div className="relative" ref={dropdownRefs.audience_level}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Audience Level *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, audience_level: !prev.audience_level }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {newPost.metadata.audience_level || 'Select audience level'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.audience_level && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {AUDIENCE_LEVEL_OPTIONS.map(level => (
-                        <button
-                          key={level}
-                          onClick={() => {
-                            setNewPost({
-                              ...newPost,
-                              metadata: { ...newPost.metadata, audience_level: level }
-                            })
-                            setDropdowns(prev => ({ ...prev, audience_level: false }))
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Language */}
-                <div className="relative" ref={dropdownRefs.language}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Language *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, language: !prev.language }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {newPost.metadata.language}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.language && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {LANGUAGE_OPTIONS.map(language => (
-                        <button
-                          key={language}
-                          onClick={() => {
-                            setNewPost({
-                              ...newPost,
-                              metadata: { ...newPost.metadata, language }
-                            })
-                            setDropdowns(prev => ({ ...prev, language: false }))
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
-                        >
-                          {language}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Related Conditions */}
-                <div className="relative" ref={dropdownRefs.related_conditions}>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Related Conditions
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, related_conditions: !prev.related_conditions }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {newPost.metadata.related_conditions.length > 0 
-                        ? `${newPost.metadata.related_conditions.length} selected` 
-                        : 'Select conditions'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.related_conditions && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {RELATED_CONDITIONS_OPTIONS.map(condition => (
-                        <label key={condition} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={newPost.metadata.related_conditions.includes(condition)}
-                            onChange={(e) => {
-                              const updatedConditions = e.target.checked
-                                ? [...newPost.metadata.related_conditions, condition]
-                                : newPost.metadata.related_conditions.filter(c => c !== condition)
-                              setNewPost({
-                                ...newPost,
-                                metadata: { ...newPost.metadata, related_conditions: updatedConditions }
-                              })
-                            }}
-                            className="mr-3 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{condition}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-  
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags & Keywords
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add tags (press Enter to add)"
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={addTag}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-                {newPost.metadata.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {newPost.metadata.tags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center"
-                      >
-                        {tag}
-                        <X 
-                          className="w-3 h-3 ml-2 cursor-pointer" 
-                          onClick={() => removeTag(tag)} 
-                        />
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-  
-              {/* Attachments */}
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    Attachments & Links
-  </label>
-  <div className="flex gap-2">
-    <input
-      type="text"
-      placeholder="Add file URLs or links..."
-      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      value={attachmentInput}
-      onChange={(e) => setAttachmentInput(e.target.value)}
-      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditAttachment())}
-      disabled={loading}
-    />
-    <button
-      type="button"
-      onClick={addEditAttachment}
-      className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-    >
-      Add
-    </button>
-  </div>
-  {editForm.metadata.attachments.length > 0 && (
-    <div className="flex flex-wrap gap-2 mt-2">
-      {editForm.metadata.attachments.map((attachment, index) => (
-        <span 
-          key={index} 
-          className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
-        >
-          Attachment {index + 1}
-          <X 
-            className="w-3 h-3 ml-2 cursor-pointer" 
-            onClick={() => removeEditAttachment(attachment)} 
-          />
-        </span>
-      ))}
-    </div>
-  )}
-</div>
+                  ))}
 
-{/* Co-authors */}
-<div>
-  <label className="block text-sm font-medium text-gray-700 mb-2">
-    Co-authors / Mentions
-  </label>
-  <div className="flex gap-2">
-    <input
-      type="text"
-      placeholder="Mention other users by username..."
-      className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-      value={coAuthorInput}
-      onChange={(e) => setCoAuthorInput(e.target.value)}
-      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditCoAuthor())}
-      disabled={loading}
-    />
-    <button
-      type="button"
-      onClick={addEditCoAuthor}
-      className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-    >
-      Add
-    </button>
-  </div>
-  {editForm.metadata.co_authors.length > 0 && (
-    <div className="flex flex-wrap gap-2 mt-2">
-      {editForm.metadata.co_authors.map(coAuthor => (
-        <span 
-          key={coAuthor} 
-          className="bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm flex items-center"
-        >
-          @{coAuthor}
-          <X 
-            className="w-3 h-3 ml-2 cursor-pointer" 
-            onClick={() => removeEditCoAuthor(coAuthor)} 
-          />
-        </span>
-      ))}
-    </div>
-  )}
-</div>
-  
-              {/* Privacy */}
-              <div>
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={newPost.metadata.is_public}
-                    onChange={(e) => setNewPost({
-                      ...newPost,
-                      metadata: { ...newPost.metadata, is_public: e.target.checked }
-                    })}
-                    className="mr-2 rounded border-gray-300"
-                  />
-                  <span className="text-sm text-gray-700">
-                    Make this post public (visible to all healthcare professionals)
-                  </span>
-                </label>
-              </div>
-  
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={createPost}
-                  disabled={loading || !newPost.title.trim() || !newPost.content.trim() || 
-                           !newPost.metadata.professions.length || !newPost.metadata.clinical_areas.length ||
-                           !newPost.metadata.content_type || !newPost.metadata.audience_level}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                      Creating Post...
-                    </>
-                  ) : (
-                    'Create Post'
-                  )}
-                </button>
-                <button
-                  onClick={() => setShowNewPostModal(false)}
-                  disabled={loading}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-  
-      {/* Edit Post Modal */}
-      {editForm.id && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center p-6 border-b border-gray-200">
-              <h3 className="text-xl font-bold text-gray-900">Edit Post</h3>
-              <button 
-                onClick={() => setEditForm({ ...editForm, id: '' })} 
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={loading}
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-  
-            <div className="p-6 space-y-6">
-              {/* Basic Information */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Post Title *
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter a clear and descriptive title..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={editForm.title}
-                  onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                  disabled={loading}
-                />
-              </div>
-  
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Content *
-                </label>
-                <textarea
-                  placeholder="Share your knowledge, ask questions, or start a discussion..."
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px]"
-                  value={editForm.content}
-                  onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-                  disabled={loading}
-                />
-              </div>
-  
-              {/* Metadata Section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Profession */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Relevant Professions *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {editForm.metadata.professions.length > 0 
-                        ? `${editForm.metadata.professions.length} selected` 
-                        : 'Select professions'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.professions && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {PROFESSION_OPTIONS.map(profession => (
-                        <label key={profession} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editForm.metadata.professions.includes(profession)}
-                            onChange={(e) => {
-                              const updatedProfessions = e.target.checked
-                                ? [...editForm.metadata.professions, profession]
-                                : editForm.metadata.professions.filter(p => p !== profession)
-                              setEditForm({
-                                ...editForm,
-                                metadata: { ...editForm.metadata, professions: updatedProfessions }
-                              })
-                            }}
-                            className="mr-3 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{profession}</span>
-                        </label>
-                      ))}
+                  {(comments[selectedPost.id] || []).length === 0 && (
+                    <div className="text-center py-6 text-gray-500">
+                      <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p>No comments yet</p>
+                      <p className="text-sm mt-1">Be the first to comment!</p>
                     </div>
                   )}
                 </div>
-  
-                {/* Clinical Areas */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Clinical Areas *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, clinical_areas: !prev.clinical_areas }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {editForm.metadata.clinical_areas.length > 0 
-                        ? `${editForm.metadata.clinical_areas.length} selected` 
-                        : 'Select clinical areas'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.clinical_areas && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {CLINICAL_AREA_OPTIONS.map(area => (
-                        <label key={area} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editForm.metadata.clinical_areas.includes(area)}
-                            onChange={(e) => {
-                              const updatedAreas = e.target.checked
-                                ? [...editForm.metadata.clinical_areas, area]
-                                : editForm.metadata.clinical_areas.filter(a => a !== area)
-                              setEditForm({
-                                ...editForm,
-                                metadata: { ...editForm.metadata, clinical_areas: updatedAreas }
-                              })
-                            }}
-                            className="mr-3 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{area}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Content Type */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Content Type *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, content_type: !prev.content_type }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {editForm.metadata.content_type || 'Select content type'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.content_type && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {CONTENT_TYPE_OPTIONS.map(type => (
-                        <button
-                          key={type}
-                          onClick={() => {
-                            setEditForm({
-                              ...editForm,
-                              metadata: { ...editForm.metadata, content_type: type }
-                            })
-                            setDropdowns(prev => ({ ...prev, content_type: false }))
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
-                        >
-                          {type}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Audience Level */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Audience Level *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, audience_level: !prev.audience_level }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {editForm.metadata.audience_level || 'Select audience level'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.audience_level && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {AUDIENCE_LEVEL_OPTIONS.map(level => (
-                        <button
-                          key={level}
-                          onClick={() => {
-                            setEditForm({
-                              ...editForm,
-                              metadata: { ...editForm.metadata, audience_level: level }
-                            })
-                            setDropdowns(prev => ({ ...prev, audience_level: false }))
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
-                        >
-                          {level}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Language */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Language *
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, language: !prev.language }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {editForm.metadata.language}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.language && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {LANGUAGE_OPTIONS.map(language => (
-                        <button
-                          key={language}
-                          onClick={() => {
-                            setEditForm({
-                              ...editForm,
-                              metadata: { ...editForm.metadata, language }
-                            })
-                            setDropdowns(prev => ({ ...prev, language: false }))
-                          }}
-                          className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-gray-700"
-                        >
-                          {language}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-  
-                {/* Related Conditions */}
-                <div className="relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Related Conditions
-                  </label>
-                  <button
-                    onClick={() => setDropdowns(prev => ({ ...prev, related_conditions: !prev.related_conditions }))}
-                    className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
-                  >
-                    <span className="text-sm text-gray-700">
-                      {editForm.metadata.related_conditions.length > 0 
-                        ? `${editForm.metadata.related_conditions.length} selected` 
-                        : 'Select conditions'}
-                    </span>
-                    <ChevronDown className="w-4 h-4 text-gray-400" />
-                  </button>
-                  {dropdowns.related_conditions && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                      {RELATED_CONDITIONS_OPTIONS.map(condition => (
-                        <label key={condition} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={editForm.metadata.related_conditions.includes(condition)}
-                            onChange={(e) => {
-                              const updatedConditions = e.target.checked
-                                ? [...editForm.metadata.related_conditions, condition]
-                                : editForm.metadata.related_conditions.filter(c => c !== condition)
-                              setEditForm({
-                                ...editForm,
-                                metadata: { ...editForm.metadata, related_conditions: updatedConditions }
-                              })
-                            }}
-                            className="mr-3 rounded border-gray-300"
-                          />
-                          <span className="text-sm text-gray-700">{condition}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-  
-              {/* Tags */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tags & Keywords
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Add tags (press Enter to add)"
-                    className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditTag())}
-                    disabled={loading}
-                  />
-                  <button
-                    type="button"
-                    onClick={addEditTag}
-                    className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-                {editForm.metadata.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {editForm.metadata.tags.map(tag => (
-                      <span 
-                        key={tag} 
-                        className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm flex items-center"
-                      >
-                        {tag}
-                        <X 
-                          className="w-3 h-3 ml-2 cursor-pointer" 
-                          onClick={() => removeEditTag(tag)} 
-                        />
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-  
-              {/* Action Buttons */}
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
-                <button
-                  onClick={handleUpdatePost}
-                  disabled={loading || !editForm.title.trim() || !editForm.content.trim() || 
-                           !editForm.metadata.professions.length || !editForm.metadata.clinical_areas.length ||
-                           !editForm.metadata.content_type || !editForm.metadata.audience_level}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                      Updating Post...
-                    </>
-                  ) : (
-                    'Update Post'
-                  )}
-                </button>
-                <button
-                  onClick={() => setEditForm({ ...editForm, id: '' })}
-                  disabled={loading}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-      {/* User Profile Modal */}
-{selectedUserProfile && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-      <div className="flex justify-between items-center p-6 border-b border-gray-200">
-        <h3 className="text-xl font-bold text-gray-900">User Profile</h3>
-        <button 
-          onClick={() => setSelectedUserProfile(null)} 
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-
-      <div className="p-6 space-y-6">
-        {/* Profile Header */}
-        <div className="flex items-center gap-4">
-          <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-            {selectedUserProfile.full_name?.charAt(0) || 'U'}
-          </div>
-          <div>
-            <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
-            <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
-          </div>
-        </div>
-
-        {/* Profile Details */}
-        <div className="space-y-4">
-          {selectedUserProfile.specialties && selectedUserProfile.specialties.length > 0 && (
-            <div>
-              <h5 className="text-sm font-medium text-gray-700 mb-2">Specialties</h5>
-              <div className="flex flex-wrap gap-2">
-                {selectedUserProfile.specialties.map((specialty: string) => (
-                  <span key={specialty} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
-                    {specialty}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedUserProfile.languages && selectedUserProfile.languages.length > 0 && (
-            <div>
-              <h5 className="text-sm font-medium text-gray-700 mb-2">Languages</h5>
-              <div className="flex flex-wrap gap-2">
-                {selectedUserProfile.languages.map((language: string) => (
-                  <span key={language} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
-                    {language}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {selectedUserProfile.bio && (
-            <div>
-              <h5 className="text-sm font-medium text-gray-700 mb-2">Bio</h5>
-              <p className="text-gray-700">{selectedUserProfile.bio}</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  </div>
-)}
-
-{/* Post Detail Modal */}
-{selectedPost && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4">
-    <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto">
-      <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-        <h3 className="text-xl font-bold text-gray-900">Post Details</h3>
-        <button 
-          onClick={() => setSelectedPost(null)} 
-          className="text-gray-400 hover:text-gray-600 transition-colors"
-        >
-          <X className="w-6 h-6" />
-        </button>
-      </div>
-
-      <div className="p-6">
-        {/* Post Header */}
-        <div className="flex items-center gap-3 mb-4">
-          <button
-            onClick={() => {
-              viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
-              setSelectedPost(null)
-            }}
-            className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors"
-          >
-            {selectedPost.user?.full_name?.charAt(0) || 'U'}
-          </button>
-          <div>
-            <button
-              onClick={() => {
-                viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
-                setSelectedPost(null)
-              }}
-              className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-lg"
-            >
-              {selectedPost.user?.full_name}
-            </button>
-            <p className="text-sm text-gray-600">
-              {selectedPost.user?.profession} • {formatTime(selectedPost.created_at)}
-              {selectedPost.updated_at && selectedPost.updated_at !== selectedPost.created_at && (
-                <span className="text-gray-400"> (edited)</span>
               )}
-            </p>
-          </div>
-        </div>
-
-        {/* Post Title */}
-        <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h2>
-
-        {/* Post Metadata */}
-        {renderPostMetadata(selectedPost)}
-
-        {/* Post Settings Indicators */}
-        <div className="flex flex-wrap gap-3 text-xs text-gray-500 my-4">
-          {postSettings[selectedPost.id]?.comments_disabled && (
-            <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
-              <MessageSquare className="w-3 h-3" />
-              Comments disabled
-            </span>
-          )}
-          {postSettings[selectedPost.id]?.muted && (
-            <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
-              <Bell className="w-3 h-3" />
-              Notifications muted
-            </span>
-          )}
-          {followingPosts.includes(selectedPost.id) && (
-            <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-              <Bell className="w-3 h-3" />
-              Following
-            </span>
-          )}
-        </div>
-
-        {/* Post Content */}
-        <p className="text-gray-700 mb-6 whitespace-pre-line text-lg leading-relaxed">{selectedPost.content}</p>
-
-        {/* Attachments */}
-        {selectedPost.post_metadata.attachments && selectedPost.post_metadata.attachments.length > 0 && (
-          <div className="mb-6">
-            <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
-            <div className="flex flex-wrap gap-2">
-              {selectedPost.post_metadata.attachments.map((attachment: string, index: number) => (
-                <a 
-                  key={index}
-                  href={attachment}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-600 hover:text-blue-700 underline"
-                >
-                  Attachment {index + 1}
-                </a>
-              ))}
             </div>
           </div>
-        )}
-
-        {/* Co-authors */}
-        {selectedPost.post_metadata.co_authors && selectedPost.post_metadata.co_authors.length > 0 && (
-          <div className="mb-6">
-            <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
-            <p className="text-sm text-gray-600">{selectedPost.post_metadata.co_authors.join(', ')}</p>
-          </div>
-        )}
-
-        {/* Comments Section - Tam kodu yukarıdaki post feed'deki comments section ile aynı */}
-        <div className="border-t border-gray-200 pt-6">
-          {/* Comments burada - önceki kodunuzdaki comments section'ı kopyalayın */}
         </div>
       </div>
-    </div>
+    )}
   </div>
-)}
-  )
+)
 }
 
 function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
