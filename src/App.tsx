@@ -5232,27 +5232,27 @@ function CommunityComponent() {
   const [coAuthorInput, setCoAuthorInput] = useState('')
   const menuRef = useRef<HTMLDivElement>(null)
   const [editForm, setEditForm] = useState<{
-  id: string;
-  title: string;
-  content: string;
-  metadata: PostMetadata;
-}>({
-  id: '',
-  title: '',
-  content: '',
-  metadata: {
-    professions: [],
-    clinical_areas: [],
-    content_type: '',
-    tags: [],
-    audience_level: '',
-    related_conditions: [],
-    language: 'English',
-    attachments: [],
-    co_authors: [],
-    is_public: true
-  }
-})
+    id: string;
+    title: string;
+    content: string;
+    metadata: PostMetadata;
+  }>({
+    id: '',
+    title: '',
+    content: '',
+    metadata: {
+      professions: [],
+      clinical_areas: [],
+      content_type: '',
+      tags: [],
+      audience_level: '',
+      related_conditions: [],
+      language: 'English',
+      attachments: [],
+      co_authors: [],
+      is_public: true
+    }
+  })
   const session = useSession()
   const user = session?.user
 
@@ -5882,9 +5882,7 @@ const removeEditCoAuthor = (coAuthorToRemove: string) => {
 
 const viewPostDetail = (post: CommunityPost) => {
   setSelectedPost(post)
-  if (!expandedPosts.includes(post.id)) {
-    loadComments(post.id)
-  }
+  loadComments(post.id)
 }
 
   const addComment = async (postId: string, parentReplyId: string | null = null) => {
@@ -6194,6 +6192,11 @@ const viewPostDetail = (post: CommunityPost) => {
     )
   }
 
+  const getContentSnippet = (content: string) => {
+    const lines = content.split('\n').slice(0, 2).join('\n');
+    return lines.length < content.length ? `${lines}...` : lines;
+  };
+
 return (
   <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
     <div className="max-w-6xl mx-auto">
@@ -6493,20 +6496,20 @@ return (
       {/* Posts Feed */}
       <div className="space-y-4">
         {posts.map(post => (
-          <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+          <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer" onClick={() => viewPostDetail(post)}>
             {/* Post Header with Menu */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <button
-                    onClick={() => viewUserProfile(post.user_id || post.user?.id)}
+                    onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || post.user?.id); }}
                     className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors cursor-pointer"
                   >
                     {post.user?.full_name?.charAt(0) || 'U'}
                   </button>
                   <div>
                     <button
-                      onClick={() => viewUserProfile(post.user_id || post.user?.id)}
+                      onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || post.user?.id); }}
                       className="font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
                     >
                       {post.user?.full_name}
@@ -6520,12 +6523,9 @@ return (
                   </div>
                 </div>
                 
-                <button
-                  onClick={() => viewPostDetail(post)}
-                  className="text-xl font-bold text-gray-900 mb-2 hover:text-blue-600 transition-colors cursor-pointer text-left w-full"
-                >
+                <div className="text-xl font-bold text-gray-900 mb-2">
                   {post.title}
-                </button>
+                </div>
                 
                 {/* Post Metadata */}
                 {renderPostMetadata(post)}
@@ -6613,178 +6613,13 @@ return (
               </div>
             </div>
 
-            <p className="text-gray-700 mb-4 whitespace-pre-line">{post.content}</p>
+            <p className="text-gray-700 mb-4 whitespace-pre-line">{getContentSnippet(post.content)}</p>
 
-            {/* Attachments */}
-            {post.post_metadata.attachments && post.post_metadata.attachments.length > 0 && (
-              <div className="mt-3">
-                <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
-                <div className="flex flex-wrap gap-2">
-                  {post.post_metadata.attachments.map((attachment, index) => (
-                    <a 
-                      key={index}
-                      href={attachment}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-700 underline"
-                    >
-                      Attachment {index + 1}
-                    </a>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Co-authors */}
-            {post.post_metadata.co_authors && post.post_metadata.co_authors.length > 0 && (
-              <div className="mt-3">
-                <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
-                <p className="text-sm text-gray-600">{post.post_metadata.co_authors.join(', ')}</p>
-              </div>
-            )}
-
-            {/* Comments Section */}
             <div className="border-t border-gray-200 pt-4">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center text-sm text-gray-500">
-                  <MessageSquare className="w-4 h-4 mr-1" />
-                  {post.replies_count} comments
-                </div>
-
-                <button
-                  onClick={() => togglePostExpansion(post.id)}
-                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  {expandedPosts.includes(post.id) ? 'Hide comments' : 'Show comments'}
-                </button>
+              <div className="flex items-center text-sm text-gray-500">
+                <MessageSquare className="w-4 h-4 mr-1" />
+                {post.replies_count} comments
               </div>
-
-              {/* Comment Input */}
-              {expandedPosts.includes(post.id) && user && !postSettings[post.id]?.comments_disabled && (
-                <div className="mb-4">
-                  <textarea
-                    placeholder="Add a comment..."
-                    value={newComments[post.id] || ''}
-                    onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                  />
-                  <div className="flex justify-end mt-2">
-                    <button
-                      onClick={() => addComment(post.id)}
-                      disabled={!newComments[post.id]?.trim()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                    >
-                      Comment
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {expandedPosts.includes(post.id) && postSettings[post.id]?.comments_disabled && (
-                <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="font-medium">Comments are disabled for this post</p>
-                  <p className="text-sm mt-1">The post owner has turned off comments</p>
-                </div>
-              )}
-
-              {expandedPosts.includes(post.id) && !postSettings[post.id]?.comments_disabled && (
-                <div className="space-y-4">
-                  {(comments[post.id] || []).map(comment => (
-                    <div key={comment.id} className="flex gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                        {comment.user?.full_name?.charAt(0) || 'U'}
-                      </div>
-                      <div className="flex-1">
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <p className="font-medium text-gray-900">{comment.user?.full_name || 'Unknown User'}</p>
-                              <p className="text-xs text-gray-500">{comment.user?.profession}</p>
-                            </div>
-                            <span className="text-xs text-gray-500">
-                              {formatTime(comment.created_at)}
-                            </span>
-                          </div>
-                          <p className="text-gray-700 mt-2">{comment.content}</p>
-
-                          {user && (
-                            <button
-                              onClick={() => setReplyingTo(prev => ({ 
-                                ...prev, 
-                                [post.id]: replyingTo[post.id] === comment.id ? null : comment.id 
-                              }))}
-                              className="text-xs text-blue-600 hover:text-blue-700 mt-2 font-medium"
-                            >
-                              {replyingTo[post.id] === comment.id ? 'Cancel' : 'Reply'}
-                            </button>
-                          )}
-                        </div>
-
-                        {replyingTo[post.id] === comment.id && user && (
-                          <div className="ml-4 mt-3">
-                            <textarea
-                              placeholder="Write a reply..."
-                              value={replyContents[comment.id] || ''}
-                              onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              rows={2}
-                            />
-                            <div className="flex justify-end mt-2 gap-2">
-                              <button
-                                onClick={() => setReplyingTo(prev => ({ ...prev, [post.id]: null }))}
-                                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                              >
-                                Cancel
-                              </button>
-                              <button
-                                onClick={() => addComment(post.id, comment.id)}
-                                disabled={!replyContents[comment.id]?.trim()}
-                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                              >
-                                Reply
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {comment.replies && comment.replies.length > 0 && (
-                          <div className="ml-4 mt-3 space-y-3">
-                            {comment.replies.map((reply: any) => (
-                              <div key={reply.id} className="flex gap-2">
-                                <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                  {reply.user?.full_name?.charAt(0) || 'U'}
-                                </div>
-                                <div className="flex-1 bg-green-50 rounded-lg p-3">
-                                  <div className="flex justify-between items-start mb-1">
-                                    <div>
-                                      <p className="font-medium text-gray-900 text-sm">{reply.user?.full_name || 'Unknown User'}</p>
-                                      <p className="text-xs text-gray-500">{reply.user?.profession}</p>
-                                    </div>
-                                    <span className="text-xs text-gray-500">
-                                      {formatTime(reply.created_at)}
-                                    </span>
-                                  </div>
-                                  <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {(comments[post.id] || []).length === 0 && (
-                    <div className="text-center py-6 text-gray-500">
-                      <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                      <p>No comments yet</p>
-                      <p className="text-sm mt-1">Be the first to comment!</p>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </div>
         ))}
@@ -7742,6 +7577,12 @@ return (
                 </div>
               )}
             </div>
+            <button 
+              onClick={() => console.log('View full profile')} 
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              View Full Profile
+            </button>
           </div>
         </div>
       </div>
