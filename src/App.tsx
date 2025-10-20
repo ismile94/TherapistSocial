@@ -2,14 +2,13 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
-import ReactDOM from 'react-dom';
 import { useSession } from '@supabase/auth-helpers-react'
 import { 
     Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
     UserPlus, UserCheck, Clock, Settings, Eye, Lock, Bell, Filter,
-    Download, Info, Trash2
+    Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw 
 } from 'lucide-react'
 
 
@@ -76,9 +75,36 @@ interface FeedFilters {
 
 // Seçenek listeleri
 const PROFESSION_OPTIONS = [
-  'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
-  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist',
-  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
+  'Physiotherapist/Physical Therapist',
+  'Occupational Therapist',
+  'Speech and Language Therapist',
+  'Practitioner Psychologist',
+  'Clinical Psychologist',
+  'Forensic Psychologist',
+  'Counselling Psychologist',
+  'Health Psychologist',
+  'Educational Psychologist',
+  'Occupational Psychologist',
+  'Sport and Exercise Psychologist',
+  'Dietitian',
+  'Podiatrist',
+  'Doctor',
+  'Nurse',
+  'Paramedic',
+  'Clinical Scientist',
+  'Hearing Aid Dispenser',
+  'Orthoptist',
+  'Prosthetist',
+  'Orthotist',
+  'Diagnostic Radiographer',
+  'Therapeutic Radiographer',
+  'Pharmacist',
+  'Social Worker',
+  'Care Assistant',
+  'Art Therapist',
+  'Dramatherapist',
+  'Music Therapist',
+  'Biomedical Scientist'
 ]
 
 const CLINICAL_AREA_OPTIONS = [
@@ -115,22 +141,21 @@ const RELATED_CONDITIONS_OPTIONS = [
 ]
 
 const LANGUAGE_OPTIONS = [
-  'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
-  // Eklenen diller:
-  'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
-  'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
-  'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
-  'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
-  'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
-  'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
-  'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
-  // Ve yeni eklenen 110+ dil:
-  'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
-  'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
-  'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
-  'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
-  'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
+  'Afrikaans','Albanian','Amharic','Arabic','Armenian','Assamese','Aymara','Azerbaijani','Bambara','Basque',
+  'Belarusian','Bengali','Bhojpuri','Bosnian','Bulgarian','Catalan','Cebuano','Chinese (Simplified)','Chinese (Traditional)',
+  'Corsican','Croatian','Czech','Danish','Dhivehi','Dogri','Dutch','English','Esperanto','Estonian','Ewe',
+  'Filipino','Finnish','French','Frisian','Galician','Georgian','German','Greek','Guarani','Gujarati','Haitian Creole',
+  'Hausa','Hawaiian','Hebrew','Hindi','Hmong','Hungarian','Icelandic','Igbo','Ilocano','Indonesian','Irish',
+  'Italian','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Konkani','Korean','Krio','Kurdish (Kurmanji)',
+  'Kurdish (Sorani)','Kyrgyz','Lao','Latin','Latvian','Lingala','Lithuanian','Luganda','Luxembourgish','Macedonian',
+  'Maithili','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi','Mizo','Mongolian','Myanmar (Burmese)',
+  'Nepali','Norwegian','Nyanja (Chichewa)','Odia (Oriya)','Oromo','Pashto','Persian','Polish','Portuguese','Punjabi',
+  'Quechua','Romanian','Russian','Samoan','Sanskrit','Scots Gaelic','Sepedi','Serbian','Sesotho','Shona','Sindhi',
+  'Sinhala','Slovak','Slovenian','Somali','Spanish','Sundanese','Swahili','Swedish','Tagalog (Filipino)','Tajik',
+  'Tamil','Tatar','Telugu','Thai','Tigrinya','Tsonga','Turkish','Turkmen','Twi (Akan)','Ukrainian','Urdu','Uyghur',
+  'Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Yoruba','Zulu'
 ];
+
 
 interface Profile {
   id: string
@@ -152,6 +177,7 @@ interface Profile {
   phone?: string
   website?: string
   email?: string
+  bio?: string; // optional olarak ekleyin
   contact_email?: string
   regulator_number?: string
   connection_stats?: ConnectionStats
@@ -344,7 +370,6 @@ function AccountDropdown({
   onProfileClick, 
   onSettingsClick,
   onSignOut,
-  onOpenConnections
 }: { 
   currentUser: any
   onProfileClick: () => void
@@ -1049,198 +1074,6 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         </div>
       </div>
     </div>
-  )
-}
-
-function MobileChatComponent({ 
-  conversation, 
-  currentUserId,
-  userProfile,
-  onBack 
-}: { 
-  conversation: Conversation
-  currentUserId: string
-  userProfile: any
-  onBack: () => void
-}) {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [newMessage, setNewMessage] = useState('')
-  const [sending, setSending] = useState(false)
-  const messagesEndRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (conversation?.id && currentUserId) {
-      loadMessages()
-      subscribeToMessages()
-    }
-  }, [conversation?.id, currentUserId])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
-
-  async function loadMessages() {
-    if (!conversation) return
-    
-    const { data, error } = await supabase
-      .from('messages')
-      .select(`*, sender:profiles(*)`)
-      .eq('conversation_id', conversation.id)
-      .order('created_at', { ascending: true })
-
-    if (!error && data) {
-      setMessages(data)
-      
-      // Mesajları okundu olarak işaretle
-      await supabase
-        .from('messages')
-        .update({ read: true })
-        .eq('conversation_id', conversation.id)
-        .eq('read', false)
-        .neq('sender_id', currentUserId)
-    }
-  }
-
-  function subscribeToMessages() {
-    if (!conversation) return
-
-    const channel = supabase
-      .channel(`mobile-chat-${conversation.id}`)
-      .on('postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'messages',
-          filter: `conversation_id=eq.${conversation.id}`
-        },
-        async (payload) => {
-          const newMsg = payload.new as Message
-          
-          const { data: senderData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', newMsg.sender_id)
-            .single()
-          
-          const messageWithSender = { ...newMsg, sender: senderData }
-          setMessages(prev => [...prev, messageWithSender])
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }
-
-  async function sendMessage() {
-    if (!conversation || !newMessage.trim() || sending) return
-  
-    setSending(true)
-    
-    const tempMessage: Message = {
-      id: `temp-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      conversation_id: conversation.id,
-      sender_id: currentUserId,
-      content: newMessage.trim(),
-      read: true,
-      sender: userProfile
-    }
-    
-    setMessages(prev => [...prev, tempMessage])
-    setNewMessage('')
-    
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: conversation.id,
-        sender_id: currentUserId,
-        content: newMessage.trim()
-      })
-      .select(`*, sender:profiles(*)`)
-      .single()
-  
-    if (error) {
-      setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id))
-      alert('Failed to send message')
-    } else {
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempMessage.id ? data : msg
-      ))
-      
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', conversation.id)
-    }
-    setSending(false)
-  }
-
-  function scrollToBottom() {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault()
-      sendMessage()
-    }
-  }
-
-  return (
-    <>
-      {/* Mesajlar listesi */}
-      <div className="space-y-4 pb-4">
-        {messages.map(message => (
-          <div
-            key={message.id}
-            className={`flex ${message.sender_id === currentUserId ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] px-4 py-2 rounded-2xl ${
-                message.sender_id === currentUserId
-                  ? 'bg-blue-600 text-white rounded-br-none'
-                  : 'bg-white text-gray-900 rounded-bl-none border border-gray-200'
-              }`}
-            >
-              <p className="whitespace-pre-wrap break-words">{message.content}</p>
-              <p className={`text-xs mt-1 ${
-                message.sender_id === currentUserId ? 'text-blue-200' : 'text-gray-500'
-              }`}>
-                {new Date(message.created_at).toLocaleTimeString([], { 
-                  hour: '2-digit', 
-                  minute: '2-digit' 
-                })}
-              </p>
-            </div>
-          </div>
-        ))}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Mesaj yazma inputu */}
-      <div className="border-t border-gray-200 bg-white p-4 flex-shrink-0">
-        <div className="flex space-x-2">
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type a message..."
-            className="flex-1 border border-gray-300 rounded-full px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            disabled={sending}
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!newMessage.trim() || sending}
-            className="bg-blue-600 text-white w-12 h-12 rounded-full hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center"
-          >
-            <Send className="w-5 h-5" />
-          </button>
-        </div>
-      </div>
-    </>
   )
 }
 
@@ -3614,7 +3447,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
   }
 
   const professions = ['Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
-  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
+  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist',
   'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist']
 
   const languages = [
@@ -5204,15 +5037,20 @@ function CommunityComponent() {
   const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const [loading, setLoading] = useState(false)
-  const [editingPost, setEditingPost] = useState<CommunityPost | null>(null)
+  const [commentLikes, setCommentLikes] = useState<Record<string, number>>({});
+  const [commentDislikes, setCommentDislikes] = useState<Record<string, number>>({});
+  const [commentFavorites, setCommentFavorites] = useState<Record<string, boolean>>({});
+  const [userReactions, setUserReactions] = useState<Record<string, 'like' | 'dislike' | 'favorite' | null>>({});
+  const [activeCommentMenu, setActiveCommentMenu] = useState<string | null>(null);
   const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({})
   const [newComments, setNewComments] = useState<{ [postId: string]: string }>({})
-  const [replyingTo, setReplyingTo] = useState<{ [postId: string]: string | null }>({})
+  const [replyingTo, setReplyingTo] = useState<{ [commentId: string]: boolean }>({});
   const [replyContents, setReplyContents] = useState<{ [commentId: string]: string }>({})
   const [postSettings, setPostSettings] = useState<{ [postId: string]: { comments_disabled: boolean; muted: boolean } }>({})
   const [followingPosts, setFollowingPosts] = useState<string[]>([])
-  const [expandedPosts, setExpandedPosts] = useState<string[]>([])
-  const [activeMenuPost, setActiveMenuPost] = useState<string | null>(null)
+  const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
+  const [activeMenuPost, setActiveMenuPost] = useState<string | null>(null);
+  const menuRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
   const [feedFilters, setFeedFilters] = useState<FeedFilters>({
     professions: [],
     clinical_areas: [],
@@ -5228,7 +5066,6 @@ function CommunityComponent() {
   const [tagInput, setTagInput] = useState('')
   const [attachmentInput, setAttachmentInput] = useState('')
   const [coAuthorInput, setCoAuthorInput] = useState('')
-  const menuRef = useRef<HTMLDivElement>(null)
   const [editForm, setEditForm] = useState<{
     id: string;
     title: string;
@@ -5302,25 +5139,162 @@ function CommunityComponent() {
           setDropdowns(prev => ({ ...prev, [key]: false }))
         }
       })
-
+  
       // Filter dropdowns
       Object.entries(filterDropdownRefs).forEach(([key, ref]) => {
         if (ref.current && !ref.current.contains(event.target as Node)) {
           setFilterDropdowns(prev => ({ ...prev, [key]: false }))
         }
       })
-
-      // Post menu
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setActiveMenuPost(null)
+  
+      // Post menus - tüm menü ref'lerini kontrol et
+      let clickedOutsideAllMenus = true;
+      Object.values(menuRefs.current).forEach(ref => {
+        if (ref && ref.contains(event.target as Node)) {
+          clickedOutsideAllMenus = false;
+        }
+      });
+  
+      if (clickedOutsideAllMenus) {
+        setActiveMenuPost(null);
       }
     }
-
+  
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Load posts with filters
+  useEffect(() => {
+    if (!user) {
+      setRealtimeStatus('disconnected');
+      return;
+    }
+  
+    let postsChannel: any;
+    let repliesChannel: any;
+    let commentReactionsChannel: any;
+  
+    const setupRealtimeSubscriptions = async () => {
+      try {
+        setRealtimeStatus('connecting');
+  
+        // Posts channel - DÜZELTİLDİ: subscribe callback eklendi
+        postsChannel = supabase.channel('posts-follow')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'posts',
+            },
+            (payload) => {
+              console.log('Post real-time update:', payload);
+              handlePostRealtime(payload);
+            }
+          )
+          .subscribe((status, error) => {
+            console.log('Posts channel subscription status:', status);
+            if (status === 'SUBSCRIBED') {
+              setRealtimeStatus('connected');
+            } else if (status === 'CHANNEL_ERROR' || error) {
+              console.error('Posts channel error:', error);
+              setRealtimeStatus('disconnected');
+            }
+          });
+  
+        // Post replies channel - DÜZELTİLDİ: subscribe callback eklendi
+        repliesChannel = supabase.channel('replies-follow')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'post_replies',
+            },
+            (payload) => {
+              console.log('Reply real-time update:', payload);
+              handleReplyRealtime(payload);
+            }
+          )
+          .subscribe((status, error) => {
+            console.log('Replies channel subscription status:', status);
+            if (error) {
+              console.error('Replies channel error:', error);
+            }
+          });
+  
+        // Comment reactions channel - DÜZELTİLDİ: subscribe callback eklendi
+        commentReactionsChannel = supabase.channel('comment-reactions-follow')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'comment_reactions',
+            },
+            (payload) => {
+              console.log('Comment reaction real-time update:', payload);
+              handleCommentReactionRealtime(payload);
+            }
+          )
+          .subscribe((status, error) => {
+            console.log('Comment reactions channel subscription status:', status);
+            if (error) {
+              console.error('Comment reactions channel error:', error);
+            }
+          });
+  
+      } catch (error) {
+        console.error('Error setting up real-time subscriptions:', error);
+        setRealtimeStatus('disconnected');
+      }
+    };
+  
+    setupRealtimeSubscriptions();
+  
+    return () => {
+      try {
+        // DÜZELTİLDİ: unsubscribe metodları callback ile çağrıldı
+        postsChannel?.unsubscribe();
+        repliesChannel?.unsubscribe();
+        commentReactionsChannel?.unsubscribe();
+        setRealtimeStatus('disconnected');
+      } catch (e) {
+        console.error('Error unsubscribing channels:', e);
+      }
+    };
+  }, [user, feedFilters]);
+
+  // Periyodik yenileme için useEffect
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshInterval = setInterval(() => {
+      // Sadece sayfa görünürse ve real-time bağlantısı kopmuşsa yenile
+      if (document.visibilityState === 'visible' && realtimeStatus === 'disconnected') {
+        console.log('Periodic refresh triggered');
+        loadPosts();
+        loadFollowingPosts();
+      }
+    }, 30000); // 30 saniyede bir
+
+    return () => clearInterval(refreshInterval);
+  }, [user, realtimeStatus]);
+
+  // Posts değiştiğinde menü ref'lerini temizle
+  useEffect(() => {
+    // Mevcut post ID'lerini al
+    const currentPostIds = new Set(posts.map(p => p.id))
+    
+    // Silinmiş post'ların ref'lerini temizle
+    Object.keys(menuRefs.current).forEach(postId => {
+      if (!currentPostIds.has(postId)) {
+        delete menuRefs.current[postId]
+      }
+    })
+  }, [posts])
+
+  // useEffect içindeki real-time subscription'ı güncelle
   useEffect(() => {
     if (user) {
       loadPosts()
@@ -5332,132 +5306,705 @@ function CommunityComponent() {
           handlePostRealtime(payload)
         })
         .subscribe()
-
+  
       const repliesChannel = supabase.channel('public:post_replies')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'post_replies' }, (payload) => {
           handleReplyRealtime(payload)
         })
         .subscribe()
-
+  
+      // YENİ: Yorum reaksiyonları için real-time subscription
+      const commentReactionsChannel = supabase.channel('public:comment_reactions')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'comment_reactions' }, (payload) => {
+          handleCommentReactionRealtime(payload)
+        })
+        .subscribe()
+  
       return () => {
         try { postsChannel.unsubscribe() } catch (e) {}
         try { repliesChannel.unsubscribe() } catch (e) {}
+        try { commentReactionsChannel.unsubscribe() } catch (e) {}
       }
     }
   }, [user, feedFilters])
 
-  const handlePostRealtime = (payload: any) => {
-    const { eventType, new: newRow, old: oldRow } = payload
-    if (eventType === 'INSERT') {
-      const attached = attachUserPlaceholders(newRow)
-      setPosts(prev => [attached, ...prev])
-      setPostSettings(prev => ({ 
-        ...prev, 
-        [newRow.id]: { 
-          comments_disabled: newRow.comments_disabled || false, 
-          muted: newRow.muted || false 
-        } 
-      }))
-    } else if (eventType === 'UPDATE') {
-      setPosts(prev => prev.map(p => p.id === newRow.id ? { ...p, ...newRow } : p))
-      setPostSettings(prev => ({ 
-        ...prev, 
-        [newRow.id]: { 
-          comments_disabled: newRow.comments_disabled || false, 
-          muted: newRow.muted || false 
-        } 
-      }))
-    } else if (eventType === 'DELETE') {
-      setPosts(prev => prev.filter(p => p.id !== oldRow.id))
-      setComments(prev => {
-        const copy = { ...prev }
-        delete copy[oldRow.id]
-        return copy
-      })
-      setFollowingPosts(prev => prev.filter(id => id !== oldRow.id))
+  
+  const handlePostRealtime = async (payload: any) => {
+    const { eventType, new: newRow, old: oldRow } = payload;
+    
+    console.log('Handling post real-time:', eventType, newRow);
+  
+    // Kendi post'larımızı filtrele (INSERT için) - ÇÖZÜM BURADA!
+    if (eventType === 'INSERT' && newRow.user_id === user?.id) {
+      console.log('Ignoring own post in real-time');
+      return;
     }
-  }
-
-  const handleReplyRealtime = (payload: any) => {
-    const { eventType, new: newRow, old: oldRow } = payload
+  
     if (eventType === 'INSERT') {
-      setPosts(prev => prev.map(p => p.id === newRow.post_id ? { 
-        ...p, 
-        replies_count: (p.replies_count || 0) + 1 
-      } : p))
-
-      setComments(prev => {
-        const postComments = prev[newRow.post_id]
-        if (!postComments) return prev
-
-        if (!newRow.parent_reply_id) {
-          return { 
-            ...prev, 
-            [newRow.post_id]: [...postComments, attachReplyUserPlaceholder(newRow)] 
+      // Yeni post için kullanıcı bilgilerini çek
+      let userProfile = { 
+        id: newRow.user_id, 
+        full_name: 'Loading...', 
+        profession: '' 
+      };
+      
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('id, full_name, profession')
+          .eq('id', newRow.user_id)
+          .single();
+        
+        if (data) {
+          userProfile = data;
+        }
+      } catch (err) {
+        console.error('Error fetching user profile:', err);
+      }
+  
+      const attached = {
+        ...newRow,
+        user: userProfile,
+        replies_count: 0,
+        post_metadata: newRow.post_metadata || {}
+      };
+  
+      // Filtre kontrolü yap (mevcut filtrelerle uyumlu mu)
+      const passesFilters = await checkPostFilters(attached, feedFilters);
+      
+      if (passesFilters) {
+        setPosts(prev => {
+          // Aynı post zaten varsa ekleme
+          if (prev.some(p => p.id === attached.id)) {
+            return prev;
           }
+          return [attached, ...prev];
+        });
+      }
+  
+      setPostSettings(prev => ({ 
+        ...prev, 
+        [newRow.id]: { 
+          comments_disabled: newRow.comments_disabled || false, 
+          muted: newRow.muted || false 
+        } 
+      }));
+  
+    } else if (eventType === 'UPDATE') {
+      setPosts(prev => prev.map(p => {
+        if (p.id === newRow.id) {
+          return { ...p, ...newRow };
+        }
+        return p;
+      }));
+      
+      setPostSettings(prev => ({ 
+        ...prev, 
+        [newRow.id]: { 
+          comments_disabled: newRow.comments_disabled || false, 
+          muted: newRow.muted || false 
+        } 
+      }));
+  
+    } else if (eventType === 'DELETE') {
+      setPosts(prev => prev.filter(p => p.id !== oldRow.id));
+      setComments(prev => {
+        const copy = { ...prev };
+        delete copy[oldRow.id];
+        return copy;
+      });
+      setFollowingPosts(prev => prev.filter(id => id !== oldRow.id));
+      
+      // Menü ref'ini de temizle
+      delete menuRefs.current[oldRow.id];
+    }
+  };
+
+  // Filtre kontrol fonksiyonu
+  const checkPostFilters = async (post: any, filters: FeedFilters): Promise<boolean> => {
+    // Eğer aktif filtre yoksa, tüm postları göster
+    if (Object.values(filters).flat().length === 0 && 
+        !filters.show_only_my_profession && 
+        !filters.show_only_my_network) {
+      return true;
+    }
+  
+    const metadata = post.post_metadata || {};
+  
+    // Profesyon filtreleri
+    if (filters.professions.length > 0) {
+      const postProfessions = metadata.professions || [];
+      const hasMatchingProfession = filters.professions.some(profession => 
+        postProfessions.includes(profession)
+      );
+      if (!hasMatchingProfession) return false;
+    }
+  
+    // Klinik alan filtreleri
+    if (filters.clinical_areas.length > 0) {
+      const postClinicalAreas = metadata.clinical_areas || [];
+      const hasMatchingArea = filters.clinical_areas.some(area => 
+        postClinicalAreas.includes(area)
+      );
+      if (!hasMatchingArea) return false;
+    }
+  
+    // İçerik tipi filtreleri
+    if (filters.content_types.length > 0) {
+      const postContentType = metadata.content_type;
+      if (!postContentType || !filters.content_types.includes(postContentType)) {
+        return false;
+      }
+    }
+  
+    // Audience level filtreleri
+    if (filters.audience_levels.length > 0) {
+      const postAudienceLevel = metadata.audience_level;
+      if (!postAudienceLevel || !filters.audience_levels.includes(postAudienceLevel)) {
+        return false;
+      }
+    }
+  
+    // Related conditions filtreleri
+    if (filters.related_conditions.length > 0) {
+      const postRelatedConditions = metadata.related_conditions || [];
+      const hasMatchingCondition = filters.related_conditions.some(condition => 
+        postRelatedConditions.includes(condition)
+      );
+      if (!hasMatchingCondition) return false;
+    }
+  
+    // Dil filtreleri
+    if (filters.languages.length > 0) {
+      const postLanguage = metadata.language || 'English';
+      if (!filters.languages.includes(postLanguage)) {
+        return false;
+      }
+    }
+  
+    // Sadece benim mesleğim filtresi
+    if (filters.show_only_my_profession && user) {
+      try {
+        const userProfile = await getUserProfile();
+        const postProfessions = metadata.professions || [];
+        if (!userProfile?.profession || !postProfessions.includes(userProfile.profession)) {
+          return false;
+        }
+      } catch (err) {
+        console.error('Error checking profession filter:', err);
+      }
+    }
+  
+    // Sadece benim ağım filtresi (basit implementasyon)
+    if (filters.show_only_my_network && user) {
+      // Bu kısım bağlantı sisteminize bağlı olarak implemente edilmeli
+      // Şimdilik tüm postları göster
+      console.log('Network filter not fully implemented');
+    }
+  
+    return true;
+  };
+
+  // Yorum beğenme - Güncellenmiş versiyon
+  const handleLikeComment = async (commentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    console.log('Like clicked - User:', user.id, 'Comment:', commentId);
+    const currentReaction = userReactions[commentId];
+    const currentLikes = commentLikes[commentId] || 0;
+    const currentDislikes = commentDislikes[commentId] || 0;
+    
+    try {
+      if (currentReaction === 'like') {
+        // OPTIMISTIC UPDATE: Hemen state'i güncelle
+        setCommentLikes(prev => ({ ...prev, [commentId]: Math.max(0, currentLikes - 1) }));
+        setUserReactions(prev => ({ ...prev, [commentId]: null }));
+
+        // Veritabanı işlemi
+        const { error } = await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id)
+          .eq('reaction_type', 'like');
+
+        if (error) {
+          // Hata olursa geri al - AMA real-time gelirse çakışma olmaz çünkü kendi aksiyonumuzu filtreliyoruz
+          setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
+          setUserReactions(prev => ({ ...prev, [commentId]: 'like' }));
+          throw error;
         }
 
-        const updated = postComments.map((c: any) => {
-          if (c.id === newRow.parent_reply_id) {
-            return { 
-              ...c, 
-              replies: [...(c.replies || []), attachReplyUserPlaceholder(newRow)] 
-            }
-          }
-          return c
-        })
-        return { ...prev, [newRow.post_id]: updated }
-      })
-    } else if (eventType === 'DELETE') {
-      setPosts(prev => prev.map(p => p.id === oldRow.post_id ? { 
-        ...p, 
-        replies_count: Math.max(0, (p.replies_count || 1) - 1) 
-      } : p))
+      } else {
+        // OPTIMISTIC UPDATE: Hemen state'i güncelle
+        setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes + 1 }));
+        
+        // Eski dislike varsa onu kaldır
+        if (currentReaction === 'dislike') {
+          setCommentDislikes(prev => ({ ...prev, [commentId]: Math.max(0, currentDislikes - 1) }));
+          
+          // Veritabanından dislike'ı sil
+          await supabase
+            .from('comment_reactions')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id)
+            .eq('reaction_type', 'dislike');
+        }
 
-      setComments(prev => {
-        const postComments = prev[oldRow.post_id]
-        if (!postComments) return prev
-        const filtered = postComments
-          .filter((c: any) => c.id !== oldRow.id)
-          .map((c: any) => ({ 
-            ...c, 
-            replies: (c.replies || []).filter((r: any) => r.id !== oldRow.id) 
-          }))
-        return { ...prev, [oldRow.post_id]: filtered }
-      })
-    } else if (eventType === 'UPDATE') {
-      setComments(prev => {
-        const postComments = prev[newRow.post_id]
-        if (!postComments) return prev
-        const updated = postComments.map((c: any) => {
-          if (c.id === newRow.id) return { ...c, ...newRow }
-          return { 
-            ...c, 
-            replies: (c.replies || []).map((r: any) => 
-              r.id === newRow.id ? { ...r, ...newRow } : r
-            ) 
+        setUserReactions(prev => ({ ...prev, [commentId]: 'like' }));
+
+        // Like ekle
+        const { error } = await supabase
+          .from('comment_reactions')
+          .upsert({
+            comment_id: commentId,
+            user_id: user.id,
+            reaction_type: 'like'
+          });
+
+        if (error) {
+          // Hata olursa geri al
+          setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
+          if (currentReaction === 'dislike') {
+            setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes }));
           }
-        })
-        return { ...prev, [newRow.post_id]: updated }
-      })
+          setUserReactions(prev => ({ ...prev, [commentId]: currentReaction }));
+          throw error;
+        }
+      }
+    } catch (err) {
+      console.error('Error updating like:', err);
     }
-  }
+  };
 
-  const attachUserPlaceholders = (post: any) => ({
-    ...post,
-    user: post.user || post.profiles || { 
-      full_name: 'Unknown User', 
-      profession: '', 
-      id: post.user_id 
-    },
-    replies_count: post.replies_count || 0,
-    post_metadata: post.post_metadata || {}
-  })
+  // Yorum beğenmeme - Güncellenmiş versiyon
+  const handleDislikeComment = async (commentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
 
-  const attachReplyUserPlaceholder = (reply: any) => ({
-    ...reply,
-    user: reply.profiles || { full_name: 'Unknown User', profession: '' }
-  })
+    const currentReaction = userReactions[commentId];
+    const currentLikes = commentLikes[commentId] || 0;
+    const currentDislikes = commentDislikes[commentId] || 0;
+    
+    try {
+      if (currentReaction === 'dislike') {
+        // OPTIMISTIC UPDATE: Hemen state'i güncelle
+        setCommentDislikes(prev => ({ ...prev, [commentId]: Math.max(0, currentDislikes - 1) }));
+        setUserReactions(prev => ({ ...prev, [commentId]: null }));
+
+        // Veritabanı işlemi
+        const { error } = await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id)
+          .eq('reaction_type', 'dislike');
+
+        if (error) {
+          // Hata olursa geri al
+          setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes }));
+          setUserReactions(prev => ({ ...prev, [commentId]: 'dislike' }));
+          throw error;
+        }
+
+      } else {
+        // OPTIMISTIC UPDATE: Hemen state'i güncelle
+        setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes + 1 }));
+        
+        // Eski like varsa onu kaldır
+        if (currentReaction === 'like') {
+          setCommentLikes(prev => ({ ...prev, [commentId]: Math.max(0, currentLikes - 1) }));
+          
+          // Veritabanından like'ı sil
+          await supabase
+            .from('comment_reactions')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id)
+            .eq('reaction_type', 'like');
+        }
+
+        setUserReactions(prev => ({ ...prev, [commentId]: 'dislike' }));
+
+        // Dislike ekle
+        const { error } = await supabase
+          .from('comment_reactions')
+          .upsert({
+            comment_id: commentId,
+            user_id: user.id,
+            reaction_type: 'dislike'
+          });
+
+        if (error) {
+          // Hata olursa geri al
+          setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes }));
+          if (currentReaction === 'like') {
+            setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
+          }
+          setUserReactions(prev => ({ ...prev, [commentId]: currentReaction }));
+          throw error;
+        }
+      }
+    } catch (err) {
+      console.error('Error updating dislike:', err);
+    }
+  };
+
+  // Yorum favorileme - Güncellenmiş versiyon
+  const handleFavoriteComment = async (commentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    const currentFavorite = commentFavorites[commentId];
+    
+    try {
+      // OPTIMISTIC UPDATE: Hemen state'i güncelle
+      setCommentFavorites(prev => ({ ...prev, [commentId]: !currentFavorite }));
+
+      if (currentFavorite) {
+        // Favoriyi kaldır
+        const { error } = await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id)
+          .eq('reaction_type', 'favorite');
+
+        if (error) {
+          // Hata olursa geri al
+          setCommentFavorites(prev => ({ ...prev, [commentId]: currentFavorite }));
+          throw error;
+        }
+        
+      } else {
+        // Favori ekle
+        const { error } = await supabase
+          .from('comment_reactions')
+          .upsert({
+            comment_id: commentId,
+            user_id: user.id,
+            reaction_type: 'favorite'
+          });
+
+        if (error) {
+          // Hata olursa geri al
+          setCommentFavorites(prev => ({ ...prev, [commentId]: currentFavorite }));
+          throw error;
+        }
+      }
+    } catch (err) {
+      console.error('Error updating favorite:', err);
+    }
+  };
+
+  const handleCommentMenuAction = (action: string, commentId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    try {
+      switch (action) {
+        case 'edit':
+          console.log('Edit comment:', commentId);
+          break;
+        case 'delete':
+          if (confirm('Are you sure you want to delete this comment?')) {
+            console.log('Delete comment:', commentId);
+          }
+          break;
+        case 'report':
+          console.log('Report comment:', commentId);
+          break;
+        default:
+          console.log('Unknown action:', action);
+      }
+    } catch (err) {
+      console.error('Error handling comment menu action:', err);
+    } finally {
+      setActiveCommentMenu(null);
+    }
+  };
+
+  // Real-time yorum reaksiyon handler'ı
+  const handleCommentReactionRealtime = async (payload: any) => {
+    const { eventType, new: newRow, old: oldRow } = payload;
+    
+    console.log('Real-time reaction event:', eventType, 'User:', newRow?.user_id, 'Current user:', user?.id);
+
+    // Kendi aksiyonlarımızı filtrele
+    if (newRow && newRow.user_id === user?.id) {
+      console.log('FILTERED: Ignoring own action in real-time');
+      return;
+    }
+  
+    if (eventType === 'INSERT') {
+      const { comment_id, reaction_type, user_id } = newRow;
+      
+      // Like/dislike sayılarını güncelle
+      if (reaction_type === 'like') {
+        setCommentLikes(prev => ({ 
+          ...prev, 
+          [comment_id]: (prev[comment_id] || 0) + 1 
+        }));
+      } else if (reaction_type === 'dislike') {
+        setCommentDislikes(prev => ({ 
+          ...prev, 
+          [comment_id]: (prev[comment_id] || 0) + 1 
+        }));
+      } else if (reaction_type === 'favorite') {
+        setCommentFavorites(prev => ({ 
+          ...prev, 
+          [comment_id]: true 
+        }));
+      }
+      
+      // Kullanıcı reaksiyonunu güncelle (sadece başka kullanıcılar için)
+      if (user_id === user?.id) {
+        setUserReactions(prev => ({ 
+          ...prev, 
+          [comment_id]: reaction_type 
+        }));
+      }
+      
+    } else if (eventType === 'DELETE') {
+      const { comment_id, reaction_type, user_id } = oldRow;
+      
+      // Kendi aksiyonumuzu filtrele
+      if (user_id === user?.id) {
+        return;
+      }
+      
+      // Like/dislike sayılarını güncelle
+      if (reaction_type === 'like') {
+        setCommentLikes(prev => ({ 
+          ...prev, 
+          [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
+        }));
+      } else if (reaction_type === 'dislike') {
+        setCommentDislikes(prev => ({ 
+          ...prev, 
+          [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
+        }));
+      } else if (reaction_type === 'favorite') {
+        setCommentFavorites(prev => ({ 
+          ...prev, 
+          [comment_id]: false 
+        }));
+      }
+      
+    } else if (eventType === 'UPDATE') {
+      const { comment_id, reaction_type, user_id } = newRow;
+      const oldReactionType = oldRow.reaction_type;
+      
+      // Kendi aksiyonumuzu filtrele
+      if (user_id === user?.id) {
+        return;
+      }
+      
+      // Eski reaksiyonu azalt
+      if (oldReactionType === 'like') {
+        setCommentLikes(prev => ({ 
+          ...prev, 
+          [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
+        }));
+      } else if (oldReactionType === 'dislike') {
+        setCommentDislikes(prev => ({ 
+          ...prev, 
+          [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
+        }));
+      }
+      
+      // Yeni reaksiyonu artır
+      if (reaction_type === 'like') {
+        setCommentLikes(prev => ({ 
+          ...prev, 
+          [comment_id]: (prev[comment_id] || 0) + 1 
+        }));
+      } else if (reaction_type === 'dislike') {
+        setCommentDislikes(prev => ({ 
+          ...prev, 
+          [comment_id]: (prev[comment_id] || 0) + 1 
+        }));
+      }
+    }
+  };
+
+
+  // handleReplyRealtime fonksiyonunu güncelle
+  const handleReplyRealtime = async (payload: any) => {
+    const { eventType, new: newRow, old: oldRow } = payload;
+    
+    console.log('Handling reply real-time:', eventType, newRow);
+  
+    // Kendi yorumlarımızı filtrele (INSERT için)
+    if (eventType === 'INSERT' && newRow.user_id === user?.id) {
+      console.log('Ignoring own comment in real-time');
+      return;
+    }
+  
+    // Kullanıcı bilgilerini çekmek için helper fonksiyon - GÜNCELLENDİ
+    const fetchUserProfile = async (userId: string) => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, full_name, profession, avatar_url')
+          .eq('id', userId)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching user profile for reply:', error);
+          return { 
+            id: userId, 
+            full_name: 'Unknown User', 
+            profession: '',
+            avatar_url: null
+          };
+        }
+        
+        return data || { 
+          id: userId, 
+          full_name: 'Unknown User', 
+          profession: '',
+          avatar_url: null
+        };
+      } catch (err) {
+        console.error('Error fetching user profile for reply:', err);
+        return { 
+          id: userId, 
+          full_name: 'Unknown User', 
+          profession: '',
+          avatar_url: null
+        };
+      }
+    };
+  
+    if (eventType === 'INSERT') {
+      const userProfile = await fetchUserProfile(newRow.user_id);
+  
+      // Post'un reply count'ını güncelle
+      setPosts(prev => prev.map(p => {
+        if (p.id === newRow.post_id) {
+          return { 
+            ...p, 
+            replies_count: (p.replies_count || 0) + 1 
+          };
+        }
+        return p;
+      }));
+  
+      // Yorumları güncelle - GÜNCELLENDİ: Yanıtlar için de kullanıcı bilgisi eklendi
+      setComments(prev => {
+        const postComments = prev[newRow.post_id] || [];
+  
+        const newComment = {
+          ...newRow,
+          user: userProfile,
+          replies: []
+        };
+  
+        // Eğer parent_reply_id varsa, üst yoruma ekle
+        if (newRow.parent_reply_id) {
+          const findAndUpdateReplies = (comments: any[]): any[] => {
+            return comments.map(comment => {
+              // Ana yorumda ara
+              if (comment.id === newRow.parent_reply_id) {
+                const updatedReplies = [...(comment.replies || []), newComment];
+                return {
+                  ...comment,
+                  replies: updatedReplies
+                };
+              }
+              
+              // Yanıtların içinde ara (nested replies)
+              if (comment.replies && comment.replies.length > 0) {
+                return {
+                  ...comment,
+                  replies: findAndUpdateReplies(comment.replies)
+                };
+              }
+              
+              return comment;
+            });
+          };
+          
+          return { 
+            ...prev, 
+            [newRow.post_id]: findAndUpdateReplies(postComments) 
+          };
+        } else {
+          // Ana yorum olarak ekle
+          return { 
+            ...prev, 
+            [newRow.post_id]: [...postComments, newComment] 
+          };
+        }
+      });
+      
+    } else if (eventType === 'DELETE') {
+      // Post'un reply count'ını güncelle
+      setPosts(prev => prev.map(p => {
+        if (p.id === oldRow.post_id) {
+          return { 
+            ...p, 
+            replies_count: Math.max(0, (p.replies_count || 1) - 1) 
+          };
+        }
+        return p;
+      }));
+  
+      // Yorumları güncelle
+      setComments(prev => {
+        const postComments = prev[oldRow.post_id];
+        if (!postComments) return prev;
+        
+        const removeFromReplies = (comments: any[]): any[] => {
+          return comments
+            .filter(comment => comment.id !== oldRow.id)
+            .map(comment => ({
+              ...comment,
+              replies: comment.replies ? removeFromReplies(comment.replies) : []
+            }));
+        };
+        
+        return { ...prev, [oldRow.post_id]: removeFromReplies(postComments) };
+      });
+      
+    } else if (eventType === 'UPDATE') {
+      // Yorum güncelleme (edit durumu) - kullanıcı bilgilerini de güncelle
+      const userProfile = await fetchUserProfile(newRow.user_id);
+      
+      setComments(prev => {
+        const postComments = prev[newRow.post_id];
+        if (!postComments) return prev;
+        
+        const updateInReplies = (comments: any[]): any[] => {
+          return comments.map(comment => {
+            // Ana yorumda ara
+            if (comment.id === newRow.id) {
+              return { 
+                ...comment, 
+                ...newRow,
+                user: userProfile
+              };
+            }
+            
+            // Yanıtların içinde ara
+            if (comment.replies && comment.replies.length > 0) {
+              return {
+                ...comment,
+                replies: updateInReplies(comment.replies)
+              };
+            }
+            
+            return comment;
+          });
+        };
+        
+        return { ...prev, [newRow.post_id]: updateInReplies(postComments) };
+      });
+    }
+  };
 
   const loadPosts = async () => {
     if (!user) return
@@ -5589,35 +6136,60 @@ function CommunityComponent() {
         .from('post_replies')
         .select(`
           *,
-          profiles!inner(full_name, profession)
+          profiles!inner(id, full_name, profession, avatar_url)
         `)
         .eq('post_id', postId)
         .is('parent_reply_id', null)
         .order('created_at', { ascending: true })
-
+  
       if (topLevelError) {
         console.error('Error loading top level comments:', topLevelError)
         return
       }
-
+  
       const commentsWithReplies = await Promise.all(
         (topLevelComments || []).map(async (comment) => {
+          // Yanıtları yükle - GÜNCELLENDİ: profiles join eklendi
           const { data: replies, error: repliesError } = await supabase
             .from('post_replies')
             .select(`
               *,
-              profiles!inner(full_name, profession)
+              profiles!inner(id, full_name, profession, avatar_url)
             `)
             .eq('parent_reply_id', comment.id)
             .order('created_at', { ascending: true })
-
-          if (!repliesError) {
+  
+          if (!repliesError && replies) {
+            // Yanıtların yanıtlarını (nested replies) yükle
+            const repliesWithNested = await Promise.all(
+              replies.map(async (reply) => {
+                const { data: nestedReplies } = await supabase
+                  .from('post_replies')
+                  .select(`
+                    *,
+                    profiles!inner(id, full_name, profession, avatar_url)
+                  `)
+                  .eq('parent_reply_id', reply.id)
+                  .order('created_at', { ascending: true });
+            
+                return {
+                  ...reply,
+                  user: reply.profiles,
+                  replies: nestedReplies ? nestedReplies.map(nested => ({
+                    ...nested,
+                    user: nested.profiles
+                  })) : []
+                };
+              })
+            );
+  
             return {
               ...comment,
               user: comment.profiles,
-              replies: replies || []
+              replies: repliesWithNested
             }
           }
+          
           return {
             ...comment,
             user: comment.profiles,
@@ -5625,7 +6197,7 @@ function CommunityComponent() {
           }
         })
       )
-
+  
       setComments(prev => ({
         ...prev,
         [postId]: commentsWithReplies
@@ -5726,22 +6298,31 @@ function CommunityComponent() {
     }
   }
 
+  // Delete post fonksiyonunu daha güvenli hale getirelim
   const deletePost = async (postId: string) => {
-    if (!confirm('Are you sure you want to delete this post?')) return
-
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('posts')
         .delete()
         .eq('id', postId)
-        .select()
 
       if (error) throw error
 
+      // Local state'ten kaldır
       setPosts(prev => prev.filter(p => p.id !== postId))
+      
+      // Menü ref'ini temizle
+      delete menuRefs.current[postId]
+      
+      // Eğer silinen post seçiliyse, seçimi temizle
+      if (selectedPost?.id === postId) {
+        setSelectedPost(null)
+      }
+      
     } catch (err) {
       console.error('Error deleting post:', err)
       alert('Failed to delete post')
+      throw err
     }
   }
 
@@ -5818,76 +6399,130 @@ function CommunityComponent() {
   }
 
   const addEditAttachment = () => {
-  if (attachmentInput.trim() && !editForm.metadata.attachments.includes(attachmentInput.trim())) {
+    if (attachmentInput.trim() && !editForm.metadata.attachments.includes(attachmentInput.trim())) {
+      setEditForm({
+        ...editForm,
+        metadata: {
+          ...editForm.metadata,
+          attachments: [...editForm.metadata.attachments, attachmentInput.trim()]
+        }
+      })
+      setAttachmentInput('')
+    }
+  }
+
+  const removeEditAttachment = (attachmentToRemove: string) => {
     setEditForm({
       ...editForm,
       metadata: {
         ...editForm.metadata,
-        attachments: [...editForm.metadata.attachments, attachmentInput.trim()]
+        attachments: editForm.metadata.attachments.filter(attachment => attachment !== attachmentToRemove)
       }
     })
-    setAttachmentInput('')
   }
-}
 
-const removeEditAttachment = (attachmentToRemove: string) => {
-  setEditForm({
-    ...editForm,
-    metadata: {
-      ...editForm.metadata,
-      attachments: editForm.metadata.attachments.filter(attachment => attachment !== attachmentToRemove)
+  const addEditCoAuthor = () => {
+    if (coAuthorInput.trim() && !editForm.metadata.co_authors.includes(coAuthorInput.trim())) {
+      setEditForm({
+        ...editForm,
+        metadata: {
+          ...editForm.metadata,
+          co_authors: [...editForm.metadata.co_authors, coAuthorInput.trim()]
+        }
+      })
+      setCoAuthorInput('')
     }
-  })
-}
+  }
 
-const addEditCoAuthor = () => {
-  if (coAuthorInput.trim() && !editForm.metadata.co_authors.includes(coAuthorInput.trim())) {
+  const removeEditCoAuthor = (coAuthorToRemove: string) => {
     setEditForm({
       ...editForm,
       metadata: {
         ...editForm.metadata,
-        co_authors: [...editForm.metadata.co_authors, coAuthorInput.trim()]
+        co_authors: editForm.metadata.co_authors.filter(coAuthor => coAuthor !== coAuthorToRemove)
       }
     })
-    setCoAuthorInput('')
   }
-}
 
-const removeEditCoAuthor = (coAuthorToRemove: string) => {
-  setEditForm({
-    ...editForm,
-    metadata: {
-      ...editForm.metadata,
-      co_authors: editForm.metadata.co_authors.filter(coAuthor => coAuthor !== coAuthorToRemove)
+  const viewUserProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) throw error
+      setSelectedUserProfile(data)
+    } catch (err) {
+      console.error('Error loading user profile:', err)
     }
-  })
-}
-
-    const viewUserProfile = async (userId: string) => {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single()
-
-    if (error) throw error
-    setSelectedUserProfile(data)
-  } catch (err) {
-    console.error('Error loading user profile:', err)
   }
-}
 
-const viewPostDetail = (post: CommunityPost) => {
-  setSelectedPost(post)
-  loadComments(post.id)
-}
+  const viewPostDetail = (post: CommunityPost) => {
+    setSelectedPost(post)
+    loadComments(post.id)
+  }
 
   const addComment = async (postId: string, parentReplyId: string | null = null) => {
     const commentText = parentReplyId ? replyContents[parentReplyId] : newComments[postId]
     if (!commentText?.trim() || !user) return
-
+  
     try {
+      // Optimistic update - hemen görünsün
+      const tempId = `temp-${Date.now()}`
+      const currentUserProfile = await getUserProfile()
+      
+      const newComment = {
+        id: tempId,
+        post_id: postId,
+        user_id: user.id,
+        content: commentText.trim(),
+        parent_reply_id: parentReplyId,
+        created_at: new Date().toISOString(),
+        user: currentUserProfile || { 
+          id: user.id, 
+          full_name: 'You', 
+          profession: '' 
+        },
+        replies: []
+      }
+  
+      // State'i optimistically güncelle
+      setComments(prev => {
+        const postComments = prev[postId] || []
+        
+        if (parentReplyId) {
+          // Yanıt ekleme
+          const updatedComments = postComments.map(comment => {
+            if (comment.id === parentReplyId) {
+              return {
+                ...comment,
+                replies: [...(comment.replies || []), newComment]
+              }
+            }
+            return comment
+          })
+          return { ...prev, [postId]: updatedComments }
+        } else {
+          // Yeni yorum ekleme
+          return { 
+            ...prev, 
+            [postId]: [...postComments, newComment] 
+          }
+        }
+      })
+  
+      // Input'ları temizle
+      if (parentReplyId) {
+        setReplyContents(prev => ({ ...prev, [parentReplyId]: '' }))
+        // DÜZELTME: null yerine false
+        setReplyingTo(prev => ({ ...prev, [parentReplyId]: false }))
+      } else {
+        setNewComments(prev => ({ ...prev, [postId]: '' }))
+      }
+  
+      // Veritabanına kaydet
       const { error } = await supabase
         .from('post_replies')
         .insert({
@@ -5896,31 +6531,35 @@ const viewPostDetail = (post: CommunityPost) => {
           content: commentText.trim(),
           parent_reply_id: parentReplyId
         })
-
-      if (error) throw error
-
-      if (parentReplyId) {
-        setReplyContents(prev => ({ ...prev, [parentReplyId]: '' }))
-        setReplyingTo(prev => ({ ...prev, [postId]: null }))
-      } else {
-        setNewComments(prev => ({ ...prev, [postId]: '' }))
+  
+      if (error) {
+        // Hata olursa optimistic update'i geri al
+        setComments(prev => {
+          const postComments = prev[postId] || []
+          if (parentReplyId) {
+            const updatedComments = postComments.map(comment => {
+              if (comment.id === parentReplyId) {
+                return {
+                  ...comment,
+                  replies: (comment.replies || []).filter((reply: any) => reply.id !== tempId)
+                }
+              }
+              return comment
+            })
+            return { ...prev, [postId]: updatedComments }
+          } else {
+            return { 
+              ...prev, 
+              [postId]: postComments.filter(comment => comment.id !== tempId)
+            }
+          }
+        })
+        throw error
       }
-
+  
     } catch (err) {
       console.error('Error adding comment:', err)
       alert('Failed to add comment')
-    }
-  }
-
-  const togglePostExpansion = (postId: string) => {
-    setExpandedPosts(prev =>
-      prev.includes(postId)
-        ? prev.filter(id => id !== postId)
-        : [...prev, postId]
-    )
-
-    if (!expandedPosts.includes(postId)) {
-      loadComments(postId)
     }
   }
 
@@ -6074,8 +6713,6 @@ const viewPostDetail = (post: CommunityPost) => {
     })
   }
 
-  // Add similar functions for attachments and co-authors if needed
-
   const handleUpdatePost = async () => {
     if (!editForm.title.trim() || !editForm.content.trim()) return
 
@@ -6094,96 +6731,108 @@ const viewPostDetail = (post: CommunityPost) => {
     }
   }
 
-  // Menu action handler
-  const handleMenuAction = (action: string, postId: string, e: React.MouseEvent) => {
+  // Menu action handler'ı daha güvenli hale getirelim
+  const handleMenuAction = async (action: string, postId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     e.preventDefault();
     
     console.log(`Menu action: ${action} for post ${postId}`);
     
-    switch (action) {
-      case 'edit':
-        const postToEdit = posts.find(p => p.id === postId)
-        if (postToEdit) {
-          setEditForm({
-            id: postToEdit.id,
-            title: postToEdit.title,
-            content: postToEdit.content,
-            metadata: {
-              professions: postToEdit.post_metadata?.professions || [],
-              clinical_areas: postToEdit.post_metadata?.clinical_areas || [],
-              content_type: postToEdit.post_metadata?.content_type || '',
-              tags: postToEdit.post_metadata?.tags || [],
-              audience_level: postToEdit.post_metadata?.audience_level || '',
-              related_conditions: postToEdit.post_metadata?.related_conditions || [],
-              language: postToEdit.post_metadata?.language || 'English',
-              attachments: postToEdit.post_metadata?.attachments || [],
-              co_authors: postToEdit.post_metadata?.co_authors || [],
-              is_public: postToEdit.post_metadata?.is_public ?? true
-            }
-          })
-        }
-        break
-      case 'toggle_comments':
-        togglePostSettings(postId, 'comments_disabled')
-        break
-      case 'toggle_mute':
-        togglePostSettings(postId, 'muted')
-        break
-      case 'delete':
-        deletePost(postId)
-        break
-      case 'follow':
-        if (followingPosts.includes(postId)) {
-          unfollowPost(postId)
-        } else {
-          followPost(postId)
-        }
-        break
-      default:
-        console.log('Unknown action:', action)
+    try {
+      switch (action) {
+        case 'edit':
+          const postToEdit = posts.find(p => p.id === postId)
+          if (postToEdit) {
+            setEditForm({
+              id: postToEdit.id,
+              title: postToEdit.title,
+              content: postToEdit.content,
+              metadata: {
+                professions: postToEdit.post_metadata?.professions || [],
+                clinical_areas: postToEdit.post_metadata?.clinical_areas || [],
+                content_type: postToEdit.post_metadata?.content_type || '',
+                tags: postToEdit.post_metadata?.tags || [],
+                audience_level: postToEdit.post_metadata?.audience_level || '',
+                related_conditions: postToEdit.post_metadata?.related_conditions || [],
+                language: postToEdit.post_metadata?.language || 'English',
+                attachments: postToEdit.post_metadata?.attachments || [],
+                co_authors: postToEdit.post_metadata?.co_authors || [],
+                is_public: postToEdit.post_metadata?.is_public ?? true
+              }
+            })
+          }
+          break
+          
+        case 'toggle_comments':
+          await togglePostSettings(postId, 'comments_disabled')
+          break
+          
+        case 'toggle_mute':
+          await togglePostSettings(postId, 'muted')
+          break
+          
+        case 'delete':
+          if (confirm('Are you sure you want to delete this post?')) {
+            await deletePost(postId)
+          }
+          break
+          
+        case 'follow':
+          if (followingPosts.includes(postId)) {
+            await unfollowPost(postId)
+          } else {
+            await followPost(postId)
+          }
+          break
+          
+        default:
+          console.log('Unknown action:', action)
+      }
+    } catch (err) {
+      console.error('Error handling menu action:', err)
+    } finally {
+      setActiveMenuPost(null)
     }
-    
-    setActiveMenuPost(null)
   }
 
   // Render post metadata badges
   const renderPostMetadata = (post: CommunityPost) => {
+    const metadata = post.post_metadata || {}
     return (
       <div className="flex flex-wrap gap-2 mt-3">
-        {post.post_metadata.content_type && (
+        {metadata.content_type && (
           <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-            {post.post_metadata.content_type}
+            {metadata.content_type}
           </span>
         )}
-        {post.post_metadata.audience_level && (
+        {metadata.audience_level && (
           <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-            {post.post_metadata.audience_level}
+            {metadata.audience_level}
           </span>
         )}
-        {post.post_metadata.language && post.post_metadata.language !== 'English' && (
+        {metadata.language && metadata.language !== 'English' && (
           <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
-            {post.post_metadata.language}
+            {metadata.language}
           </span>
         )}
-        {post.post_metadata.professions.slice(0, 2).map(profession => (
+        {(metadata.professions || []).slice(0, 2).map(profession => (
           <span key={profession} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
             {profession}
           </span>
         ))}
-        {post.post_metadata.clinical_areas.slice(0, 2).map(area => (
+        {(metadata.clinical_areas || []).slice(0, 2).map(area => (
           <span key={area} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
             {area}
           </span>
         ))}
-        {post.post_metadata.tags.slice(0, 3).map(tag => (
+        {(metadata.tags || []).slice(0, 3).map(tag => (
           <span key={tag} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
             #{tag}
           </span>
         ))}
-        {post.post_metadata.professions.length > 2 && (
+        {(metadata.professions || []).length > 2 && (
           <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
-            +{post.post_metadata.professions.length - 2} more
+            +{(metadata.professions || []).length - 2} more
           </span>
         )}
       </div>
@@ -6195,6 +6844,26 @@ const viewPostDetail = (post: CommunityPost) => {
     return lines.length < content.length ? `${lines}...` : lines;
   };
 
+ const getUserDisplayName = (user: any): string => {
+  if (!user) return 'Unknown User';
+  return user.full_name || 'Unknown User';
+};
+
+const getUserProfession = (user: any): string => {
+  if (!user) return '';
+  return user.profession || '';
+};
+
+const getUserId = (user: any): string => {
+  if (!user) return '';
+  return user.id || '';
+};
+
+// Yorum sahibi kontrolü
+const isCommentOwner = (comment: any) => {
+  return comment.user_id === user?.id;
+};
+
 return (
   <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
     <div className="max-w-6xl mx-auto">
@@ -6203,26 +6872,55 @@ return (
         <div className="flex items-center">
           <Users className="w-6 h-6 mr-2 text-blue-600" />
           <h2 className="text-2xl font-bold text-gray-900">Professional Community</h2>
+          
+          {/* Real-time durum göstergesi - Mobilde gizle */}
+          <div className="ml-4 hidden md:flex items-center">
+            <div className={`w-2 h-2 rounded-full mr-2 ${
+              realtimeStatus === 'connected' ? 'bg-green-500' : 
+              realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+            }`} />
+            <span className="text-xs text-gray-500">
+              {realtimeStatus === 'connected' ? 'Live' : 
+              realtimeStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+            </span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
+        
+        <div className="flex items-center gap-2 md:gap-3">
+          {/* Refresh Button - Mobilde sadece simge */}
+          <button 
+            onClick={() => {
+              loadPosts();
+              loadFollowingPosts();
+            }}
+            className="flex items-center p-2 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            title="Refresh posts"
+          >
+            <RefreshCw className="w-4 h-4 md:mr-2" />
+            <span className="hidden md:inline">Refresh</span>
+          </button>
+          
+          {/* Filters Button - Mobilde sadece simge */}
           <button 
             onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="relative flex items-center p-2 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <Filter className="w-4 h-4 mr-2" />
-            Filters
+            <Filter className="w-4 h-4 md:mr-2" />
+            <span className="hidden md:inline">Filters</span>
             {Object.values(feedFilters).flat().length > 0 && (
-              <span className="ml-2 bg-blue-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+              <span className="absolute -top-1 -right-1 md:relative md:top-0 md:right-0 md:ml-2 bg-blue-600 text-white text-xs rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center text-[10px] md:text-xs">
                 {Object.values(feedFilters).flat().length}
               </span>
             )}
           </button>
+          
+          {/* New Post Button - Mobilde sadece simge */}
           <button 
             onClick={() => setShowNewPostModal(true)}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center p-2 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
-            <Plus className="w-4 h-4 mr-2" />
-            New Post
+            <Plus className="w-4 h-4 md:mr-2" />
+            <span className="hidden md:inline">New Post</span>
           </button>
         </div>
       </div>
@@ -6500,20 +7198,20 @@ return (
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || post.user?.id); }}
+                    onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
                     className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors cursor-pointer"
                   >
-                    {post.user?.full_name?.charAt(0) || 'U'}
+                    {getUserDisplayName(post.user)?.charAt(0) || 'U'}
                   </button>
                   <div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || post.user?.id); }}
+                      onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
                       className="font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
                     >
-                      {post.user?.full_name}
+                      {getUserDisplayName(post.user)}
                     </button>
                     <p className="text-sm text-gray-600">
-                      {post.user?.profession} • {formatTime(post.created_at)}
+                      {getUserProfession(post.user)} • {formatTime(post.created_at)}
                       {post.updated_at && post.updated_at !== post.created_at && (
                         <span className="text-gray-400"> (edited)</span>
                       )}
@@ -6552,10 +7250,16 @@ return (
               </div>
 
               {/* Menu Button and Dropdown */}
-              <div className="relative" ref={menuRef}>
+              <div 
+                className="relative" 
+                ref={el => {
+                  menuRefs.current[post.id] = el;
+                }}
+              >
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
+                    e.preventDefault();
                     setActiveMenuPost(activeMenuPost === post.id ? null : post.id);
                   }}
                   className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition-colors"
@@ -6568,21 +7272,33 @@ return (
                     {isPostOwner(post) ? (
                       <>
                         <button
-                          onClick={(e) => handleMenuAction('edit', post.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleMenuAction('edit', post.id, e);
+                          }}
                           className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <Edit2 className="w-4 h-4 mr-3 text-blue-600" />
                           Edit Post
                         </button>
                         <button
-                          onClick={(e) => handleMenuAction('toggle_comments', post.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleMenuAction('toggle_comments', post.id, e);
+                          }}
                           className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <MessageSquare className="w-4 h-4 mr-3 text-green-600" />
                           {postSettings[post.id]?.comments_disabled ? 'Enable Comments' : 'Disable Comments'}
                         </button>
                         <button
-                          onClick={(e) => handleMenuAction('toggle_mute', post.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleMenuAction('toggle_mute', post.id, e);
+                          }}
                           className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         >
                           <Bell className="w-4 h-4 mr-3 text-orange-600" />
@@ -6590,7 +7306,11 @@ return (
                         </button>
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
-                          onClick={(e) => handleMenuAction('delete', post.id, e)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            handleMenuAction('delete', post.id, e);
+                          }}
                           className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
                         >
                           <Trash2 className="w-4 h-4 mr-3" />
@@ -6599,7 +7319,11 @@ return (
                       </>
                     ) : (
                       <button
-                        onClick={(e) => handleMenuAction('follow', post.id, e)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          handleMenuAction('follow', post.id, e);
+                        }}
                         className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                       >
                         <Bell className="w-4 h-4 mr-3 text-purple-600" />
@@ -6702,8 +7426,8 @@ return (
                 </button>
                 {dropdowns.professions && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {PROFESSION_OPTIONS.map(profession => (
-                      <label key={profession} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
+                    {PROFESSION_OPTIONS.map((profession, index) => (
+                      <label key={`${profession}-${index}`} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={newPost.metadata.professions.includes(profession)}
@@ -6852,9 +7576,9 @@ return (
                 </button>
                 {dropdowns.language && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {LANGUAGE_OPTIONS.map(language => (
+                    {LANGUAGE_OPTIONS.map((language, index) => (
                       <button
-                        key={language}
+                        key={`${language}-${index}`}
                         onClick={() => {
                           setNewPost({
                             ...newPost,
@@ -7149,18 +7873,18 @@ return (
                 </button>
                 {dropdowns.professions && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {PROFESSION_OPTIONS.map(profession => (
-                      <label key={profession} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
+                    {PROFESSION_OPTIONS.map((profession, index) => (
+                      <label key={`${profession}-${index}`} className="flex items-center px-4 py-3 hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={editForm.metadata.professions.includes(profession)}
+                          checked={newPost.metadata.professions.includes(profession)}
                           onChange={(e) => {
                             const updatedProfessions = e.target.checked
-                              ? [...editForm.metadata.professions, profession]
-                              : editForm.metadata.professions.filter(p => p !== profession)
-                            setEditForm({
-                              ...editForm,
-                              metadata: { ...editForm.metadata, professions: updatedProfessions }
+                              ? [...newPost.metadata.professions, profession]
+                              : newPost.metadata.professions.filter(p => p !== profession)
+                            setNewPost({
+                              ...newPost,
+                              metadata: { ...newPost.metadata, professions: updatedProfessions }
                             })
                           }}
                           className="mr-3 rounded border-gray-300"
@@ -7299,13 +8023,13 @@ return (
                 </button>
                 {dropdowns.language && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                    {LANGUAGE_OPTIONS.map(language => (
+                    {LANGUAGE_OPTIONS.map((language, index) => (
                       <button
-                        key={language}
+                        key={`${language}-${index}`}
                         onClick={() => {
-                          setEditForm({
-                            ...editForm,
-                            metadata: { ...editForm.metadata, language }
+                          setNewPost({
+                            ...newPost,
+                            metadata: { ...newPost.metadata, language }
                           })
                           setDropdowns(prev => ({ ...prev, language: false }))
                         }}
@@ -7516,7 +8240,7 @@ return (
 
     {/* User Profile Modal */}
     {selectedUserProfile && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
         <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
             <h3 className="text-xl font-bold text-gray-900">User Profile</h3>
@@ -7568,10 +8292,11 @@ return (
                 </div>
               )}
 
-              {selectedUserProfile.bio && (
+              {/* Type-safe bio access */}
+              {'bio' in selectedUserProfile && selectedUserProfile.bio && (
                 <div>
                   <h5 className="text-sm font-medium text-gray-700 mb-2">Bio</h5>
-                  <p className="text-gray-700">{selectedUserProfile.bio}</p>
+                  <p className="text-gray-700">{(selectedUserProfile as { bio: string }).bio}</p>
                 </div>
               )}
             </div>
@@ -7605,25 +8330,25 @@ return (
             <div className="flex items-center gap-3 mb-4">
               <button
                 onClick={() => {
-                  viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
+                  viewUserProfile(selectedPost.user_id || getUserId(selectedPost.user))
                   setSelectedPost(null)
                 }}
                 className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors"
               >
-                {selectedPost.user?.full_name?.charAt(0) || 'U'}
+                {getUserDisplayName(selectedPost.user)?.charAt(0) || 'U'}
               </button>
               <div>
                 <button
                   onClick={() => {
-                    viewUserProfile(selectedPost.user_id || selectedPost.user?.id)
+                    viewUserProfile(selectedPost.user_id || getUserId(selectedPost.user))
                     setSelectedPost(null)
                   }}
                   className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-lg"
                 >
-                  {selectedPost.user?.full_name}
+                  {getUserDisplayName(selectedPost.user)}
                 </button>
                 <p className="text-sm text-gray-600">
-                  {selectedPost.user?.profession} • {formatTime(selectedPost.created_at)}
+                  {getUserProfession(selectedPost.user)} • {formatTime(selectedPost.created_at)}
                   {selectedPost.updated_at && selectedPost.updated_at !== selectedPost.created_at && (
                     <span className="text-gray-400"> (edited)</span>
                   )}
@@ -7663,7 +8388,7 @@ return (
             <p className="text-gray-700 mb-6 whitespace-pre-line text-lg leading-relaxed">{selectedPost.content}</p>
 
             {/* Attachments */}
-            {selectedPost.post_metadata.attachments && selectedPost.post_metadata.attachments.length > 0 && (
+            {selectedPost.post_metadata?.attachments && selectedPost.post_metadata.attachments.length > 0 && (
               <div className="mb-6">
                 <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
                 <div className="flex flex-wrap gap-2">
@@ -7683,7 +8408,7 @@ return (
             )}
 
             {/* Co-authors */}
-            {selectedPost.post_metadata.co_authors && selectedPost.post_metadata.co_authors.length > 0 && (
+            {selectedPost.post_metadata?.co_authors && selectedPost.post_metadata.co_authors.length > 0 && (
               <div className="mb-6">
                 <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
                 <p className="text-sm text-gray-600">{selectedPost.post_metadata.co_authors.join(', ')}</p>
@@ -7733,36 +8458,149 @@ return (
                 <div className="space-y-4">
                   {(comments[selectedPost.id] || []).map(comment => (
                     <div key={comment.id} className="flex gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                        {comment.user?.full_name?.charAt(0) || 'U'}
-                      </div>
+                      {/* Kullanıcı Avatarı */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          viewUserProfile(comment.user_id || getUserId(comment.user));
+                        }}
+                        className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                      >
+                        {getUserDisplayName(comment.user)?.charAt(0) || 'U'}
+                      </button>
+                      
                       <div className="flex-1">
+                        {/* Yorum İçeriği */}
                         <div className="bg-gray-50 rounded-lg p-4">
                           <div className="flex justify-between items-start mb-2">
                             <div>
-                              <p className="font-medium text-gray-900">{comment.user?.full_name || 'Unknown User'}</p>
-                              <p className="text-xs text-gray-500">{comment.user?.profession}</p>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  viewUserProfile(comment.user_id || getUserId(comment.user));
+                                }}
+                                className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-left"
+                              >
+                                {getUserDisplayName(comment.user)}
+                              </button>
+                              <p className="text-xs text-gray-500">
+                                {getUserProfession(comment.user)}
+                              </p>
                             </div>
-                            <span className="text-xs text-gray-500">
-                              {formatTime(comment.created_at)}
-                            </span>
+                            
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-gray-500">
+                                {formatTime(comment.created_at)}
+                              </span>
+                              
+                              {/* Yorum Menüsü */}
+                              <div className="relative">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveCommentMenu(activeCommentMenu === comment.id ? null : comment.id);
+                                  }}
+                                  className="flex items-center justify-center w-6 h-6 rounded-full hover:bg-gray-200 transition-colors"
+                                >
+                                  <MoreHorizontal className="w-4 h-4 text-gray-500" />
+                                </button>
+
+                                {activeCommentMenu === comment.id && (
+                                  <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-2">
+                                    {isCommentOwner(comment) ? (
+                                      <>
+                                        <button
+                                          onClick={(e) => handleCommentMenuAction('edit', comment.id, e)}
+                                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                        >
+                                          <Edit2 className="w-4 h-4 mr-3 text-blue-600" />
+                                          Edit Comment
+                                        </button>
+                                        <button
+                                          onClick={(e) => handleCommentMenuAction('delete', comment.id, e)}
+                                          className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-3" />
+                                          Delete Comment
+                                        </button>
+                                      </>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => handleCommentMenuAction('report', comment.id, e)}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                      >
+                                        <Flag className="w-4 h-4 mr-3 text-orange-600" />
+                                        Report Comment
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
+                          
                           <p className="text-gray-700 mt-2">{comment.content}</p>
 
-                          {user && (
+                          {/* Yorum Etkileşim Butonları */}
+                          <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200">
+                            {/* Beğenme Butonu */}
                             <button
-                              onClick={() => setReplyingTo(prev => ({ 
-                                ...prev, 
-                                [selectedPost.id]: replyingTo[selectedPost.id] === comment.id ? null : comment.id 
-                              }))}
-                              className="text-xs text-blue-600 hover:text-blue-700 mt-2 font-medium"
+                              onClick={(e) => handleLikeComment(comment.id, e)}
+                              className={`flex items-center gap-1 text-xs ${
+                                userReactions[comment.id] === 'like' 
+                                  ? 'text-blue-600 font-medium' 
+                                  : 'text-gray-500 hover:text-blue-600'
+                              }`}
                             >
-                              {replyingTo[selectedPost.id] === comment.id ? 'Cancel' : 'Reply'}
+                              <ThumbsUp className="w-4 h-4" />
+                              <span>{commentLikes[comment.id] || 0}</span>
                             </button>
-                          )}
+
+                            {/* Beğenmeme Butonu */}
+                            <button
+                              onClick={(e) => handleDislikeComment(comment.id, e)}
+                              className={`flex items-center gap-1 text-xs ${
+                                userReactions[comment.id] === 'dislike' 
+                                  ? 'text-red-600 font-medium' 
+                                  : 'text-gray-500 hover:text-red-600'
+                              }`}
+                            >
+                              <ThumbsDown className="w-4 h-4" />
+                              <span>{commentDislikes[comment.id] || 0}</span>
+                            </button>
+
+                            {/* Favori Butonu */}
+                            <button
+                              onClick={(e) => handleFavoriteComment(comment.id, e)}
+                              className={`flex items-center gap-1 text-xs ${
+                                commentFavorites[comment.id] 
+                                  ? 'text-yellow-500 font-medium' 
+                                  : 'text-gray-500 hover:text-yellow-500'
+                              }`}
+                            >
+                              <Star className="w-4 h-4" fill={commentFavorites[comment.id] ? "currentColor" : "none"} />
+                            </button>
+
+                            {/* Reply Butonu */}
+                            {user && !postSettings[selectedPost.id]?.comments_disabled && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReplyingTo(prev => ({ 
+                                    ...prev, 
+                                    [comment.id]: !prev[comment.id] 
+                                  }));
+                                }}
+                                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                              >
+                                {replyingTo[comment.id] ? 'Cancel' : 'Reply'}
+                              </button>
+                            )}
+                          </div>
                         </div>
 
-                        {replyingTo[selectedPost.id] === comment.id && user && (
+                        {/* Reply Formu */}
+                        {replyingTo[comment.id] && user && !postSettings[selectedPost.id]?.comments_disabled && (
                           <div className="ml-4 mt-3">
                             <textarea
                               placeholder="Write a reply..."
@@ -7773,7 +8611,7 @@ return (
                             />
                             <div className="flex justify-end mt-2 gap-2">
                               <button
-                                onClick={() => setReplyingTo(prev => ({ ...prev, [selectedPost.id]: null }))}
+                                onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: false }))}
                                 className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                               >
                                 Cancel
@@ -7789,24 +8627,256 @@ return (
                           </div>
                         )}
 
+                        {/* Yanıtlar (Replies) */}
                         {comment.replies && comment.replies.length > 0 && (
                           <div className="ml-4 mt-3 space-y-3">
                             {comment.replies.map((reply: any) => (
                               <div key={reply.id} className="flex gap-2">
-                                <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                                  {reply.user?.full_name?.charAt(0) || 'U'}
-                                </div>
-                                <div className="flex-1 bg-green-50 rounded-lg p-3">
-                                  <div className="flex justify-between items-start mb-1">
-                                    <div>
-                                      <p className="font-medium text-gray-900 text-sm">{reply.user?.full_name || 'Unknown User'}</p>
-                                      <p className="text-xs text-gray-500">{reply.user?.profession}</p>
+                                {/* Yanıt Kullanıcı Avatarı */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    viewUserProfile(reply.user_id || getUserId(reply.user));
+                                  }}
+                                  className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                                >
+                                  {getUserDisplayName(reply.user)?.charAt(0) || 'U'}
+                                </button>
+                                
+                                <div className="flex-1">
+                                  <div className="bg-green-50 rounded-lg p-3">
+                                    <div className="flex justify-between items-start mb-1">
+                                      <div>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            viewUserProfile(reply.user_id || getUserId(reply.user));
+                                          }}
+                                          className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-sm text-left"
+                                        >
+                                          {getUserDisplayName(reply.user)}
+                                        </button>
+                                        <p className="text-xs text-gray-500">
+                                          {getUserProfession(reply.user)}
+                                        </p>
+                                      </div>
+                                      
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-500">
+                                          {formatTime(reply.created_at)}
+                                        </span>
+                                        
+                                        {/* Yanıt Menüsü */}
+                                        <div className="relative">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setActiveCommentMenu(activeCommentMenu === reply.id ? null : reply.id);
+                                            }}
+                                            className="flex items-center justify-center w-5 h-5 rounded-full hover:bg-gray-200 transition-colors"
+                                          >
+                                            <MoreHorizontal className="w-3 h-3 text-gray-500" />
+                                          </button>
+
+                                          {activeCommentMenu === reply.id && (
+                                            <div className="absolute right-0 top-6 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-1">
+                                              {isCommentOwner(reply) ? (
+                                                <>
+                                                  <button
+                                                    onClick={(e) => handleCommentMenuAction('edit', reply.id, e)}
+                                                    className="flex items-center w-full px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                                  >
+                                                    <Edit2 className="w-3 h-3 mr-2 text-blue-600" />
+                                                    Edit
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => handleCommentMenuAction('delete', reply.id, e)}
+                                                    className="flex items-center w-full px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                                                  >
+                                                    <Trash2 className="w-3 h-3 mr-2" />
+                                                    Delete
+                                                  </button>
+                                                </>
+                                              ) : (
+                                                <button
+                                                  onClick={(e) => handleCommentMenuAction('report', reply.id, e)}
+                                                  className="flex items-center w-full px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                                  >
+                                                  <Flag className="w-3 h-3 mr-2 text-orange-600" />
+                                                  Report
+                                                </button>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
                                     </div>
-                                    <span className="text-xs text-gray-500">
-                                      {formatTime(reply.created_at)}
-                                    </span>
+                                    
+                                    <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
+                                    
+                                    {/* Yanıt Etkileşim Butonları */}
+                                    <div className="flex items-center gap-3 mt-2 pt-2 border-t border-green-100">
+                                      <button
+                                        onClick={(e) => handleLikeComment(reply.id, e)}
+                                        className={`flex items-center gap-1 text-xs ${
+                                          userReactions[reply.id] === 'like' 
+                                            ? 'text-blue-600' 
+                                            : 'text-gray-500 hover:text-blue-600'
+                                        }`}
+                                      >
+                                        <ThumbsUp className="w-3 h-3" />
+                                        <span>{commentLikes[reply.id] || 0}</span>
+                                      </button>
+
+                                      <button
+                                        onClick={(e) => handleDislikeComment(reply.id, e)}
+                                        className={`flex items-center gap-1 text-xs ${
+                                          userReactions[reply.id] === 'dislike' 
+                                            ? 'text-red-600' 
+                                            : 'text-gray-500 hover:text-red-600'
+                                        }`}
+                                      >
+                                        <ThumbsDown className="w-3 h-3" />
+                                        <span>{commentDislikes[reply.id] || 0}</span>
+                                      </button>
+
+                                      <button
+                                        onClick={(e) => handleFavoriteComment(reply.id, e)}
+                                        className={`text-xs ${
+                                          commentFavorites[reply.id] 
+                                            ? 'text-yellow-500' 
+                                            : 'text-gray-500 hover:text-yellow-500'
+                                        }`}
+                                      >
+                                        <Star className="w-3 h-3" fill={commentFavorites[reply.id] ? "currentColor" : "none"} />
+                                      </button>
+
+                                      {/* Yanıtlara Yanıt Butonu */}
+                                      {user && !postSettings[selectedPost.id]?.comments_disabled && (
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setReplyingTo(prev => ({ 
+                                              ...prev, 
+                                              [reply.id]: !prev[reply.id] 
+                                            }));
+                                          }}
+                                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                                        >
+                                          {replyingTo[reply.id] ? 'Cancel' : 'Reply'}
+                                        </button>
+                                      )}
+                                    </div>
                                   </div>
-                                  <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
+
+                                  {/* Yanıtlara Yanıt Formu */}
+                                  {replyingTo[reply.id] && user && !postSettings[selectedPost.id]?.comments_disabled && (
+                                    <div className="ml-4 mt-3">
+                                      <textarea
+                                        placeholder="Write a reply..."
+                                        value={replyContents[reply.id] || ''}
+                                        onChange={(e) => setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }))}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        rows={2}
+                                      />
+                                      <div className="flex justify-end mt-2 gap-2">
+                                        <button
+                                          onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: false }))}
+                                          className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => addComment(selectedPost.id, reply.id)}
+                                          disabled={!replyContents[reply.id]?.trim()}
+                                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                        >
+                                          Reply
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Nested Yanıtlar (Yanıtların Yanıtları) */}
+                                  {reply.replies && reply.replies.length > 0 && (
+                                    <div className="ml-4 mt-3 space-y-3">
+                                      {reply.replies.map((nestedReply: any) => (
+                                        <div key={nestedReply.id} className="flex gap-2">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
+                                            }}
+                                            className="w-5 h-5 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                                          >
+                                            {getUserDisplayName(nestedReply.user)?.charAt(0) || 'U'}
+                                          </button>
+                                          <div className="flex-1">
+                                            <div className="bg-orange-50 rounded-lg p-2">
+                                              <div className="flex justify-between items-start mb-1">
+                                                <div>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
+                                                    }}
+                                                    className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-xs text-left"
+                                                  >
+                                                    {getUserDisplayName(nestedReply.user)}
+                                                  </button>
+                                                  <p className="text-xs text-gray-500">
+                                                    {getUserProfession(nestedReply.user)}
+                                                  </p>
+                                                </div>
+                                                <span className="text-xs text-gray-500">
+                                                  {formatTime(nestedReply.created_at)}
+                                                </span>
+                                              </div>
+                                              <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
+                                              
+                                              {/* Nested Yanıt Etkileşim Butonları */}
+                                              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-orange-100">
+                                                <button
+                                                  onClick={(e) => handleLikeComment(nestedReply.id, e)}
+                                                  className={`flex items-center gap-1 text-xs ${
+                                                    userReactions[nestedReply.id] === 'like' 
+                                                      ? 'text-blue-600' 
+                                                      : 'text-gray-500 hover:text-blue-600'
+                                                  }`}
+                                                >
+                                                  <ThumbsUp className="w-3 h-3" />
+                                                  <span>{commentLikes[nestedReply.id] || 0}</span>
+                                                </button>
+
+                                                <button
+                                                  onClick={(e) => handleDislikeComment(nestedReply.id, e)}
+                                                  className={`flex items-center gap-1 text-xs ${
+                                                    userReactions[nestedReply.id] === 'dislike' 
+                                                      ? 'text-red-600' 
+                                                      : 'text-gray-500 hover:text-red-600'
+                                                  }`}
+                                                >
+                                                  <ThumbsDown className="w-3 h-3" />
+                                                  <span>{commentDislikes[nestedReply.id] || 0}</span>
+                                                </button>
+
+                                                <button
+                                                  onClick={(e) => handleFavoriteComment(nestedReply.id, e)}
+                                                  className={`text-xs ${
+                                                    commentFavorites[nestedReply.id] 
+                                                      ? 'text-yellow-500' 
+                                                      : 'text-gray-500 hover:text-yellow-500'
+                                                  }`}
+                                                >
+                                                  <Star className="w-3 h-3" fill={commentFavorites[nestedReply.id] ? "currentColor" : "none"} />
+                                                </button>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             ))}
@@ -7831,7 +8901,7 @@ return (
       </div>
     )}
   </div>
- )}
+)
 }
 
 function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
@@ -8917,7 +9987,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
 
   const professions = [
 'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
-  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist'
+  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist',
   'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
   ]
 
@@ -8928,27 +9998,22 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
   ]
 
   const languageOptions = [
-  'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
-  // Eklenen diller:
-  'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
-  'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
-  'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
-  'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
-  'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
-  'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
-  'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
-  // Ve yeni eklenen 110+ dil:
-  'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
-  'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
-  'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
-  'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
-  'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
-];
-
-  const months = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'
-  ]
+    'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
+    // Eklenen diller:
+    'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
+    'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
+    'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
+    'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
+    'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
+    'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
+    'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
+    // Ve yeni eklenen 110+ dil:
+    'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
+    'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
+    'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
+    'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
+    'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
+  ];
   
   const handleLocationSelect = (suggestion: any) => {
     const city = suggestion.address.city || 
