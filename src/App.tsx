@@ -7994,6 +7994,7 @@ return (
   </div>
  )}
 }
+}
 
 function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
   const [loading, setLoading] = useState(false)
