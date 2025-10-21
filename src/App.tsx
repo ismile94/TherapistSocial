@@ -48,6 +48,11 @@ interface CommunityPost {
   replies_count?: number
 }
 
+interface CVMakerProps {
+  userProfile: any
+  onClose: () => void
+}
+
 interface PostMetadata {
   professions: string[]
   clinical_areas: string[]
@@ -8904,11 +8909,12 @@ return (
 )
 }
 
-function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => void }) {
+function CVMaker({ userProfile, onClose }: CVMakerProps) {
   const [loading, setLoading] = useState(false)
   const [cvStyle, setCvStyle] = useState<'modern' | 'professional' | 'creative'>('modern')
   const [selectedSections, setSelectedSections] = useState({
     personal: true,
+    phone: false,
     summary: true,
     experience: true,
     qualifications: true,
@@ -8924,6 +8930,72 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     }))
   }
 
+  const calculateTotalExperience = (experiences: any[]) => {
+    if (!experiences || experiences.length === 0) return 'N/A'
+    
+    let totalMonths = 0
+    experiences.forEach(exp => {
+      if (exp.start_date) {
+        const start = new Date(exp.start_date)
+        const end = exp.end_date?.toLowerCase() === 'present' ? new Date() : new Date(exp.end_date)
+        
+        if (!isNaN(start.getTime())) {
+          const diffTime = Math.abs(end.getTime() - start.getTime())
+          const months = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 30.44))
+          totalMonths += months
+        }
+      }
+    })
+    
+    const years = Math.floor(totalMonths / 12)
+    const months = totalMonths % 12
+    
+    if (years > 0) {
+      return `${years} year${years > 1 ? 's' : ''} ${months > 0 ? `${months} month${months > 1 ? 's' : ''}` : ''}`.trim()
+    } else {
+      return `${months} month${months > 1 ? 's' : ''}`
+    }
+  }
+
+  const formatParagraphs = (text: string) => {
+    if (!text) return ''
+    return text.split('\n').filter(para => para.trim()).map(para => 
+      `<p style="margin-bottom: 0.4rem;">${para.trim()}</p>`
+    ).join('')
+  }
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return ''
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString('en-GB', { 
+        year: 'numeric', 
+        month: 'long' 
+      })
+    } catch {
+      return dateString
+    }
+  }
+
+  const calculateDuration = (startDate: string, endDate: string) => {
+    if (!startDate) return ''
+    
+    const start = new Date(startDate)
+    const end = endDate?.toLowerCase() === 'present' ? new Date() : new Date(endDate)
+    
+    if (isNaN(start.getTime())) return ''
+    
+    const diffTime = Math.abs(end.getTime() - start.getTime())
+    const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365.25))
+    const diffMonths = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44))
+    
+    if (diffYears > 0) {
+      return `${diffYears} year${diffYears > 1 ? 's' : ''} ${diffMonths > 0 ? `${diffMonths} month${diffMonths > 1 ? 's' : ''}` : ''}`.trim()
+    } else {
+      return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`
+    }
+  }
+
   const generatePDF = async () => {
     setLoading(true)
     try {
@@ -8935,7 +9007,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
           <!DOCTYPE html>
           <html>
             <head>
-              <title>CV - ${userProfile.full_name}</title>
+              <title>CV_${userProfile.full_name?.replace(/\s+/g, '_') || 'Professional'}</title>
               <meta charset="UTF-8">
               <style>
                 ${getCVStyles(cvStyle)}
@@ -8948,8 +9020,10 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
               </div>
               <script>
                 window.onload = function() {
-                  window.print();
-                  setTimeout(() => window.close(), 1000);
+                  setTimeout(() => {
+                    window.print();
+                    setTimeout(() => window.close(), 500);
+                  }, 250);
                 }
               </script>
             </body>
@@ -8972,12 +9046,23 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
         size: A4;
       }
       
+      /* CRITICAL: Remove all headers and footers */
+      body::before,
+      body::after {
+        display: none !important;
+        content: none !important;
+      }
+      
+      header, footer {
+        display: block !important;
+      }
+      
       body {
         margin: 0;
         padding: 0;
         background: white !important;
-        font-size: 12pt;
-        line-height: 1.4;
+        font-size: 10pt;
+        line-height: 1.35;
       }
       
       .cv-container {
@@ -8989,50 +9074,51 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
       }
       
       .cv-section {
-        break-inside: avoid;
-        margin-bottom: 1.5rem;
-        page-break-inside: avoid;
+        break-inside: auto;
+        margin-bottom: 0.8rem;
+        page-break-inside: auto;
       }
       
       .experience-item {
         break-inside: avoid;
         page-break-inside: avoid;
-        margin-bottom: 1rem;
+        margin-bottom: 0.5rem;
+        padding: 0.4rem 0.6rem;
       }
       
       .qualification-item {
         break-inside: avoid;
         page-break-inside: avoid;
+        margin-bottom: 0.4rem;
+        padding: 0.3rem 0.5rem;
       }
       
       .cv-header {
-        margin: 0 0 2rem 0 !important;
-        padding: 2rem 0 !important;
+        margin: 0 0 1rem 0 !important;
+        padding: 1.5rem 0 !important;
+        break-after: avoid;
       }
       
       .skills-container, .languages-container {
         break-inside: avoid;
       }
       
-      /* Ensure sections don't break awkwardly */
       .section-content {
-        break-inside: avoid;
+        break-inside: auto;
       }
       
-      /* Reduce spacing for print */
-      .cv-section {
-        padding: 0.5rem 0;
+      .section-title {
+        margin-bottom: 0.4rem !important;
+        padding-bottom: 0.2rem !important;
       }
       
-      .experience-item, .qualification-item {
-        padding: 0.75rem;
-        margin-bottom: 0.75rem;
+      .summary-text p {
+        margin-bottom: 0.3rem !important;
       }
-    }
-    
-    /* Smart page breaking */
-    .page-break {
-      page-break-before: always;
+      
+      .job-description p {
+        margin-bottom: 0.3rem !important;
+      }
     }
     
     .avoid-break {
@@ -9053,7 +9139,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             <h2 class="title">${userProfile.profession || 'Therapist'}</h2>
             <div class="contact-info">
               ${userProfile.contact_email ? `<div class="contact-item"><span class="icon">✉️</span> ${userProfile.contact_email}</div>` : ''}
-              ${userProfile.phone ? `<div class="contact-item"><span class="icon">📞</span> ${userProfile.phone}</div>` : ''}
+              ${selectedSections.phone && userProfile.phone ? `<div class="contact-item"><span class="icon">📞</span> ${userProfile.phone}</div>` : ''}
               ${userProfile.city ? `<div class="contact-item"><span class="icon">📍</span> ${userProfile.city}, ${userProfile.county}</div>` : ''}
               ${userProfile.website ? `<div class="contact-item"><span class="icon">🌐</span> ${userProfile.website}</div>` : ''}
             </div>
@@ -9062,7 +9148,6 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
       `
     }
 
-    // Main Content
     content += `<main class="cv-main">`
 
     // Professional Summary
@@ -9071,7 +9156,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
         <section class="cv-section avoid-break">
           <h3 class="section-title">Professional Summary</h3>
           <div class="section-content">
-            <p class="summary-text">${formatParagraphs(userProfile.about_me)}</p>
+            <div class="summary-text">${formatParagraphs(userProfile.about_me)}</div>
           </div>
         </section>
       `
@@ -9080,25 +9165,23 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     // Work Experience
     if (selectedSections.experience && userProfile.work_experience?.length > 0) {
       content += `
-        <section class="cv-section">
+        <section class="cv-section" style="margin-top: 1.2rem;">
           <h3 class="section-title">Work Experience</h3>
           <div class="section-content">
-            ${userProfile.work_experience.map((exp: any, index: number) => {
-              const isLast = index === userProfile.work_experience.length - 1
+            ${userProfile.work_experience.map((exp: any) => {
+              const duration = calculateDuration(exp.start_date, exp.end_date)
+              const endDateDisplay = exp.end_date?.toLowerCase() === 'present' ? 'Present' : formatDate(exp.end_date)
               return `
-                <div class="experience-item ${isLast ? '' : 'avoid-break'}">
+                <div class="experience-item">
                   <div class="experience-header">
                     <h4 class="job-title">${exp.title || 'Position'}</h4>
-                    <span class="date-range">${formatDate(exp.start_date)} - ${exp.end_date?.toLowerCase() === 'present' ? 'Present' : formatDate(exp.end_date)}</span>
+                    <span class="date-range">${formatDate(exp.start_date)} - ${endDateDisplay}${duration ? ` (${duration})` : ''}</span>
                   </div>
                   <div class="company">${exp.organization || 'Organization'}</div>
                   ${exp.description ? `
                     <div class="job-description">
                       ${formatParagraphs(exp.description)}
                     </div>
-                  ` : ''}
-                  ${calculateDuration(exp.start_date, exp.end_date) ? `
-                    <div class="duration">${calculateDuration(exp.start_date, exp.end_date)}</div>
                   ` : ''}
                 </div>
               `
@@ -9181,7 +9264,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     // Footer
     content += `
       <footer class="cv-footer">
-        <p>Generated by UK Therapist Network • ${new Date().toLocaleDateString()}</p>
+        <p>Generated by UK Therapist Network • ${new Date().toLocaleDateString('en-GB')}</p>
       </footer>
     `
 
@@ -9200,7 +9283,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
 
   body {
     font-family: 'Inter', sans-serif;
-    line-height: 1.4;
+    line-height: 1.35;
     color: #333;
     background: #fff;
   }
@@ -9215,8 +9298,8 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
 
   .cv-header {
     border-bottom: 2px solid #2563eb;
-    padding-bottom: 1rem;
-    margin-bottom: 1.2rem;
+    padding-bottom: 0.8rem;
+    margin-bottom: 1rem;
   }
 
   .header-content {
@@ -9224,25 +9307,25 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
   }
 
   .name {
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     font-weight: 700;
     color: #1e293b;
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
   }
 
   .title {
-    font-size: 1rem;
+    font-size: 0.95rem;
     font-weight: 500;
     color: #2563eb;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.4rem;
   }
 
   .contact-info {
     display: flex;
     justify-content: center;
     flex-wrap: wrap;
-    gap: 0.5rem;
-    font-size: 0.8rem;
+    gap: 0.4rem;
+    font-size: 0.75rem;
     color: #64748b;
   }
 
@@ -9251,7 +9334,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
   }
 
   .section-title {
-    font-size: 1.05rem;
+    font-size: 1rem;
     font-weight: 600;
     color: #1e293b;
     margin-bottom: 0.5rem;
@@ -9265,105 +9348,153 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     position: absolute;
     bottom: -1px;
     left: 0;
-    width: 40px;
+    width: 35px;
     height: 2px;
     background: #2563eb;
   }
 
   .section-content {
-    padding-left: 0.5rem;
+    padding-left: 0.3rem;
   }
 
   .experience-item {
-    margin-bottom: 0.75rem;
-    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.6rem;
+    padding: 0.5rem 0.7rem;
     background: #f8fafc;
-    border-radius: 5px;
+    border-radius: 4px;
     border-left: 3px solid #2563eb;
   }
 
+  .experience-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 0.25rem;
+    gap: 1rem;
+  }
+
   .job-title {
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     font-weight: 600;
     color: #1e293b;
+    flex: 1;
   }
 
   .date-range {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: #64748b;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   .company {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: #2563eb;
     font-weight: 500;
-    margin-bottom: 0.3rem;
+    margin-bottom: 0.25rem;
   }
 
   .job-description {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #475569;
-    line-height: 1.4;
+    line-height: 1.35;
+  }
+
+  .job-description p {
+    margin-bottom: 0.4rem;
+  }
+
+  .job-description p:last-child {
+    margin-bottom: 0;
   }
 
   .qualification-item {
-    margin-bottom: 0.6rem;
-    padding: 0.6rem;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
     background: #fff;
     border: 1px solid #e2e8f0;
     border-radius: 4px;
   }
 
+  .qualification-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+  }
+
   .qualification-title {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     font-weight: 600;
     color: #1e293b;
   }
 
   .qualification-year {
+    font-size: 0.75rem;
+    color: #64748b;
+    white-space: nowrap;
+  }
+
+  .institution {
     font-size: 0.8rem;
     color: #64748b;
+    margin-top: 0.2rem;
   }
 
   .skills-container, .languages-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.35rem;
   }
 
   .skill-tag, .language-item {
     background: #e0f2fe;
     color: #075985;
-    padding: 0.3rem 0.6rem;
-    border-radius: 12px;
-    font-size: 0.8rem;
+    padding: 0.25rem 0.55rem;
+    border-radius: 10px;
+    font-size: 0.75rem;
     font-weight: 500;
   }
 
+  .additional-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
   .info-item {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     color: #475569;
   }
 
   .summary-text {
-    font-size: 0.9rem;
-    line-height: 1.5;
+    font-size: 0.85rem;
+    line-height: 1.4;
     color: #475569;
   }
 
+  .summary-text p {
+    margin-bottom: 0.5rem;
+  }
+
+  .summary-text p:last-child {
+    margin-bottom: 0;
+  }
+
   .cv-footer {
-    margin-top: 1.5rem;
-    padding-top: 0.5rem;
+    margin-top: 1.2rem;
+    padding-top: 0.4rem;
     border-top: 1px solid #e2e8f0;
     text-align: center;
     color: #94a3b8;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
   }
 
   @media print {
     body {
       background: white !important;
-      font-size: 11pt;
+      font-size: 10pt;
+      line-height: 1.3;
     }
 
     .cv-container {
@@ -9372,24 +9503,43 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
       max-width: 100%;
     }
 
-    .cv-section, .experience-item, .qualification-item {
+    .experience-item, .qualification-item {
       break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    
+    .cv-section {
+      margin-bottom: 0.8rem;
+    }
+    
+    .section-title {
+      margin-bottom: 0.4rem;
+      padding-bottom: 0.2rem;
+    }
+    
+    .experience-item {
+      margin-bottom: 0.5rem;
+      padding: 0.4rem 0.6rem;
+    }
+    
+    .qualification-item {
+      margin-bottom: 0.4rem;
+      padding: 0.3rem 0.5rem;
     }
   }
 `
-
 
     const styleVariants = {
       modern: `
         .cv-header {
           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
           color: white;
-          padding: 2rem;
-          margin: -20mm -20mm 2rem -20mm;
+          padding: 1.8rem 0;
+          margin: -12mm -15mm 1rem -15mm;
         }
         
-        .name, .title, .contact-info {
-          color: white;
+        .name, .title, .contact-info, .contact-item {
+          color: white !important;
         }
         
         .section-title {
@@ -9401,20 +9551,20 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
         .cv-header {
           background: #1e293b;
           color: white;
-          padding: 2rem;
-          margin: -20mm -20mm 2rem -20mm;
+          padding: 1.8rem 0;
+          margin: -12mm -15mm 1rem -15mm;
         }
         
         .name {
-          color: white;
+          color: white !important;
         }
         
         .title {
-          color: #cbd5e1;
+          color: #cbd5e1 !important;
         }
         
-        .contact-info {
-          color: #cbd5e1;
+        .contact-info, .contact-item {
+          color: #cbd5e1 !important;
         }
         
         .section-title {
@@ -9427,13 +9577,13 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
         .cv-header {
           background: linear-gradient(45deg, #ec4899, #8b5cf6);
           color: white;
-          padding: 2rem;
-          margin: -20mm -20mm 2rem -20mm;
+          padding: 1.8rem 0;
+          margin: -12mm -15mm 1rem -15mm;
           border-bottom: none;
         }
         
-        .name, .title, .contact-info {
-          color: white;
+        .name, .title, .contact-info, .contact-item {
+          color: white !important;
         }
         
         .section-title {
@@ -9448,46 +9598,6 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
     }
 
     return baseStyles + (styleVariants[style as keyof typeof styleVariants] || styleVariants.modern)
-  }
-
-  // Helper functions
-  const formatParagraphs = (text: string) => {
-    if (!text) return ''
-    return text.split('\n').filter(para => para.trim()).map(para => 
-      `<p style="margin-bottom: 0.75rem;">${para.trim()}</p>`
-    ).join('')
-  }
-
-  const formatDate = (dateString: string) => {
-    if (!dateString) return ''
-    try {
-      const date = new Date(dateString)
-      return date.toLocaleDateString('en-GB', { 
-        year: 'numeric', 
-        month: 'long' 
-      })
-    } catch {
-      return dateString
-    }
-  }
-
-  const calculateDuration = (startDate: string, endDate: string) => {
-    if (!startDate) return ''
-    
-    const start = new Date(startDate)
-    const end = endDate?.toLowerCase() === 'present' ? new Date() : new Date(endDate)
-    
-    if (isNaN(start.getTime())) return ''
-    
-    const diffTime = Math.abs(end.getTime() - start.getTime())
-    const diffYears = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 365.25))
-    const diffMonths = Math.floor((diffTime % (1000 * 60 * 60 * 24 * 365.25)) / (1000 * 60 * 60 * 24 * 30.44))
-    
-    if (diffYears > 0) {
-      return `${diffYears} year${diffYears > 1 ? 's' : ''} ${diffMonths > 0 ? `${diffMonths} month${diffMonths > 1 ? 's' : ''}` : ''}`.trim()
-    } else {
-      return `${diffMonths} month${diffMonths > 1 ? 's' : ''}`
-    }
   }
 
   const previewCV = () => {
@@ -9507,7 +9617,7 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
                 background: #f8fafc; 
                 padding: 2rem;
                 display: flex;
-                justify-content: center;
+                justify-center: center;
               }
               .cv-container {
                 box-shadow: 0 10px 30px rgba(0,0,0,0.1);
@@ -9542,20 +9652,20 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Choose CV Style</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               {[
-                { id: 'modern', name: 'Modern', color: 'blue' },
-                { id: 'professional', name: 'Professional', color: 'gray' },
-                { id: 'creative', name: 'Creative', color: 'purple' }
+                { id: 'modern', name: 'Modern', color: 'bg-gradient-to-r from-indigo-500 to-purple-600' },
+                { id: 'professional', name: 'Professional', color: 'bg-gray-800' },
+                { id: 'creative', name: 'Creative', color: 'bg-gradient-to-r from-pink-500 to-purple-600' }
               ].map((style) => (
                 <button
                   key={style.id}
                   onClick={() => setCvStyle(style.id as any)}
                   className={`p-4 border-2 rounded-lg text-left transition-all ${
                     cvStyle === style.id
-                      ? `border-${style.color}-500 bg-${style.color}-50`
+                      ? 'border-blue-500 bg-blue-50'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full bg-${style.color}-500 mb-2`}></div>
+                  <div className={`w-6 h-6 rounded-full ${style.color} mb-2`}></div>
                   <span className="font-medium text-gray-900">{style.name}</span>
                 </button>
               ))}
@@ -9565,15 +9675,16 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
           {/* Section Selection */}
           <div className="mb-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-3">Include Sections</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { id: 'personal', label: 'Personal Info', default: true },
-                { id: 'summary', label: 'Professional Summary', default: true },
-                { id: 'experience', label: 'Work Experience', default: true },
-                { id: 'qualifications', label: 'Qualifications', default: true },
-                { id: 'specialties', label: 'Specialties', default: true },
-                { id: 'languages', label: 'Languages', default: true },
-                { id: 'additional', label: 'Additional Info', default: true }
+                { id: 'personal', label: 'Personal Info' },
+                { id: 'phone', label: 'Phone Number' },
+                { id: 'summary', label: 'Professional Summary' },
+                { id: 'experience', label: 'Work Experience' },
+                { id: 'qualifications', label: 'Qualifications' },
+                { id: 'specialties', label: 'Specialties' },
+                { id: 'languages', label: 'Languages' },
+                { id: 'additional', label: 'Additional Info' }
               ].map((section) => (
                 <label key={section.id} className="flex items-center gap-2 p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
@@ -9654,8 +9765,10 @@ function CVMaker({ userProfile, onClose }: { userProfile: any, onClose: () => vo
               Pro Tip
             </h4>
             <p className="text-sm text-blue-700">
-              For best results, use the "Print" dialog and save as PDF. Choose "A4" paper size and disable headers/footers for a clean look.
-              The CV is optimized to avoid awkward page breaks and make efficient use of space.
+              For best results, when printing:<br/>
+              1. Choose "A4" paper size<br/>
+              2. In "More settings" <strong>disable "Headers and footers"</strong> to remove page headers<br/>
+              3. Click "Save as PDF" for a clean, professional look
             </p>
           </div>
         </div>
