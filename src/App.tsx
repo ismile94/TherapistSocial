@@ -80,7 +80,7 @@ interface FeedFilters {
 
 // Seçenek listeleri
 const PROFESSION_OPTIONS = [
-  'Physiotherapist/Physical Therapist',
+  'Physiotherapist',
   'Occupational Therapist',
   'Speech and Language Therapist',
   'Practitioner Psychologist',
@@ -182,7 +182,7 @@ interface Profile {
   phone?: string
   website?: string
   email?: string
-  bio?: string; // optional olarak ekleyin
+  bio?: string; 
   contact_email?: string
   regulator_number?: string
   connection_stats?: ConnectionStats
@@ -3967,15 +3967,25 @@ function ProfileDetailPage({
     website: '',
     specialties: [] as string[],
     languages: [] as string[],
-    availability: {} as any
+    availability: {} as any,
+    profession: '',
+    city: '',
+    county: '',
+    regulatorNumber: ''
   })
+  const [professionInput, setProfessionInput] = useState('')
+  const [filteredProfessions, setFilteredProfessions] = useState<string[]>([])
+  const [showProfessionDropdown, setShowProfessionDropdown] = useState(false)
+  const [allAvailableProfessions, setAllAvailableProfessions] = useState<string[]>([])
   const [expandedItems, setExpandedItems] = useState<{[key: number]: boolean}>({});
   const [connectionStatus, setConnectionStatus] = useState<'not_connected' | 'pending' | 'accepted' | 'rejected'>('not_connected')
   const [showConnectionOptions, setShowConnectionOptions] = useState(false)
   const [connectionId, setConnectionId] = useState<string | null>(null)
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   useEffect(() => {
     loadProfile()
+    loadAllProfessions()
   }, [profileId])
 
   // Connection durumunu kontrol et
@@ -3984,6 +3994,39 @@ function ProfileDetailPage({
       checkConnectionStatus()
     }
   }, [currentUserId, profile, connections, connectionRequests])
+
+  // Dropdown gösterildiğinde veya filtrelenmiş meslekler değiştiğinde highlight'ı sıfırla
+  useEffect(() => {
+    if (showProfessionDropdown && filteredProfessions.length > 0) {
+      setHighlightedIndex(-1);
+    }
+  }, [showProfessionDropdown, filteredProfessions]);
+
+  const loadAllProfessions = async () => {
+    try {
+      // Veritabanından tüm benzersiz meslekleri çek
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('profession')
+        .not('profession', 'is', null)
+
+      if (!error && data) {
+        // Benzersiz meslekleri al
+        const usedProfessions = [...new Set(data.map(p => p.profession).filter(p => p && p.trim()))] as string[]
+        
+        // PROFESSION_OPTIONS ile birleştir ve sırala
+        const combinedProfessions = [...new Set([...PROFESSION_OPTIONS, ...usedProfessions])]
+        combinedProfessions.sort()
+        
+        setAllAvailableProfessions(combinedProfessions)
+      } else {
+        setAllAvailableProfessions([...PROFESSION_OPTIONS])
+      }
+    } catch (err) {
+      console.error('Error loading professions:', err)
+      setAllAvailableProfessions([...PROFESSION_OPTIONS])
+    }
+  }
 
   const checkConnectionStatus = async () => {
     if (!currentUserId || !profile) return
@@ -4027,8 +4070,13 @@ function ProfileDetailPage({
         website: data.website || '',
         specialties: data.specialties || [],
         languages: data.languages || [],
-        availability: data.availability || {}
+        availability: data.availability || {},
+        profession: data.profession || '',
+        city: data.city || '',
+        county: data.county || '',
+        regulatorNumber: data.regulator_number || ''
       })
+      setProfessionInput(data.profession || '')
     }
     setLoading(false)
   }
@@ -4043,11 +4091,78 @@ function ProfileDetailPage({
   const startEditing = (section: string) => {
     setEditingSection(section)
     setTempFormData({ ...formData })
+    if (section === 'basic') {
+      setProfessionInput(formData.profession)
+    }
   }
 
   const cancelEditing = () => {
     setEditingSection(null)
     setFormData(tempFormData)
+    setProfessionInput(tempFormData.profession)
+    setShowProfessionDropdown(false)
+    setHighlightedIndex(-1)
+  }
+
+  // Profession input için klavye olaylarını yönet
+  const handleProfessionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showProfessionDropdown || filteredProfessions.length === 0) return;
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault();
+        setHighlightedIndex(prev => 
+          prev < filteredProfessions.length - 1 ? prev + 1 : 0
+        );
+        break;
+      
+      case 'ArrowUp':
+        e.preventDefault();
+        setHighlightedIndex(prev => 
+          prev > 0 ? prev - 1 : filteredProfessions.length - 1
+        );
+        break;
+      
+      case 'Enter':
+        e.preventDefault();
+        if (highlightedIndex >= 0 && highlightedIndex < filteredProfessions.length) {
+          selectProfession(filteredProfessions[highlightedIndex]);
+        }
+        break;
+      
+      case 'Escape':
+        e.preventDefault();
+        setShowProfessionDropdown(false);
+        setHighlightedIndex(-1);
+        break;
+      
+      default:
+        break;
+    }
+  };
+
+  const handleProfessionInputChange = (value: string) => {
+    setProfessionInput(value)
+    setFormData({ ...formData, profession: value })
+    setHighlightedIndex(-1); // Reset highlight when typing
+    
+    if (value.trim()) {
+      const filtered = allAvailableProfessions.filter(prof => 
+        prof.toLowerCase().includes(value.toLowerCase())
+      )
+      setFilteredProfessions(filtered)
+      setShowProfessionDropdown(true)
+    } else {
+      setFilteredProfessions([])
+      setShowProfessionDropdown(false)
+    }
+  }
+
+  const selectProfession = (profession: string) => {
+    setProfessionInput(profession)
+    setFormData({ ...formData, profession })
+    setShowProfessionDropdown(false)
+    setHighlightedIndex(-1)
   }
 
   const saveSection = async (section: string) => {
@@ -4055,7 +4170,13 @@ function ProfileDetailPage({
     try {
       const updateData: any = {}
       
-      if (section === 'about') {
+      if (section === 'basic') {
+        const professionToSave = professionInput.trim()
+        
+        updateData.profession = professionToSave
+        updateData.city = formData.city
+        updateData.county = formData.county
+      } else if (section === 'about') {
         updateData.about_me = formData.aboutMe
       } else if (section === 'qualifications') {
         updateData.qualifications = formData.qualifications
@@ -4065,6 +4186,7 @@ function ProfileDetailPage({
         updateData.contact_email = formData.contactEmail
         updateData.phone = formData.phone
         updateData.website = formData.website
+        updateData.regulator_number = formData.regulatorNumber // Bu satırı ekleyin
       } else if (section === 'specialties') {
         updateData.specialties = formData.specialties
       } else if (section === 'languages') {
@@ -4081,6 +4203,14 @@ function ProfileDetailPage({
       if (error) throw error
       
       setEditingSection(null)
+      setShowProfessionDropdown(false)
+      setHighlightedIndex(-1)
+      
+      // Meslekler listesini yeniden yükle
+      if (section === 'basic') {
+        await loadAllProfessions()
+      }
+      
       loadProfile()
     } catch (err: any) {
       console.error('Update error:', err)
@@ -4157,14 +4287,13 @@ function ProfileDetailPage({
       return (
         <div className="flex gap-3 flex-wrap">
           <button
-            onClick={() => window.dispatchEvent(new CustomEvent('openAuthModal'))}
+            onClick={() => startEditing('basic')}
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
           >
             <Edit2 className="w-4 h-4" />
             Edit Profile
           </button>
           
-          {/* CV Maker butonunu buraya ekleyin */}
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('openCVMaker'))}
             className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors"
@@ -4178,7 +4307,6 @@ function ProfileDetailPage({
 
     return (
       <div className="flex gap-3 flex-wrap">
-        {/* Message Button - Her zaman görünür */}
         <button
           onClick={handleMessage}
           className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
@@ -4187,7 +4315,6 @@ function ProfileDetailPage({
           Message
         </button>
 
-        {/* Connect Button - Connection durumuna göre değişir */}
         {connectionStatus === 'not_connected' && (
           <button
             onClick={handleConnect}
@@ -4236,7 +4363,6 @@ function ProfileDetailPage({
           </div>
         )}
 
-        {/* Contact Buttons */}
         {profile.contact_email && (
           <a 
             href={`mailto:${profile.contact_email}?subject=Contact from UK Therapist Network&body=Hello ${profile.full_name}, I found your profile on UK Therapist Network and would like to get in touch.`}
@@ -4308,29 +4434,110 @@ function ProfileDetailPage({
               {profile?.full_name?.charAt(0) || 'T'}
             </div>
             <div className="flex-1">
-              <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{profile?.full_name}</h1>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
-                <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile?.profession}</p>
-                {totalExperience !== '0' && (
-                  <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
-                    {totalExperience} years total experience
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-gray-600 mb-4">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  <span>{profile.city}, {profile.county}</span>
+              {editingSection === 'basic' && isOwnProfile ? (
+                <div className="space-y-4 mb-4">
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveSection('basic')}
+                      disabled={loading}
+                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 text-sm font-medium"
+                    >
+                      <Check className="w-4 h-4 inline mr-1" />
+                      Save Changes
+                    </button>
+                    <button
+                      onClick={cancelEditing}
+                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
+                    >
+                      <X className="w-4 h-4 inline mr-1" />
+                      Cancel
+                    </button>
+                  </div>
+                  
+                  <div className="relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Profession</label>
+                    <input
+                      type="text"
+                      placeholder="Type to search or add new profession..."
+                      value={professionInput}
+                      onChange={(e) => handleProfessionInputChange(e.target.value)}
+                      onKeyDown={handleProfessionKeyDown}
+                      onFocus={() => {
+                        if (professionInput.trim()) {
+                          const filtered = allAvailableProfessions.filter(prof => 
+                            prof.toLowerCase().includes(professionInput.toLowerCase())
+                          )
+                          setFilteredProfessions(filtered)
+                          setShowProfessionDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        // Dropdown'u kısa bir gecikmeyle kapat (tıklama olayının çalışması için)
+                        setTimeout(() => {
+                          setShowProfessionDropdown(false)
+                          setHighlightedIndex(-1)
+                        }, 200)
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    {showProfessionDropdown && filteredProfessions.length > 0 && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredProfessions.map((prof, index) => (
+                          <button
+                            key={prof}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              selectProfession(prof)
+                            }}
+                            onMouseEnter={() => setHighlightedIndex(index)}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              index === highlightedIndex 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'text-gray-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            {prof}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {allAvailableProfessions.some(p => p.toLowerCase() === professionInput.toLowerCase()) 
+                        ? 'Select from suggestions or keep typing. Use ↑↓ arrows to navigate, Enter to select, Esc to close' 
+                        : professionInput.trim() 
+                          ? 'New profession will be saved. Use ↑↓ arrows to navigate, Enter to select, Esc to close' 
+                          : 'Start typing to see suggestions'}
+                    </p>
+                  </div>
                 </div>
-                {profile.offers_remote && (
-                  <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
-                    ✅ Remote Available
-                  </span>
-                )}
-              </div>
+              ) : (
+                <>
+                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{profile?.full_name}</h1>
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
+                    <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile?.profession}</p>
+                    {totalExperience !== '0' && (
+                      <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
+                        {totalExperience} years total experience
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-gray-600 mb-4">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      <span>{profile.city}, {profile.county}</span>
+                    </div>
+                    {profile.offers_remote && (
+                      <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
+                        ✅ Remote Available
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
               
               {/* Contact Buttons */}
-              {renderContactButtons()}
+              {editingSection !== 'basic' && renderContactButtons()}
             </div>
           </div>
         </div>
@@ -4751,6 +4958,14 @@ function ProfileDetailPage({
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
                     value={formData.website}
                     onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  />
+                  {/* Regulator Number inputunu ekleyin */}
+                  <input 
+                    type="text"
+                    placeholder="Registration Number"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    value={formData.regulatorNumber}
+                    onChange={(e) => setFormData({ ...formData, regulatorNumber: e.target.value })}
                   />
                 </div>
               ) : (
