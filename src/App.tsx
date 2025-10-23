@@ -10196,9 +10196,14 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     }));
   };
 
-  const startEditing = (section: string) => {
-    setEditingSection(section)
-    setTempFormData({ ...formData })
+  const startEditing = (section: string, index?: number) => {
+    if (section.startsWith('experience-')) {
+      setEditingSection(section)
+      setTempFormData({ ...formData })
+    } else {
+      setEditingSection(section)
+      setTempFormData({ ...formData })
+    }
   }
 
   const cancelEditing = () => {
@@ -10238,7 +10243,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         updateData.about_me = formData.aboutMe
       } else if (section === 'qualifications') {
         updateData.qualifications = formData.qualifications
-      } else if (section === 'experience') {
+      } else if (section.startsWith('experience-')) {
         updateData.work_experience = formData.workExperience
       } else if (section === 'contact') {
         updateData.contact_email = formData.contactEmail
@@ -10257,6 +10262,18 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
       
       if (section === 'email') {
         alert('Email updated! Please check your new email for verification.')
+      }
+      
+      // Profili yeniden yükle ve state'i güncelle
+      const { data: updatedProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single()
+      
+      if (updatedProfile) {
+        // userProfile'ı güncelle (parent component'ten gelen prop)
+        onSuccess() // Bu, parent component'in profili yeniden yüklemesini tetikler
       }
       
       setEditingSection(null)
