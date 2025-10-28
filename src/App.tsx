@@ -7,7 +7,7 @@ import {
     Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
-    UserPlus, UserCheck, Clock, Settings, Eye, Lock, Bell, Filter,
+    UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
     Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw 
 } from 'lucide-react'
 
@@ -27,6 +27,33 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     }
   }
 })
+  // Sort helper for displaying experiences (does not mutate state)
+  const getSortedExperiences = (items: any[]) => {
+    const parseDate = (d?: string) => {
+      if (!d) return null
+      const t = d.toLowerCase()
+      if (t === 'present') return new Date()
+      const dt = new Date(d)
+      return isNaN(dt.getTime()) ? null : dt
+    }
+    return [...(items || [])].sort((a, b) => {
+      const aIsCurrent = (a.end_date || '').toLowerCase() === 'present'
+      const bIsCurrent = (b.end_date || '').toLowerCase() === 'present'
+      const aStart = parseDate(a.start_date)
+      const bStart = parseDate(b.start_date)
+      const aEnd = parseDate(a.end_date) || (aIsCurrent ? new Date() : null)
+      const bEnd = parseDate(b.end_date) || (bIsCurrent ? new Date() : null)
+
+      if (aIsCurrent !== bIsCurrent) return aIsCurrent ? -1 : 1
+      if (!aIsCurrent && aEnd && bEnd && aEnd.getTime() !== bEnd.getTime()) {
+        return bEnd.getTime() - aEnd.getTime()
+      }
+      const aDur = aStart && aEnd ? (aEnd.getTime() - aStart.getTime()) : 0
+      const bDur = bStart && bEnd ? (bEnd.getTime() - bStart.getTime()) : 0
+      if (aDur !== bDur) return bDur - aDur
+      return 0
+    })
+  }
 
 // Leaflet icon fix
 delete (L.Icon.Default.prototype as any)._getIconUrl
@@ -79,38 +106,8 @@ interface FeedFilters {
 }
 
 // Seçenek listeleri
-const PROFESSION_OPTIONS = [
-  'Physiotherapist',
-  'Occupational Therapist',
-  'Speech and Language Therapist',
-  'Practitioner Psychologist',
-  'Clinical Psychologist',
-  'Forensic Psychologist',
-  'Counselling Psychologist',
-  'Health Psychologist',
-  'Educational Psychologist',
-  'Occupational Psychologist',
-  'Sport and Exercise Psychologist',
-  'Dietitian',
-  'Podiatrist',
-  'Doctor',
-  'Nurse',
-  'Paramedic',
-  'Clinical Scientist',
-  'Hearing Aid Dispenser',
-  'Orthoptist',
-  'Prosthetist',
-  'Orthotist',
-  'Diagnostic Radiographer',
-  'Therapeutic Radiographer',
-  'Pharmacist',
-  'Social Worker',
-  'Care Assistant',
-  'Art Therapist',
-  'Dramatherapist',
-  'Music Therapist',
-  'Biomedical Scientist'
-]
+const PROFESSION_OPTIONS = ['Physiotherapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist', 'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist', 'Pharmacist', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist', 'Operating Department Practitioner (ODP)', 'Midwife', 'Genetic Counsellor', 'Dental Hygienist', 'Dental Therapist', 'Orthodontic Therapist', 'Prosthetist', 'Orthotist', 'Clinical Physiologist', 'Audiologist'
+  ]
 
 const CLINICAL_AREA_OPTIONS = [
   'Neurology', 'Orthopaedics', 'Cardiorespiratory', 'Paediatrics',
@@ -1088,7 +1085,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedMobileConversation, setSelectedMobileConversation] = useState<Conversation | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null) // SADECE BİR KEZ
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -1117,9 +1114,66 @@ function App() {
   // New state for CV Maker
   const [isCVMakerOpen, setIsCVMakerOpen] = useState(false)
   
-  // Cache
+  // Cache - SADECE BİR KEZ
   const profileCacheRef = useRef<{ [key: string]: { data: any, timestamp: number } }>({})
   const loadingProfileRef = useRef<{ [key: string]: boolean }>({})
+
+  // Ana App bileşeninize bu fonksiyonları ekleyin:
+
+  const updateProfileInState = (updatedProfile: Profile) => {
+    console.log('🔄 Updating profile in state:', updatedProfile.id);
+    
+    // Therapists listesini güncelle
+    setTherapists(prev => prev.map(t => 
+      t.id === updatedProfile.id ? { ...t, ...updatedProfile } : t
+    ));
+    
+    // Eğer güncel kullanıcının profili ise userProfile'ı güncelle
+    if (currentUser?.id === updatedProfile.id) {
+      setUserProfile(updatedProfile);
+    }
+    
+    // Profile cache'i güncelle
+    profileCacheRef.current[updatedProfile.id] = {
+      data: updatedProfile,
+      timestamp: Date.now()
+    };
+  };
+
+  const updateProfileInAllComponents = (profileId: string, updates: Partial<Profile>) => {
+    console.log('🔄 Updating profile in all components:', profileId);
+    
+    // Therapists listesini güncelle
+    setTherapists(prev => prev.map(t => 
+      t.id === profileId ? { ...t, ...updates } : t
+    ));
+    
+    // Eğer güncel kullanıcının profili ise userProfile'ı güncelle
+    if (currentUser?.id === profileId && userProfile) {
+      setUserProfile({ ...userProfile, ...updates });
+    }
+    
+    // Profile cache'i güncelle
+    if (profileCacheRef.current[profileId]) {
+      profileCacheRef.current[profileId] = {
+        data: { ...profileCacheRef.current[profileId].data, ...updates },
+        timestamp: Date.now()
+      };
+    }
+  };
+
+  useEffect(() => {
+    // Global fonksiyonları tanımla
+    const globalWindow = window as any;
+    globalWindow.updateProfileInState = updateProfileInState;
+    globalWindow.updateProfileInAllComponents = updateProfileInAllComponents;
+    
+    return () => {
+      // Cleanup
+      globalWindow.updateProfileInState = undefined;
+      globalWindow.updateProfileInAllComponents = undefined;
+    };
+  }, [currentUser?.id, userProfile, therapists]);
 
   // Browser notification permission and page title setup
   useEffect(() => {
@@ -1779,6 +1833,7 @@ const cancelConnectionRequest = async (connectionId: string) => {
             onAcceptConnectionRequest={acceptConnectionRequest}
             onRejectConnectionRequest={rejectConnectionRequest}
             onRemoveConnection={removeConnection}
+            updateProfileInState={updateProfileInState} // Bu satırı ekleyin
           />
         ) : activeView === 'map' ? (
           <>
@@ -1809,11 +1864,16 @@ const cancelConnectionRequest = async (connectionId: string) => {
         <AuthModalComponent 
           onClose={() => setIsAuthModalOpen(false)}
           onSuccess={() => {
-            loadProfiles()
+            loadProfiles();
+            // Mevcut kullanıcının profilini yeniden yükle
+            if (currentUser?.id) {
+              loadUserProfile(currentUser.id);
+            }
           }}
           currentUser={currentUser}
           userProfile={userProfile}
           onOpenProfileDetail={(profileId: string) => setSelectedProfileId(profileId)}
+          updateProfileInState={updateProfileInState} // Bu satırı ekleyin
         />
       )}
 
@@ -3451,10 +3511,8 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
     return diffYears.toFixed(1)
   }
 
-  const professions = ['Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
-  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist',
-  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist']
-
+  const professions = ['Physiotherapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist', 'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist', 'Pharmacist', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist', 'Operating Department Practitioner (ODP)', 'Midwife', 'Genetic Counsellor', 'Dental Hygienist', 'Dental Therapist', 'Orthodontic Therapist', 'Prosthetist', 'Orthotist', 'Clinical Physiologist', 'Audiologist'
+    ]
   const languages = [
   'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
   // Eklenen diller:
@@ -3746,22 +3804,23 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
 
 // New component for therapist list
 function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any) {
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  
   const filteredTherapists = therapists.filter((therapist: Profile) => {
     const matchesSearch = therapist.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          therapist.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         therapist.county?.toLowerCase().includes(searchTerm.toLowerCase())
+                         therapist.county?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesProfession = filters.professions.length === 0 || 
-                            filters.professions.includes(therapist.profession)
+                            filters.professions.includes(therapist.profession);
     
     const matchesLanguages = filters.languages.length === 0 || 
       (filters.languageMode === 'OR' 
         ? filters.languages.some((lang: string) => therapist.languages?.includes(lang))
-        : filters.languages.every((lang: string) => therapist.languages?.includes(lang)))
+        : filters.languages.every((lang: string) => therapist.languages?.includes(lang)));
     
-    return matchesSearch && matchesProfession && matchesLanguages
-  })
+    return matchesSearch && matchesProfession && matchesLanguages;
+  });
 
   return (
     <>
@@ -3773,9 +3832,9 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
 
       <div className="space-y-2">
         {filteredTherapists.map((therapist: Profile) => {
-          // Use the global calculateTotalExperience function
-          const experience = calculateTotalExperience(therapist.work_experience || [])
-          const isHovered = hoveredId === therapist.id
+          // Yeni calculateTotalExperience fonksiyonunu kullan
+          const experience = calculateTotalExperience(therapist.work_experience || []);
+          const isHovered = hoveredId === therapist.id;
           
           return (
             <div
@@ -3846,34 +3905,34 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
                 </div>
               </div>
             </div>
-          )
+          );
         })}
       </div>
     </>
-  )
+  );
 }
 
 function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
-  const [therapistsWithCoords, setTherapistsWithCoords] = useState<Profile[]>([])
+  const [therapistsWithCoords, setTherapistsWithCoords] = useState<Profile[]>([]);
 
   useEffect(() => {
     async function addCoordinates() {
-      const updated = []
+      const updated = [];
       for (const t of therapists) {
         if (t.lat && t.lng) {
-          updated.push(t)
+          updated.push(t);
         } 
         else if (t.city && t.county) {
-          const coords = await geocodeLocation(t.city, t.county)
+          const coords = await geocodeLocation(t.city, t.county);
           if (coords) {
-            updated.push({ ...t, lat: coords[0], lng: coords[1] })
+            updated.push({ ...t, lat: coords[0], lng: coords[1] });
           }
         }
       }
-      setTherapistsWithCoords(updated)
+      setTherapistsWithCoords(updated);
     }
-    addCoordinates()
-  }, [therapists])
+    addCoordinates();
+  }, [therapists]);
 
   return (
     <div className="h-full">
@@ -3883,8 +3942,8 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
           attribution='&copy; OpenStreetMap'
         />
         {therapistsWithCoords.map(t => {
-          // Use the global calculateTotalExperience function
-          const experience = calculateTotalExperience(t.work_experience || [])
+          // Yeni calculateTotalExperience fonksiyonunu kullan
+          const experience = calculateTotalExperience(t.work_experience || []);
           
           return t.lat && t.lng && (
             <Marker key={t.id} position={[t.lat, t.lng]}>
@@ -3895,7 +3954,7 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
                     <p className="text-blue-600 font-medium text-sm">{t.profession}</p>
                     {experience !== '0' && (
                       <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap">
-                        {experience} yrs
+                        {experience}
                       </span>
                     )}
                   </div>
@@ -3926,11 +3985,11 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
                 </div>
               </Popup>
             </Marker>
-          )
+          );
         })}
       </MapContainer>
     </div>
-  )
+  );
 }
 
 function ProfileDetailPage({ 
@@ -3941,7 +4000,8 @@ function ProfileDetailPage({
   connections,
   connectionRequests,
   onSendConnectionRequest,
-  onRemoveConnection
+  onRemoveConnection,
+  updateProfileInState
 }: { 
   profileId: string
   onClose: () => void
@@ -3950,9 +4010,10 @@ function ProfileDetailPage({
   connections: Connection[]
   connectionRequests: Connection[]
   onSendConnectionRequest: (receiverId: string) => Promise<void>
-  onRemoveConnection: (connectionId: string) => Promise<void>
   onAcceptConnectionRequest?: (connectionId: string) => Promise<void>
   onRejectConnectionRequest?: (connectionId: string) => Promise<void>
+  onRemoveConnection: (connectionId: string) => Promise<void>
+  updateProfileInState?: (updatedProfile: Profile) => void
 }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -3995,26 +4056,15 @@ function ProfileDetailPage({
     }
   }, [currentUserId, profile, connections, connectionRequests])
 
-  // Dropdown gösterildiğinde veya filtrelenmiş meslekler değiştiğinde highlight'ı sıfırla
-  useEffect(() => {
-    if (showProfessionDropdown && filteredProfessions.length > 0) {
-      setHighlightedIndex(-1);
-    }
-  }, [showProfessionDropdown, filteredProfessions]);
-
   const loadAllProfessions = async () => {
     try {
-      // Veritabanından tüm benzersiz meslekleri çek
       const { data, error } = await supabase
         .from('profiles')
         .select('profession')
         .not('profession', 'is', null)
 
       if (!error && data) {
-        // Benzersiz meslekleri al
         const usedProfessions = [...new Set(data.map(p => p.profession).filter(p => p && p.trim()))] as string[]
-        
-        // PROFESSION_OPTIONS ile birleştir ve sırala
         const combinedProfessions = [...new Set([...PROFESSION_OPTIONS, ...usedProfessions])]
         combinedProfessions.sort()
         
@@ -4104,7 +4154,6 @@ function ProfileDetailPage({
     setHighlightedIndex(-1)
   }
 
-  // Profession input için klavye olaylarını yönet
   const handleProfessionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!showProfessionDropdown || filteredProfessions.length === 0) return;
 
@@ -4144,7 +4193,7 @@ function ProfileDetailPage({
   const handleProfessionInputChange = (value: string) => {
     setProfessionInput(value)
     setFormData({ ...formData, profession: value })
-    setHighlightedIndex(-1); // Reset highlight when typing
+    setHighlightedIndex(-1);
     
     if (value.trim()) {
       const filtered = allAvailableProfessions.filter(prof => 
@@ -4186,7 +4235,7 @@ function ProfileDetailPage({
         updateData.contact_email = formData.contactEmail
         updateData.phone = formData.phone
         updateData.website = formData.website
-        updateData.regulator_number = formData.regulatorNumber // Bu satırı ekleyin
+        updateData.regulator_number = formData.regulatorNumber
       } else if (section === 'specialties') {
         updateData.specialties = formData.specialties
       } else if (section === 'languages') {
@@ -4202,6 +4251,48 @@ function ProfileDetailPage({
       
       if (error) throw error
       
+      // Güncellenmiş profili al
+      const { data: updatedProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', profileId)
+        .single()
+      
+      if (updatedProfile) {
+        // Tüm bileşenleri yeni profil verisi ile güncelle
+        if (updateProfileInState) {
+          updateProfileInState(updatedProfile)
+        } else {
+          // Fallback: window üzerinden çağır
+          const globalWindow = window as any
+          if (globalWindow.updateProfileInState) {
+            globalWindow.updateProfileInState(updatedProfile)
+          }
+        }
+        
+        // Local profile state'ini güncelle
+        setProfile(updatedProfile)
+        
+        // Form data'yı güncelle
+        setFormData({
+          aboutMe: updatedProfile.about_me || '',
+          qualifications: updatedProfile.qualifications || [],
+          workExperience: updatedProfile.work_experience || [],
+          contactEmail: updatedProfile.contact_email || '',
+          phone: updatedProfile.phone || '',
+          website: updatedProfile.website || '',
+          specialties: updatedProfile.specialties || [],
+          languages: updatedProfile.languages || [],
+          availability: updatedProfile.availability || {},
+          profession: updatedProfile.profession || '',
+          city: updatedProfile.city || '',
+          county: updatedProfile.county || '',
+          regulatorNumber: updatedProfile.regulator_number || ''
+        })
+        
+        setProfessionInput(updatedProfile.profession || '')
+      }
+      
       setEditingSection(null)
       setShowProfessionDropdown(false)
       setHighlightedIndex(-1)
@@ -4211,7 +4302,6 @@ function ProfileDetailPage({
         await loadAllProfessions()
       }
       
-      loadProfile()
     } catch (err: any) {
       console.error('Update error:', err)
       alert(`Error: ${err.message}`)
@@ -4427,7 +4517,7 @@ function ProfileDetailPage({
       </div>
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        {/* Profile Header Card */}
+        {/* Profile Header Card - TEK BİR KEZ RENDER EDİLİYOR */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
             <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold flex-shrink-0">
@@ -4472,7 +4562,6 @@ function ProfileDetailPage({
                         }
                       }}
                       onBlur={() => {
-                        // Dropdown'u kısa bir gecikmeyle kapat (tıklama olayının çalışması için)
                         setTimeout(() => {
                           setShowProfessionDropdown(false)
                           setHighlightedIndex(-1)
@@ -4518,7 +4607,7 @@ function ProfileDetailPage({
                     <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile?.profession}</p>
                     {totalExperience !== '0' && (
                       <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
-                        {totalExperience} years total experience
+                        {totalExperience} total experience
                       </span>
                     )}
                   </div>
@@ -4542,7 +4631,7 @@ function ProfileDetailPage({
           </div>
         </div>
 
-        {/* Main Content Grid */}
+        {/* Main Content Grid - TEK BİR KEZ RENDER EDİLİYOR */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Left Column - Main Info */}
           <div className="md:col-span-2 space-y-4 sm:space-y-6">
@@ -4736,8 +4825,8 @@ function ProfileDetailPage({
                 <div className="space-y-4">
                   {profile.work_experience.map((exp: any, index: number) => {
                     const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
-                    const startDate = exp.start_date ? new Date(exp.start_date + (exp.start_date.length === 7 ? '-01' : '')) : null
-                    const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date + (exp.end_date.length === 7 ? '-01' : '')) : null)
+                    const startDate = exp.start_date ? new Date(exp.start_date) : null
+                    const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date) : null)
                     
                     let duration = ''
                     if (startDate && endDate) {
@@ -4959,7 +5048,6 @@ function ProfileDetailPage({
                     value={formData.website}
                     onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                   />
-                  {/* Regulator Number inputunu ekleyin */}
                   <input 
                     type="text"
                     placeholder="Registration Number"
@@ -9992,7 +10080,21 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
   )
 }
 
-function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOpenProfileDetail }: any) {
+function AuthModalComponent({ 
+  onClose, 
+  onSuccess, 
+  currentUser, 
+  userProfile, 
+  onOpenProfileDetail,
+  updateProfileInState
+}: { 
+  onClose: () => void
+  onSuccess: () => void
+  currentUser: any
+  userProfile: any
+  onOpenProfileDetail: (profileId: string) => void
+  updateProfileInState?: (updatedProfile: Profile) => void
+}) {
   const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
   const [editingSection, setEditingSection] = useState<string | null>(null)
@@ -10024,7 +10126,29 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     contactEmail: '',
     useSignupEmailAsContact: true
   })
+  const [professionInput, setProfessionInput] = useState('')
+  const [filteredProfessions, setFilteredProfessions] = useState<string[]>([])
+  const [showProfessionDropdown, setShowProfessionDropdown] = useState(false)
+  const [highlightedProfessionIndex, setHighlightedProfessionIndex] = useState(-1)
+  const [specialtyInput, setSpecialtyInput] = useState('')
+  const [filteredSpecialties, setFilteredSpecialties] = useState<string[]>([])
+  const [showSpecialtyDropdown, setShowSpecialtyDropdown] = useState(false)
+  const [highlightedSpecialtyIndex, setHighlightedSpecialtyIndex] = useState(-1)
+  const [allAvailableSpecialties, setAllAvailableSpecialties] = useState<string[]>([])
+  const [languageInput, setLanguageInput] = useState('')
+  const [filteredLanguages, setFilteredLanguages] = useState<string[]>([])
+  const [showLanguageDropdown, setShowLanguageDropdown] = useState(false)
+  const [highlightedLanguageIndex, setHighlightedLanguageIndex] = useState(-1)
+  const [allAvailableLanguages, setAllAvailableLanguages] = useState<string[]>([])
   const [expandedItems, setExpandedItems] = useState<{[key: number]: boolean}>({});
+  const [showPassword, setShowPassword] = useState(false)
+  const [authMessage, setAuthMessage] = useState<{ type: 'error' | 'success', text: string } | null>(null)
+  const [allAvailableProfessions, setAllAvailableProfessions] = useState<string[]>([]);
+
+  // Ref'leri ekleyin:
+  const emailRef = useRef<HTMLInputElement>(null)
+  const passwordRef = useRef<HTMLInputElement>(null)
+  const signInButtonRef = useRef<HTMLButtonElement>(null)
 
   const [dropdowns, setDropdowns] = useState({
     specialties: false,
@@ -10051,6 +10175,9 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
   // Tüm organization'ları veritabanından çek
   useEffect(() => {
     fetchAllOrganizations()
+    fetchAllProfessions()
+    fetchAllSpecialties()
+    fetchAllLanguages()
   }, [])
 
   const fetchAllOrganizations = async () => {
@@ -10078,6 +10205,136 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
       setAllOrganizations(Array.from(organizations).sort())
     } catch (err) {
       console.error('Error fetching organizations:', err)
+    }
+  }
+
+  const removeWorkExperience = async (index: number) => {
+  setLoading(true)
+  try {
+    // Mevcut deneyimleri filtrele
+    const updated = formData.workExperience.filter((_: any, i: number) => i !== index)
+    
+    // State'i güncelle
+    setFormData({ 
+      ...formData, 
+      workExperience: updated 
+    })
+    
+    // Veritabanını güncelle
+    const { error } = await supabase
+      .from('profiles')
+      .update({ work_experience: updated })
+      .eq('id', currentUser.id)
+    
+    if (error) throw error
+    
+    // Global state'i güncelle
+    if (updateProfileInState) {
+      updateProfileInState({
+        ...userProfile,
+        work_experience: updated
+      } as any)
+    }
+    
+    // Düzenleme modundan çık
+    setEditingSection(null)
+    
+    // Başarı mesajı
+    console.log('✅ Work experience removed successfully')
+    
+  } catch (err: any) {
+    console.error('Remove error:', err)
+    alert(`Error removing experience: ${err.message}`)
+    // Hata durumunda state'i geri yükle
+    onSuccess()
+  } finally {
+    setLoading(false)
+  }
+}
+
+  const fetchAllProfessions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('profession')
+        .not('profession', 'is', null)
+
+      if (!error && data) {
+        const usedProfessions = [...new Set(data.map(p => p.profession).filter(p => p && p.trim()))] as string[]
+        const combinedProfessions = [...new Set([...PROFESSION_OPTIONS, ...usedProfessions])]
+        combinedProfessions.sort()
+        
+        setAllAvailableProfessions(combinedProfessions)
+      } else {
+        setAllAvailableProfessions([...PROFESSION_OPTIONS])
+      }
+    } catch (err) {
+      console.error('Error loading professions:', err)
+      setAllAvailableProfessions([...PROFESSION_OPTIONS])
+    }
+  }
+
+  const fetchAllSpecialties = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('specialties')
+        .not('specialties', 'is', null)
+
+      if (error) {
+        console.error('Error fetching specialties:', error)
+        return
+      }
+
+      const allSpecialties = new Set<string>()
+      data.forEach(profile => {
+        if (profile.specialties && Array.isArray(profile.specialties)) {
+          profile.specialties.forEach((s: string) => {
+            if (s.trim()) {
+              allSpecialties.add(s.trim())
+            }
+          })
+        }
+      })
+
+      const combinedSpecialties = [...new Set([...specialtiesOptions, ...Array.from(allSpecialties)])]
+      combinedSpecialties.sort()
+      setAllAvailableSpecialties(combinedSpecialties)
+    } catch (err) {
+      console.error('Error fetching specialties:', err)
+      setAllAvailableSpecialties([...specialtiesOptions])
+    }
+  }
+
+  const fetchAllLanguages = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('languages')
+        .not('languages', 'is', null)
+
+      if (error) {
+        console.error('Error fetching languages:', error)
+        return
+      }
+
+      const allLanguages = new Set<string>()
+      data.forEach(profile => {
+        if (profile.languages && Array.isArray(profile.languages)) {
+          profile.languages.forEach((l: string) => {
+            if (l.trim()) {
+              allLanguages.add(l.trim())
+            }
+          })
+        }
+      })
+
+      const combinedLanguages = [...new Set([...languageOptions, ...Array.from(allLanguages)])]
+      combinedLanguages.sort()
+      setAllAvailableLanguages(combinedLanguages)
+    } catch (err) {
+      console.error('Error fetching languages:', err)
+      setAllAvailableLanguages([...languageOptions])
     }
   }
 
@@ -10115,28 +10372,6 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
       }
     }
   }, [userProfile, currentUser, editingSection])
-
-  // Tecrübe hesaplama fonksiyonu - gün, ay, yıl ile
-  const calculateTotalExperience = (workExperience: any[]) => {
-    if (!workExperience || workExperience.length === 0) return '0'
-    
-    let totalDays = 0
-    
-    workExperience.forEach((exp: any) => {
-      const startDate = exp.start_date ? new Date(exp.start_date) : null
-      const endDate = exp.end_date?.toLowerCase() === 'present' ? new Date() : 
-                     (exp.end_date ? new Date(exp.end_date) : null)
-      
-      if (startDate && endDate) {
-        const diffTime = Math.abs(endDate.getTime() - startDate.getTime())
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-        totalDays += diffDays
-      }
-    })
-    
-    const totalYears = (totalDays / 365.25).toFixed(1)
-    return totalYears
-  }
 
   // Organization auto-complete fonksiyonları
   const handleOrganizationSearch = (searchTerm: string, index: number) => {
@@ -10186,6 +10421,255 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     } else if (e.key === 'Escape') {
       setShowOrganizationSuggestions(false)
       setActiveOrganizationSuggestionIndex(-1)
+    }
+  }
+
+  // Profession input handlers
+  const handleProfessionInputChange = (value: string) => {
+    setProfessionInput(value)
+    setFormData({ ...formData, profession: value })
+    setHighlightedProfessionIndex(-1)
+    
+    if (value.trim()) {
+      const filtered = allAvailableProfessions.filter(prof => 
+        prof.toLowerCase().includes(value.toLowerCase())
+      )
+      setFilteredProfessions(filtered)
+      setShowProfessionDropdown(true)
+    } else {
+      setFilteredProfessions([])
+      setShowProfessionDropdown(false)
+    }
+  }
+
+  const selectProfession = (profession: string) => {
+    setProfessionInput(profession)
+    setFormData({ ...formData, profession })
+    setShowProfessionDropdown(false)
+    setHighlightedProfessionIndex(-1)
+  }
+
+  const handleProfessionKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showProfessionDropdown) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setHighlightedProfessionIndex(prev => {
+          const next = prev + 1
+          // allow highlighting special "+ Add" row at index = filteredProfessions.length
+          const bounded = next > filteredProfessions.length ? filteredProfessions.length : next
+          const result = prev === -1 ? 0 : bounded
+          if (result >= 0 && result < filteredProfessions.length) {
+            setProfessionInput(filteredProfessions[result])
+          }
+          return result
+        })
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setHighlightedProfessionIndex(prev => {
+          if (prev === -1) return -1
+          const next = prev - 1
+          const result = next >= 0 ? next : filteredProfessions.length // allow jumping to "+ Add" row when moving above first
+          if (result >= 0 && result < filteredProfessions.length) {
+            setProfessionInput(filteredProfessions[result])
+          }
+          return result
+        })
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (highlightedProfessionIndex >= 0 && highlightedProfessionIndex < filteredProfessions.length) {
+          selectProfession(filteredProfessions[highlightedProfessionIndex])
+        } else if (
+          highlightedProfessionIndex === filteredProfessions.length ||
+          filteredProfessions.length === 0
+        ) {
+          if (professionInput.trim() && !allAvailableProfessions.includes(professionInput.trim())) {
+            const newProfession = professionInput.trim()
+            setAllAvailableProfessions(prev => [...prev, newProfession].sort())
+            selectProfession(newProfession)
+          }
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        setShowProfessionDropdown(false)
+        setHighlightedProfessionIndex(-1)
+        break
+      default:
+        break
+    }
+  }
+
+  // Specialty input handlers
+  const handleSpecialtyInputChange = (value: string) => {
+    setSpecialtyInput(value)
+    setHighlightedSpecialtyIndex(-1)
+    
+    if (value.trim()) {
+      const filtered = allAvailableSpecialties.filter(spec => 
+        spec.toLowerCase().includes(value.toLowerCase())
+      )
+      setFilteredSpecialties(filtered)
+      setShowSpecialtyDropdown(true)
+    } else {
+      setFilteredSpecialties([])
+      setShowSpecialtyDropdown(false)
+    }
+  }
+
+  const addSpecialty = (specialty: string) => {
+    if (!formData.specialties.includes(specialty)) {
+      setFormData({
+        ...formData,
+        specialties: [...formData.specialties, specialty]
+      })
+      
+      // Eğer yeni bir specialty eklendiyse, listeye ekle
+      if (!allAvailableSpecialties.includes(specialty)) {
+        setAllAvailableSpecialties(prev => [...prev, specialty].sort())
+      }
+    }
+    setSpecialtyInput('')
+    setShowSpecialtyDropdown(false)
+    setHighlightedSpecialtyIndex(-1)
+  }
+
+  const handleSpecialtyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSpecialtyDropdown) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setHighlightedSpecialtyIndex(prev => {
+          const next = prev + 1
+          const bounded = next > filteredSpecialties.length ? filteredSpecialties.length : next
+          const result = prev === -1 ? 0 : bounded
+          if (result >= 0 && result < filteredSpecialties.length) {
+            setSpecialtyInput(filteredSpecialties[result])
+          }
+          return result
+        })
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setHighlightedSpecialtyIndex(prev => {
+          if (prev === -1) return -1
+          const next = prev - 1
+          const result = next >= 0 ? next : filteredSpecialties.length
+          if (result >= 0 && result < filteredSpecialties.length) {
+            setSpecialtyInput(filteredSpecialties[result])
+          }
+          return result
+        })
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (highlightedSpecialtyIndex >= 0 && highlightedSpecialtyIndex < filteredSpecialties.length) {
+          addSpecialty(filteredSpecialties[highlightedSpecialtyIndex])
+        } else if (
+          highlightedSpecialtyIndex === filteredSpecialties.length ||
+          filteredSpecialties.length === 0
+        ) {
+          if (specialtyInput.trim() && !allAvailableSpecialties.includes(specialtyInput.trim())) {
+            addSpecialty(specialtyInput.trim())
+          }
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        setShowSpecialtyDropdown(false)
+        setHighlightedSpecialtyIndex(-1)
+        break
+      default:
+        break
+    }
+  }
+
+  // Language input handlers
+  const handleLanguageInputChange = (value: string) => {
+    setLanguageInput(value)
+    setHighlightedLanguageIndex(-1)
+    
+    if (value.trim()) {
+      const filtered = allAvailableLanguages.filter(lang => 
+        lang.toLowerCase().includes(value.toLowerCase())
+      )
+      setFilteredLanguages(filtered)
+      setShowLanguageDropdown(true)
+    } else {
+      setFilteredLanguages([])
+      setShowLanguageDropdown(false)
+    }
+  }
+
+  const addLanguage = (language: string) => {
+    if (!formData.languages.includes(language)) {
+      setFormData({
+        ...formData,
+        languages: [...formData.languages, language]
+      })
+      
+      // Eğer yeni bir language eklendiyse, listeye ekle
+      if (!allAvailableLanguages.includes(language)) {
+        setAllAvailableLanguages(prev => [...prev, language].sort())
+      }
+    }
+    setLanguageInput('')
+    setShowLanguageDropdown(false)
+    setHighlightedLanguageIndex(-1)
+  }
+
+  const handleLanguageKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showLanguageDropdown) return
+
+    switch (e.key) {
+      case 'ArrowDown':
+        e.preventDefault()
+        setHighlightedLanguageIndex(prev => {
+          const next = prev + 1
+          const bounded = next > filteredLanguages.length ? filteredLanguages.length : next
+          const result = prev === -1 ? 0 : bounded
+          if (result >= 0 && result < filteredLanguages.length) {
+            setLanguageInput(filteredLanguages[result])
+          }
+          return result
+        })
+        break
+      case 'ArrowUp':
+        e.preventDefault()
+        setHighlightedLanguageIndex(prev => {
+          if (prev === -1) return -1
+          const next = prev - 1
+          const result = next >= 0 ? next : filteredLanguages.length
+          if (result >= 0 && result < filteredLanguages.length) {
+            setLanguageInput(filteredLanguages[result])
+          }
+          return result
+        })
+        break
+      case 'Enter':
+        e.preventDefault()
+        if (highlightedLanguageIndex >= 0 && highlightedLanguageIndex < filteredLanguages.length) {
+          addLanguage(filteredLanguages[highlightedLanguageIndex])
+        } else if (
+          highlightedLanguageIndex === filteredLanguages.length ||
+          filteredLanguages.length === 0
+        ) {
+          if (languageInput.trim() && !allAvailableLanguages.includes(languageInput.trim())) {
+            addLanguage(languageInput.trim())
+          }
+        }
+        break
+      case 'Escape':
+        e.preventDefault()
+        setShowLanguageDropdown(false)
+        setHighlightedLanguageIndex(-1)
+        break
+      default:
+        break
     }
   }
 
@@ -10243,8 +10727,44 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         updateData.about_me = formData.aboutMe
       } else if (section === 'qualifications') {
         updateData.qualifications = formData.qualifications
-      } else if (section.startsWith('experience-')) {
-        updateData.work_experience = formData.workExperience
+      } else if (section === 'experience' || section.startsWith('experience-')) {
+        // Sort experiences before saving
+        const sorted = [...formData.workExperience].sort((a: any, b: any) => {
+          const isAPresent = (a.end_date || '').toLowerCase() === 'present'
+          const isBPresent = (b.end_date || '').toLowerCase() === 'present'
+
+          const parseDate = (d: string | undefined) => {
+            if (!d) return null
+            const t = d.toLowerCase()
+            if (t === 'present') return new Date() as Date
+            const dt = new Date(d)
+            return isNaN(dt.getTime()) ? null : dt
+          }
+
+          const aStart = parseDate(a.start_date)
+          const bStart = parseDate(b.start_date)
+          const aEnd = parseDate(a.end_date)
+          const bEnd = parseDate(b.end_date)
+
+          // Current jobs first
+          if (isAPresent !== isBPresent) return isAPresent ? -1 : 1
+
+          // If both current or both not, compare by end date desc (newer first)
+          if (!isAPresent && aEnd && bEnd && aEnd.getTime() !== bEnd.getTime()) {
+            return bEnd.getTime() - aEnd.getTime()
+          }
+
+          // Tie-breaker: longer duration first
+          const aDuration = (aStart && aEnd ? (aEnd.getTime() - aStart.getTime()) : 0)
+          const bDuration = (bStart && bEnd ? (bEnd.getTime() - bStart.getTime()) : 0)
+          if (aDuration !== bDuration) return bDuration - aDuration
+
+          // Final fallback: stable order
+          return 0
+        })
+        updateData.work_experience = sorted
+        // also reflect sorted in local state so UI updates immediately
+        setFormData(prev => ({ ...prev, workExperience: sorted }))
       } else if (section === 'contact') {
         updateData.contact_email = formData.contactEmail
         updateData.phone = formData.phone
@@ -10264,7 +10784,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         alert('Email updated! Please check your new email for verification.')
       }
       
-      // Profili yeniden yükle ve state'i güncelle
+      // Güncellenmiş profili al
       const { data: updatedProfile } = await supabase
         .from('profiles')
         .select('*')
@@ -10272,8 +10792,24 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         .single()
       
       if (updatedProfile) {
-        // userProfile'ı güncelle (parent component'ten gelen prop)
-        onSuccess() // Bu, parent component'in profili yeniden yüklemesini tetikler
+        // Eğer deneyim güncellendiyse, cache/stale veri sorunlarını önlemek için
+        // en azından work_experience alanını yerelde sıraladığımız liste ile güncelle
+        if (section === 'experience' || section.startsWith('experience-')) {
+          (updatedProfile as any).work_experience = (formData.workExperience || [])
+        }
+        // Tüm bileşenleri yeni profil verisi ile güncelle
+        if (updateProfileInState) {
+          updateProfileInState(updatedProfile)
+        } else {
+          // Fallback: window üzerinden çağır
+          const globalWindow = window as any
+          if (globalWindow.updateProfileInState) {
+            globalWindow.updateProfileInState(updatedProfile)
+          }
+        }
+        
+        // Profili yeniden yükle
+        onSuccess()
       }
       
       setEditingSection(null)
@@ -10330,12 +10866,6 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
     return () => clearTimeout(timeoutId)
   }, [locationSearch])
 
-  const professions = [
-'Physiotherapist/Physical Therapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist',
-  'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist',
-  'Pharmacist', 'Radiographer', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist'
-  ]
-
   const specialtiesOptions = [
     'Orthopaedics', 'Neurology', 'Cardiorespiratory', 'Paediatrics',
     'Mental Health', 'Community Care', 'Acute Care', 'Sports Medicine',
@@ -10344,20 +10874,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
 
   const languageOptions = [
     'English','Turkish','Spanish','French','German','Italian','Portuguese','Arabic','Hindi','Urdu','Polish','Romanian',
-    // Eklenen diller:
-    'Afrikaans','Albanian','Amharic','Armenian','Azerbaijani','Basque','Belarusian','Bengali','Bosnian','Bulgarian','Burmese',
-    'Catalan','Cebuano','Chichewa','Chinese (Simplified)','Chinese (Traditional)','Corsican','Croatian','Czech','Danish','Dutch',
-    'Estonian','Filipino','Finnish','Galician','Georgian','Greek','Gujarati','Haitian Creole','Hausa','Hawaiian','Hebrew','Hungarian',
-    'Icelandic','Indonesian','Irish','Japanese','Javanese','Kannada','Kazakh','Khmer','Kinyarwanda','Korean','Kurdish (Kurmanji)',
-    'Kyrgyz','Lao','Latvian','Lithuanian','Luxembourgish','Macedonian','Malagasy','Malay','Malayalam','Maltese','Maori','Marathi',
-    'Mongolian','Nepali','Norwegian','Odia','Pashto','Persian','Punjabi','Samogitian','Sinhala','Slovak','Slovenian','Somali','Swahili',
-    'Sundanese','Tajik','Tamil','Telugu','Thai','Turkish','Turkmen','Ukrainian','Urdu','Uzbek','Vietnamese','Welsh','Xhosa','Yiddish','Zulu',
-    // Ve yeni eklenen 110+ dil:
-    'Abkhaz','Acehnese','Acholi','Afar','Alur','Avar','Awadhi','Aymara','Balinese','Baluchi','Bambara','Baoulé','Bashkir','Batak Karo',
-    'Batak Simalungun','Batak Toba','Bemba','Betawi','Bikol','Breton','Buryat','Cantonese','Chamorro','Chechen','Chuvash','Crimean Tatar (Cyrillic)',
-    'Crimean Tatar (Latin)','Dari','Dhivehi','Dinka','Dogri','Dombe','Dyula','Dzongkha','Ewe','Fijian','Fon','Friulian','Ga','Hakha Chin','Hiligaynon',
-    'Hunsrik','Iban','Jamaican Patois','Jingpo','Konkani','Krio','Lingala','Luganda','Maithili','Meitei','Mizo','Minangkabau','Nuer','Occitan','Quechua',
-    'Sanskrit','Tigrinya','Tsonga','Twi','Wolof','Yoruba'
+    // ... diğer diller
   ];
   
   const handleLocationSelect = (suggestion: any) => {
@@ -10408,9 +10925,11 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setAuthMessage(null) // Önceki mesajı temizle
+    
     if (isSignUp) {
       if (!formData.acceptTerms) {
-        alert('Please accept Terms & Privacy Policy')
+        setAuthMessage({ type: 'error', text: 'Please accept Terms & Privacy Policy' })
         return
       }
       setLoading(true)
@@ -10429,14 +10948,16 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         
         if (error) {
           console.error('Auth signup error:', error)
-          throw new Error(`Sign up failed: ${error.message}`)
+          setAuthMessage({ type: 'error', text: error.message })
+          return
         }
         
         const user = data.user
         const session = data.session
         
         if (!user || !user.id) {
-          throw new Error('User creation failed - no user ID returned')
+          setAuthMessage({ type: 'error', text: 'User creation failed - no user ID returned' })
+          return
         }
         
         console.log('User created with ID:', user.id)
@@ -10501,37 +11022,64 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
         
         if (upsertError) {
           console.error('Profile upsert error:', upsertError)
-          throw new Error(`Failed to save profile: ${upsertError.message}`)
+          setAuthMessage({ type: 'error', text: `Failed to save profile: ${upsertError.message}` })
+          return
         }
         
         console.log('Profile saved successfully!')
-        alert('Account created successfully! You can now sign in.')
-        onSuccess()
-        onClose()
+        setAuthMessage({ type: 'success', text: 'Account created successfully!' })
+        
+        // 1.5 saniye bekle ve kapat
+        setTimeout(() => {
+          onSuccess()
+          onClose()
+        }, 1500)
       } catch (err: any) {
         console.error('Signup error:', err)
-        alert(`Error: ${err.message}`)
+        setAuthMessage({ type: 'error', text: err.message })
       } finally {
         setLoading(false)
       }
     } else {
+      // Sign In
       setLoading(true)
       try {
         const { error } = await supabase.auth.signInWithPassword({
           email: formData.email,
           password: formData.password
         })
-        if (error) throw error
+        if (error) {
+          setAuthMessage({ type: 'error', text: 'Invalid email or password' })
+          return
+        }
         
-        alert('Signed in successfully!')
-        onSuccess()
-        onClose()
+        setAuthMessage({ type: 'success', text: 'Successfully signed in!' })
+        
+        // 1 saniye bekle ve kapat
+        setTimeout(() => {
+          onSuccess()
+          onClose()
+        }, 1000)
       } catch (err: any) {
         console.error('Sign in error:', err)
-        alert(`Sign in failed: ${err.message}`)
+        setAuthMessage({ type: 'error', text: err.message })
       } finally {
         setLoading(false)
       }
+    }
+  }
+
+  const handleEmailKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isSignUp) {
+      e.preventDefault()
+      passwordRef.current?.focus()
+    }
+  }
+
+  const handlePasswordKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !isSignUp) {
+      e.preventDefault()
+      signInButtonRef.current?.click()
     }
   }
 
@@ -10548,7 +11096,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
             </button>
           </div>
         </div>
-  
+
         <div className="p-6">
           {currentUser ? (
             <div className="space-y-4">
@@ -10572,7 +11120,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                         const totalExperience = calculateTotalExperience(userProfile?.work_experience || [])
                         return totalExperience !== '0' && (
                           <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-semibold">
-                            {totalExperience} yrs
+                            {totalExperience}
                           </span>
                         )
                       })()}
@@ -10580,7 +11128,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   </div>
                 </div>
               </div>
-  
+
               {/* Name Section */}
               <div 
                 className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -10637,7 +11185,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Email Section */}
               <div 
                 className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -10685,7 +11233,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* About Me Section */}
               <div 
                 className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 relative group hover:bg-blue-100 transition-colors"
@@ -10736,7 +11284,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Contact Info Section */}
               <div 
                 className="bg-purple-50 border-2 border-purple-200 rounded-lg p-4 relative group hover:bg-purple-100 transition-colors"
@@ -10815,7 +11363,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* CV Maker Button */}
               <div className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4">
                 <p className="text-sm font-bold text-amber-900 mb-2">📄 CV Maker</p>
@@ -10827,7 +11375,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   Generate CV
                 </button>
               </div>
-  
+
               {/* Registration Number Section */}
               <div 
                 className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -10884,7 +11432,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Qualifications Section */}
               <div 
                 className="bg-amber-50 border-2 border-amber-200 rounded-lg p-4 relative group hover:bg-amber-100 transition-colors"
@@ -10999,7 +11547,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Work Experience Section */}
               <div 
                 className="bg-emerald-50 border-2 border-emerald-200 rounded-lg p-4 relative group hover:bg-emerald-100 transition-colors"
@@ -11009,12 +11557,35 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="text-sm font-bold text-emerald-900 mb-2">💼 Work Experience</p>
-                    {editingSection === 'experience' ? (
+                    {editingSection?.startsWith('experience-') ? (
                       <div className="space-y-3">
-                        {formData.workExperience.map((exp: any, index: number) => {
+                        {(() => {
+                          const editIndex = parseInt((editingSection as string).split('-')[1] || '-1', 10)
+                          const exp = formData.workExperience[editIndex]
+                          if (!exp) return null
                           const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
                           return (
-                            <div key={index} className="bg-white border border-gray-300 rounded-lg p-3 space-y-2">
+                            <div className="bg-white border border-gray-300 rounded-lg p-3 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium text-gray-900">Edit Experience</p>
+                                <div className="flex gap-1">
+                                  <button
+                                    onClick={() => saveSection('experience')}
+                                    disabled={loading}
+                                    className="p-1 bg-green-500 text-white rounded hover:bg-green-600 disabled:bg-gray-300"
+                                    type="button"
+                                  >
+                                    <Check className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={cancelEditing}
+                                    className="p-1 bg-red-500 text-white rounded hover:bg-red-600"
+                                    type="button"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </div>
                               <input 
                                 type="text"
                                 placeholder="Job Title"
@@ -11022,12 +11593,10 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                 value={exp.title || ''}
                                 onChange={(e) => {
                                   const updated = [...formData.workExperience]
-                                  updated[index].title = e.target.value
+                                  updated[editIndex].title = e.target.value
                                   setFormData({ ...formData, workExperience: updated })
                                 }}
                               />
-                              
-                              {/* Organization Input with Auto-complete */}
                               <div className="relative" ref={organizationRef}>
                                 <input 
                                   type="text"
@@ -11036,14 +11605,14 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                   value={exp.organization || ''}
                                   onChange={(e) => {
                                     const updated = [...formData.workExperience]
-                                    updated[index].organization = e.target.value
+                                    updated[editIndex].organization = e.target.value
                                     setFormData({ ...formData, workExperience: updated })
-                                    handleOrganizationSearch(e.target.value, index)
+                                    handleOrganizationSearch(e.target.value, editIndex)
                                   }}
-                                  onKeyDown={(e) => handleOrganizationKeyDown(e, index)}
+                                  onKeyDown={(e) => handleOrganizationKeyDown(e, editIndex)}
                                   onFocus={() => {
                                     if (exp.organization) {
-                                      handleOrganizationSearch(exp.organization, index)
+                                      handleOrganizationSearch(exp.organization, editIndex)
                                     }
                                   }}
                                 />
@@ -11057,7 +11626,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                             ? 'bg-blue-100 text-blue-800' 
                                             : 'hover:bg-gray-100'
                                         }`}
-                                        onClick={() => handleOrganizationSelect(org, index)}
+                                        onClick={() => handleOrganizationSelect(org, editIndex)}
                                       >
                                         {org}
                                       </div>
@@ -11065,7 +11634,6 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                   </div>
                                 )}
                               </div>
-  
                               <div className="grid grid-cols-2 gap-2">
                                 <input 
                                   type="date"
@@ -11074,7 +11642,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                   value={exp.start_date || ''}
                                   onChange={(e) => {
                                     const updated = [...formData.workExperience]
-                                    updated[index].start_date = e.target.value
+                                    updated[editIndex].start_date = e.target.value
                                     setFormData({ ...formData, workExperience: updated })
                                   }}
                                 />
@@ -11087,7 +11655,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                     disabled={isCurrentJob}
                                     onChange={(e) => {
                                       const updated = [...formData.workExperience]
-                                      updated[index].end_date = e.target.value
+                                      updated[editIndex].end_date = e.target.value
                                       setFormData({ ...formData, workExperience: updated })
                                     }}
                                   />
@@ -11099,7 +11667,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                   checked={isCurrentJob}
                                   onChange={(e) => {
                                     const updated = [...formData.workExperience]
-                                    updated[index].end_date = e.target.checked ? 'Present' : ''
+                                    updated[editIndex].end_date = e.target.checked ? 'Present' : ''
                                     setFormData({ ...formData, workExperience: updated })
                                   }}
                                 />
@@ -11112,15 +11680,44 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                 value={exp.description || ''}
                                 onChange={(e) => {
                                   const updated = [...formData.workExperience]
-                                  updated[index].description = e.target.value
+                                  updated[editIndex].description = e.target.value
                                   setFormData({ ...formData, workExperience: updated })
                                 }}
                               />
                               <button
                                 type="button"
-                                onClick={() => {
-                                  const updated = formData.workExperience.filter((_, i) => i !== index)
+                                onClick={async () => {
+                                  const updated = formData.workExperience.filter((_: any, i: number) => i !== editIndex)
+                                  
+                                  // State'i hemen güncelle
                                   setFormData({ ...formData, workExperience: updated })
+                                  
+                                  // Veritabanını güncelle
+                                  setLoading(true)
+                                  try {
+                                    const { error } = await supabase
+                                      .from('profiles')
+                                      .update({ work_experience: updated })
+                                      .eq('id', currentUser.id)
+                                    
+                                    if (error) throw error
+                                    
+                                    // Global state'i güncelle
+                                    if (updateProfileInState) {
+                                      updateProfileInState({
+                                        ...userProfile,
+                                        work_experience: updated
+                                      } as any)
+                                    }
+                                    
+                                    setEditingSection(null)
+                                  } catch (err: any) {
+                                    console.error('Remove error:', err)
+                                    alert(`Error: ${err.message}`)
+                                    onSuccess() // Hata durumunda verileri yeniden yükle
+                                  } finally {
+                                    setLoading(false)
+                                  }
                                 }}
                                 className="px-2 py-1 bg-red-500 text-white rounded text-xs hover:bg-red-600"
                               >
@@ -11128,24 +11725,19 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                               </button>
                             </div>
                           )
-                        })}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData({
-                              ...formData,
-                              workExperience: [...formData.workExperience, { title: '', organization: '', start_date: '', end_date: '', description: '' }]
-                            })
-                          }}
-                          className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-blue-400 hover:text-blue-600"
-                        >
-                          + Add Experience
-                        </button>
+                        })()}
                       </div>
                     ) : (
-                      userProfile?.work_experience && userProfile.work_experience.length > 0 ? (
+                      (formData.workExperience && formData.workExperience.length > 0) || (userProfile?.work_experience && userProfile.work_experience.length > 0) ? (
                         <div className="space-y-3">
-                          {userProfile.work_experience.map((exp: any, index: number) => {
+                          {(() => {
+                            const sourceList = (formData.workExperience && formData.workExperience.length > 0)
+                              ? formData.workExperience
+                              : (userProfile?.work_experience || [])
+                            return getSortedExperiences(sourceList).map((exp: any, index: number) => {
+                              const originalIndex = sourceList === formData.workExperience
+                                ? formData.workExperience.indexOf(exp)
+                                : index
                             const isCurrentJob = exp.end_date?.toLowerCase() === 'present'
                             const startDate = exp.start_date ? new Date(exp.start_date) : null
                             const endDate = isCurrentJob ? new Date() : (exp.end_date ? new Date(exp.end_date) : null)
@@ -11171,7 +11763,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                 duration = `${diffDays} day${diffDays > 1 ? 's' : ''}`
                               }
                             }
-  
+
                             return (
                               <div key={index} className="bg-white border border-gray-200 rounded-lg p-3">
                                 <div className="flex items-start justify-between">
@@ -11182,14 +11774,24 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                       {exp.start_date} - {exp.end_date || 'Present'} {duration && `• ${duration}`}
                                     </p>
                                   </div>
-                                  {exp.description && (
+                                  <div className="ml-2 flex items-center gap-1 flex-shrink-0">
                                     <button
-                                      onClick={() => toggleItem(index)}
-                                      className="ml-2 text-gray-400 hover:text-blue-600 transition-colors flex-shrink-0"
+                                      onClick={() => startEditing(`experience-${originalIndex}`)}
+                                      className="text-gray-400 hover:text-blue-600 transition-colors"
+                                      title="Edit"
                                     >
-                                      <ChevronDown className={`w-4 h-4 transition-transform ${expandedItems[index] ? 'rotate-180' : ''}`} />
+                                      <Edit2 className="w-4 h-4" />
                                     </button>
-                                  )}
+                                    {exp.description && (
+                                      <button
+                                        onClick={() => toggleItem(index)}
+                                        className="text-gray-400 hover:text-blue-600 transition-colors"
+                                        title="Expand"
+                                      >
+                                        <ChevronDown className={`w-4 h-4 transition-transform ${expandedItems[index] ? 'rotate-180' : ''}`} />
+                                      </button>
+                                    )}
+                                  </div>
                                 </div>
                                 {exp.description && expandedItems[index] && (
                                   <div className="mt-3 pt-3 border-t border-gray-100">
@@ -11198,40 +11800,34 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                                 )}
                               </div>
                             )
-                          })}
+                            })
+                          })()}
                         </div>
                       ) : (
                         <p className="text-sm text-gray-500 italic">Click edit to add work experience</p>
                       )
                     )}
                   </div>
-                  {editingSection === 'experience' ? (
-                    <div className="flex gap-1 ml-2">
-                      <button
-                        onClick={() => saveSection('experience')}
-                        disabled={loading}
-                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
-                      >
-                        <Check className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={cancelEditing}
-                        className="p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ) : (
+                  <div className="">
                     <button
-                      onClick={() => startEditing('experience')}
-                      className="edit-icon hidden p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                      type="button"
+                      onClick={() => {
+                        const newIndex = formData.workExperience.length
+                        setFormData({
+                          ...formData,
+                          workExperience: [...formData.workExperience, { title: '', organization: '', start_date: '', end_date: '', description: '' }]
+                        })
+                        setEditingSection(`experience-${newIndex}`)
+                      }}
+                      className="absolute top-2 right-2 p-1 bg-green-500 text-white rounded-full hover:bg-green-600 shadow-sm"
+                      title="Add Experience"
                     >
-                      <Edit2 className="w-5 h-5" />
+                      <Plus className="w-3 h-3" />
                     </button>
-                  )}
+                  </div>
                 </div>
               </div>
-  
+
               {/* Specialties Section */}
               <div 
                 className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -11323,7 +11919,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Languages Section */}
               <div 
                 className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -11415,7 +12011,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Location Section */}
               <div 
                 className="bg-gray-50 rounded-lg p-3 relative group hover:bg-gray-100 transition-colors"
@@ -11510,7 +12106,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   )}
                 </div>
               </div>
-  
+
               {/* Sign Out Button */}
               <button
                 onClick={handleSignOut}
@@ -11523,6 +12119,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
             <div className="space-y-4">
               {/* Email ve Password - HER ZAMAN GÖRÜNÜR (Sign In ve Sign Up'ta) */}
               <input 
+                ref={emailRef}
                 type="email" 
                 placeholder="Email" 
                 required
@@ -11533,17 +12130,44 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   email: e.target.value,
                   contactEmail: formData.useSignupEmailAsContact ? e.target.value : formData.contactEmail
                 })}
+                onKeyDown={handleEmailKeyDown}
               />
               
-              <input 
-                type="password" 
-                placeholder="Password" 
-                required
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              />
-  
+              <div className="relative">
+                <input 
+                  ref={passwordRef}
+                  type={showPassword ? "text" : "password"}
+                  placeholder="Password" 
+                  required
+                  className="w-full px-4 py-3 pr-12 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  onKeyDown={handlePasswordKeyDown}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
+                </button>
+              </div>
+
+              {/* Auth Message - Şifre ile Buton Arası */}
+              {authMessage && (
+                <div className={`px-4 py-3 rounded-xl text-sm font-medium ${
+                  authMessage.type === 'error' 
+                    ? 'bg-red-50 text-red-700 border border-red-200' 
+                    : 'bg-green-50 text-green-700 border border-green-200'
+                }`}>
+                  {authMessage.text}
+                </div>
+              )}
+
               {/* Diğer tüm alanlar - SADECE SIGN UP'TA GÖRÜNÜR */}
               {isSignUp && (
                 <>
@@ -11563,19 +12187,76 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                     value={formData.lastName}
                     onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   />
-  
-                  <select 
-                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
-                    value={formData.profession}
-                    required
-                    onChange={(e) => setFormData({ ...formData, profession: e.target.value })}
-                  >
-                    <option value="">Select Profession</option>
-                    {professions.map((p) => (
-                      <option key={p} value={p}>{p}</option>
-                    ))}
-                  </select>
-  
+
+                  {/* Profession Input - YENİ YAPI */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Type to search or add new profession..."
+                      required
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      value={professionInput}
+                      onChange={(e) => handleProfessionInputChange(e.target.value)}
+                      onKeyDown={handleProfessionKeyDown}
+                      onFocus={() => {
+                        if (professionInput.trim()) {
+                          const filtered = allAvailableProfessions.filter(prof => 
+                            prof.toLowerCase().includes(professionInput.toLowerCase())
+                          )
+                          setFilteredProfessions(filtered)
+                          setShowProfessionDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setShowProfessionDropdown(false)
+                          setHighlightedProfessionIndex(-1)
+                        }, 200)
+                      }}
+                    />
+                    {showProfessionDropdown && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredProfessions.map((prof, index) => (
+                          <button
+                            key={prof}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              selectProfession(prof)
+                            }}
+                            onMouseEnter={() => setHighlightedProfessionIndex(index)}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              index === highlightedProfessionIndex 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'text-gray-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            {prof}
+                          </button>
+                        ))}
+                        {professionInput.trim() && !allAvailableProfessions.includes(professionInput.trim()) && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              const newProfession = professionInput.trim()
+                              setAllAvailableProfessions(prev => [...prev, newProfession].sort())
+                              selectProfession(newProfession)
+                            }}
+                            onMouseEnter={() => setHighlightedProfessionIndex(filteredProfessions.length)}
+                            className={`w-full text-left px-4 py-2 text-sm border-t border-gray-200 ${
+                              highlightedProfessionIndex === filteredProfessions.length
+                                ? 'bg-green-100 text-green-800'
+                                : 'text-green-600 hover:bg-green-50'
+                            }`}
+                          >
+                            + Add "{professionInput.trim()}"
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {formData.profession && (
                     <input 
                       type="text" 
@@ -11586,41 +12267,73 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       onChange={(e) => setFormData({ ...formData, registrationNumber: e.target.value })}
                     />
                   )}
-  
-                  <div className="relative" ref={specialtiesRef}>
-                    <button 
-                      type="button"
-                      onClick={() => setDropdowns({ ...dropdowns, specialties: !dropdowns.specialties })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl flex justify-between items-center hover:border-gray-300"
-                    >
-                      <span>{formData.specialties.length ? `${formData.specialties.length} selected` : 'Select Specialties'}</span>
-                      <ChevronDown className={`w-4 h-4 transition-transform ${dropdowns.specialties ? 'rotate-180' : ''}`} />
-                    </button>
-                    
-                    {dropdowns.specialties && (
-                      <div className="absolute w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
-                        {specialtiesOptions.map((s) => (
-                          <label key={s} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer">
-                            <input 
-                              type="checkbox"
-                              checked={formData.specialties.includes(s)}
-                              onChange={() => {
-                                setFormData({
-                                  ...formData,
-                                  specialties: formData.specialties.includes(s)
-                                    ? formData.specialties.filter((x) => x !== s)
-                                    : [...formData.specialties, s]
-                                })
-                              }}
-                              className="mr-2"
-                            />
-                            <span className="text-sm">{s}</span>
-                          </label>
+
+                  {/* Specialties Input - YENİ YAPI */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Type to search or add new specialty..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      value={specialtyInput}
+                      onChange={(e) => handleSpecialtyInputChange(e.target.value)}
+                      onKeyDown={handleSpecialtyKeyDown}
+                      onFocus={() => {
+                        if (specialtyInput.trim()) {
+                          const filtered = allAvailableSpecialties.filter(spec => 
+                            spec.toLowerCase().includes(specialtyInput.toLowerCase())
+                          )
+                          setFilteredSpecialties(filtered)
+                          setShowSpecialtyDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setShowSpecialtyDropdown(false)
+                          setHighlightedSpecialtyIndex(-1)
+                        }, 200)
+                      }}
+                    />
+                    {showSpecialtyDropdown && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredSpecialties.map((spec, index) => (
+                          <button
+                            key={spec}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              addSpecialty(spec)
+                            }}
+                            onMouseEnter={() => setHighlightedSpecialtyIndex(index)}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              index === highlightedSpecialtyIndex 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'text-gray-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            {spec}
+                          </button>
                         ))}
+                        {specialtyInput.trim() && !allAvailableSpecialties.includes(specialtyInput.trim()) && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              addSpecialty(specialtyInput.trim())
+                            }}
+                            onMouseEnter={() => setHighlightedSpecialtyIndex(filteredSpecialties.length)}
+                            className={`w-full text-left px-4 py-2 text-sm border-t border-gray-200 ${
+                              highlightedSpecialtyIndex === filteredSpecialties.length
+                                ? 'bg-green-100 text-green-800'
+                                : 'text-green-600 hover:bg-green-50'
+                            }`}
+                          >
+                            + Add "{specialtyInput.trim()}"
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
-  
+
                   {formData.specialties.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.specialties.map((s) => (
@@ -11640,41 +12353,73 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       ))}
                     </div>
                   )}
-  
-                  <div className="relative" ref={languagesRef}>
-                    <button 
-                      type="button"
-                      onClick={() => setDropdowns({ ...dropdowns, languages: !dropdowns.languages })}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl flex justify-between items-center hover:border-gray-300"
-                    >
-                      <span>{formData.languages.length ? `${formData.languages.length} selected` : 'Select Languages'}</span>
-                      <ChevronDown className={`w-4 h-4 transition-transform ${dropdowns.languages ? 'rotate-180' : ''}`} />
-                    </button>
-                    
-                    {dropdowns.languages && (
-                      <div className="absolute w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-48 overflow-y-auto z-50">
-                        {languageOptions.map((lang) => (
-                          <label key={lang} className="flex items-center px-4 py-2 hover:bg-gray-50 cursor-pointer">
-                            <input 
-                              type="checkbox"
-                              checked={formData.languages.includes(lang)}
-                              onChange={() => {
-                                setFormData({
-                                  ...formData,
-                                  languages: formData.languages.includes(lang)
-                                    ? formData.languages.filter((x) => x !== lang)
-                                    : [...formData.languages, lang]
-                                })
-                              }}
-                              className="mr-2"
-                            />
-                            <span className="text-sm">{lang}</span>
-                          </label>
+
+                  {/* Languages Input - YENİ YAPI */}
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Type to search or add new language..."
+                      className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500"
+                      value={languageInput}
+                      onChange={(e) => handleLanguageInputChange(e.target.value)}
+                      onKeyDown={handleLanguageKeyDown}
+                      onFocus={() => {
+                        if (languageInput.trim()) {
+                          const filtered = allAvailableLanguages.filter(lang => 
+                            lang.toLowerCase().includes(languageInput.toLowerCase())
+                          )
+                          setFilteredLanguages(filtered)
+                          setShowLanguageDropdown(true)
+                        }
+                      }}
+                      onBlur={() => {
+                        setTimeout(() => {
+                          setShowLanguageDropdown(false)
+                          setHighlightedLanguageIndex(-1)
+                        }, 200)
+                      }}
+                    />
+                    {showLanguageDropdown && (
+                      <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        {filteredLanguages.map((lang, index) => (
+                          <button
+                            key={lang}
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              addLanguage(lang)
+                            }}
+                            onMouseEnter={() => setHighlightedLanguageIndex(index)}
+                            className={`w-full text-left px-4 py-2 text-sm ${
+                              index === highlightedLanguageIndex 
+                                ? 'bg-blue-100 text-blue-800' 
+                                : 'text-gray-700 hover:bg-blue-50'
+                            }`}
+                          >
+                            {lang}
+                          </button>
                         ))}
+                        {languageInput.trim() && !allAvailableLanguages.includes(languageInput.trim()) && (
+                          <button
+                            type="button"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              addLanguage(languageInput.trim())
+                            }}
+                            onMouseEnter={() => setHighlightedLanguageIndex(filteredLanguages.length)}
+                            className={`w-full text-left px-4 py-2 text-sm border-t border-gray-200 ${
+                              highlightedLanguageIndex === filteredLanguages.length
+                                ? 'bg-green-100 text-green-800'
+                                : 'text-green-600 hover:bg-green-50'
+                            }`}
+                          >
+                            + Add "{languageInput.trim()}"
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
-  
+
                   {formData.languages.length > 0 && (
                     <div className="flex flex-wrap gap-2">
                       {formData.languages.map((l) => (
@@ -11694,7 +12439,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       ))}
                     </div>
                   )}
-  
+
                   {/* Contact Email Checkbox */}
                   <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                     <label className="flex items-start gap-2">
@@ -11719,7 +12464,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       </div>
                     </label>
                   </div>
-  
+
                   <div className="relative" ref={locationRef}>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Location (City/Town)
@@ -11745,7 +12490,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                         </div>
                       )}
                     </div>
-  
+
                     {showLocationSuggestions && locationSuggestions.length > 0 && (
                       <div className="absolute w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg max-h-60 overflow-y-auto z-50">
                         {locationSuggestions.map((suggestion, index) => (
@@ -11765,14 +12510,14 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                         ))}
                       </div>
                     )}
-  
+
                     {showLocationSuggestions && locationSuggestions.length === 0 && locationSearch.length >= 3 && !isSearchingLocation && (
                       <div className="absolute w-full bg-white border border-gray-200 mt-1 rounded-lg shadow-lg p-3 z-50">
                         <p className="text-sm text-gray-500">No locations found. Try a different search.</p>
                       </div>
                     )}
                   </div>
-  
+
                   {formData.city && formData.county && (
                     <div className="bg-green-50 border border-green-200 rounded-xl p-3">
                       <div className="flex items-start gap-2">
@@ -11784,7 +12529,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                       </div>
                     </div>
                   )}
-  
+
                   <input 
                     type="text" 
                     placeholder="City" 
@@ -11803,7 +12548,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                     value={formData.county}
                     readOnly
                   />
-  
+
                   <label className="flex items-center gap-2">
                     <input 
                       type="checkbox" 
@@ -11812,7 +12557,7 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                     />
                     Offers remote sessions
                   </label>
-  
+
                   <label className="flex items-center gap-2">
                     <input 
                       type="checkbox" 
@@ -11823,8 +12568,9 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
                   </label>
                 </>
               )}
-  
+
               <button 
+                ref={signInButtonRef}
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading || (isSignUp && !formData.acceptTerms)}
@@ -11832,11 +12578,29 @@ function AuthModalComponent({ onClose, onSuccess, currentUser, userProfile, onOp
               >
                 {loading ? 'Processing...' : isSignUp ? 'Create Account' : 'Sign In'}
               </button>
-  
-              <div className="text-center mt-3">
+
+              {/* Şifremi Unuttum - Sadece Sign In'de */}
+              {!isSignUp && (
+                <div className="text-center">
+                  <button 
+                    type="button"
+                    className="text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                    onClick={() => {
+                      setAuthMessage({ type: 'error', text: 'Password reset feature coming soon!' })
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
+
+              <div className="text-center">
                 <button 
                   type="button" 
-                  onClick={() => setIsSignUp(!isSignUp)}
+                  onClick={() => {
+                    setIsSignUp(!isSignUp)
+                    setAuthMessage(null)
+                  }}
                   className="text-blue-600 hover:text-blue-700 text-sm font-medium"
                 >
                   {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
