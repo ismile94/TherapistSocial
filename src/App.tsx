@@ -8,7 +8,8 @@ import {
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
     UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
-    Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw, Printer 
+    Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw, Printer,
+    Image as ImageIcon, FileText, BarChart3, MessageCircle
 } from 'lucide-react'
 
 
@@ -105,6 +106,16 @@ interface FeedFilters {
   show_only_my_network: boolean
 }
 
+// Emoji Reactions
+const EMOJI_REACTIONS = [
+  { emoji: '👍', label: 'Like' },
+  { emoji: '❤️', label: 'Love' },
+  { emoji: '😂', label: 'Haha' },
+  { emoji: '😮', label: 'Wow' },
+  { emoji: '😢', label: 'Sad' },
+  { emoji: '💡', label: 'Insightful' }
+]
+
 // Seçenek listeleri
 const PROFESSION_OPTIONS = ['Physiotherapist', 'Occupational Therapist', 'Speech & Language Therapist', 'Practitioner psychologist', 'Registered psychologist', 'Clinical psychologist', 'Forensic psychologist', 'Counselling psychologist', 'Health psychologist', 'Educational psychologist', 'Occupational psychologist', 'Sport and exercise psychologist', 'Dietitian/Dietician', 'Chiropodist', 'Podiatrist', 'Doctor', 'Nurse', 'Paramedic', 'Psychologist', 'Clinical scientist', 'Hearing aid dispenser', 'Orthoptist', 'Prosthetist', 'Orthotist', 'Radiographer', 'Diagnostic radiographer', 'Therapeutic radiographer', 'Speech and language/Speech therapist', 'Pharmacist', 'Social Worker', 'Care Assistant', 'Art Psychotherapist', 'Art therapist', 'Dramatherapist', 'Music therapist', 'Biomedical scientist', 'Operating Department Practitioner (ODP)', 'Midwife', 'Genetic Counsellor', 'Dental Hygienist', 'Dental Therapist', 'Orthodontic Therapist', 'Prosthetist', 'Orthotist', 'Clinical Physiologist', 'Audiologist'
   ]
@@ -185,6 +196,7 @@ interface Profile {
   connection_stats?: ConnectionStats
   is_connected?: boolean
   connection_status?: 'pending' | 'accepted' | 'rejected' | 'not_connected'
+  profile_views?: number
 }
 
 interface Connection {
@@ -497,7 +509,7 @@ function MobileBottomNav({
         className={`flex flex-col items-center p-2 ${activeView === 'community' ? 'text-blue-600' : 'text-gray-600'}`}
       >
         <Users className="w-5 h-5" />
-        <span className="text-xs mt-1">Community</span>
+        <span className="text-xs mt-1">Feed</span>
       </button>
 
       {/* Messages Button */}
@@ -1025,7 +1037,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                       />
                     </label>
                     <label className="flex items-center justify-between w-full max-w-md">
-                      <span className="text-sm text-gray-700">Community posts</span>
+                      <span className="text-sm text-gray-700">Feed posts</span>
                       <input 
                         type="checkbox" 
                         className="rounded border-gray-300" 
@@ -1080,7 +1092,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<'map' | 'community'>('map')
+  const [activeView, setActiveView] = useState<'map' | 'community'>('community')
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -1758,367 +1770,396 @@ const cancelConnectionRequest = async (connectionId: string) => {
     )
   }
 
-  return (
-    <div className="h-screen flex flex-col">
-      <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4">
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <Users className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-xl font-bold text-gray-900">UK Therapist Network</h1>
-          </div>
-          
-          <div className="flex items-center space-x-4 w-full md:w-auto">
-            <nav className="flex flex-wrap items-center gap-2">
-              <button
-                onClick={() => {
-                  setActiveView('map')
-                  setSelectedProfileId(null)
-                }}
-                className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
-                  activeView === 'map' && !selectedProfileId
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <MapPin className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => {
-                  setActiveView('community')
-                  setSelectedProfileId(null)
-                }}
-                className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
-                  activeView === 'community' && !selectedProfileId
-                    ? 'bg-blue-100 text-blue-700'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <Users className="w-5 h-5" />
-              </button>
-              {/* Network inline button */}
-              {currentUser && (
-                <button
-                  onClick={() => setIsConnectionsOpen(true)}
-                  className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
-                  aria-label="Network"
-                >
-                  <UserPlus className="w-5 h-5" />
-                </button>
-              )}
-              {/* Account inline icon button */}
-              <AccountDropdown 
-                currentUser={currentUser}
-                onProfileClick={handleProfileClick}
-                onSettingsClick={handleSettingsClick}
-                onSignOut={handleSignOut}
-                onOpenConnections={() => setIsConnectionsOpen(true)}
-              />
-            </nav>
-          </div>
+return (
+  <div className="h-screen flex flex-col">
+    {/* Header */}
+    <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
+      <div className="flex items-center space-x-2">
+        {/* <img src="/logo.png" alt="UK Therapist Network" className="h-8 w-8" /> */} 
+        <h1 className="text-xl font-semibold text-gray-800">UK Therapist Network</h1>
+      </div>
+
+      <div className="flex-1 mx-6">
+        <div className="max-w-2xl mx-auto">
+          <input
+            aria-label="Search"
+            className="w-full rounded-full border px-4 py-2 shadow-sm bg-white focus:outline-none"
+            placeholder="Search therapists or posts..."
+          />
         </div>
-      </header>
+      </div>
       
-      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-        {selectedProfileId ? (
-          <ProfileDetailPage 
-            profileId={selectedProfileId} 
-            onClose={() => setSelectedProfileId(null)}
-            currentUserId={currentUser?.id}
-            onStartConversation={openChatBox}
-            connections={connections}
-            connectionRequests={connectionRequests}
-            onSendConnectionRequest={sendConnectionRequest}
-            onAcceptConnectionRequest={acceptConnectionRequest}
-            onRejectConnectionRequest={rejectConnectionRequest}
-            onRemoveConnection={removeConnection}
-            updateProfileInState={updateProfileInState} // Bu satırı ekleyin
-          />
-        ) : activeView === 'map' ? (
-          <>
-            <SidebarComponent
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              filters={filters}
-              setFilters={setFilters}
-              onProfileClick={(id: string) => setSelectedProfileId(id)}
-              therapists={filteredTherapists}
-            />
-            
-            <div className="flex-1 relative min-h-[75vh] md:min-h-0">
-              <MapComponent 
-                therapists={filteredTherapists}
-                geocodeLocation={geocodeLocation}
-                onProfileClick={(id: string) => setSelectedProfileId(id)}
-              />
-              
-            </div>
-          </>
-        ) : activeView === 'community' ? (
-          <CommunityComponent />
-        ) : null}
-      </div>
-
-      {isAuthModalOpen && (
-        <AuthModalComponent 
-          onClose={() => setIsAuthModalOpen(false)}
-          onSuccess={() => {
-            loadProfiles();
-            // Mevcut kullanıcının profilini yeniden yükle
-            if (currentUser?.id) {
-              loadUserProfile(currentUser.id);
-            }
-          }}
-          currentUser={currentUser}
-          userProfile={userProfile}
-          onOpenProfileDetail={(profileId: string) => setSelectedProfileId(profileId)}
-          updateProfileInState={updateProfileInState} // Bu satırı ekleyin
-        />
-      )}
-
-      {/* Chat Boxes */}
-      <div className="hidden md:block">
-      {chatBoxes.map((chatBox, index) => (
-        <ChatBoxComponent
-          key={chatBox.id}
-          chatBox={chatBox}
-          currentUserId={currentUser?.id}
-          userProfile={userProfile}
-          onClose={() => closeChatBox(chatBox.id)}
-          onMinimize={() => minimizeChatBox(chatBox.id)}
-          position={index}
-          baseRightOffset={360 + 16}
-          playNotificationSound={playNotificationSound}
-        />
-      ))}
-      </div>
-
-      {/* Mobile Messages Overlay - Sadece mobilde */}
-      {isMessagesOverlayOpen && (
-        <div className="fixed inset-0 z-50 md:hidden" style={{ bottom: '60px' }}>
-          {/* Arkaplan overlay */}
-          <div 
-            className="absolute inset-0 bg-black bg-opacity-50"
-            onClick={() => {
-              setIsMessagesOverlayOpen(false)
-              setSelectedMobileConversation(null) // Overlay kapatılınca konuşmayı da temizle
-            }}
-          />
-          
-          {/* Mesajlar paneli - MobileBottomNav'ın üstünde */}
-          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
-            {/* Header */}
-            <div className="p-4 border-b border-gray-200 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-gray-900">Messages</h3>
-                <button 
-                  onClick={() => {
-                    setIsMessagesOverlayOpen(false)
-                    setSelectedMobileConversation(null) // Overlay kapatılınca konuşmayı da temizle
-                  }}
-                  className="p-2 text-gray-400 hover:text-gray-600"
-                >
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Mesajlar listesi */}
-            <div className="flex-1 overflow-y-auto">
-              <ConversationsList
-                currentUserId={currentUser?.id || ''}
-                onSelectConversation={(conv: Conversation) => {
-                  setSelectedMobileConversation(conv)
-                  setMobileChatOpen(true)
-                  setIsMessagesOverlayOpen(false)
-                }}
-                selectedConversationId={undefined}
-                onUnreadCountChange={setUnreadMessagesCount}
-                conversationMetadata={conversationMetadata}
-                onUpdateMetadata={updateConversationMetadata}
-                compact={false}
-                playNotificationSound={playNotificationSound}
-              />
-            </div>
+      <nav className="flex space-x-6 text-gray-600">
+        <button className="hover:text-blue-600 transition-colors">
+          <MapPin className="w-5 h-5" />
+        </button>
+        <button className="hover:text-blue-600 transition-colors">
+          <Users className="w-5 h-5" />
+        </button>
+        <button className="hover:text-blue-600 transition-colors">
+          <MessageCircle className="w-5 h-5" />
+        </button>
+        <button className="hover:text-blue-600 transition-colors">
+          <Bell className="w-5 h-5" />
+        </button>
+      </nav>
+    </header>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center space-x-2">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <Users className="w-5 h-5 text-white" />
           </div>
+          <h1 className="text-xl font-bold text-gray-900">UK Therapist Network</h1>
         </div>
-      )}
-
-      {/* Mobile Chat Screen - Tam ekran mesajlaşma */}
-      {mobileChatOpen && selectedMobileConversation && (
-        <MobileChatScreen
-          conversation={selectedMobileConversation}
-          currentUserId={currentUser?.id}
-          userProfile={userProfile}
-          onBack={() => {
-            // Sadece sohbet ekranını kapat, mesajlar listesine dön
-            setMobileChatOpen(false)
-          }}
-          onClose={() => {
-            // Tamamen kapat
-            setMobileChatOpen(false)
-            setSelectedMobileConversation(null)
-          }}
-        />
-      )}
-
-      {/* Desktop Messages Overlay - Sadece masaüstünde */}
-      <div className="hidden md:block fixed bottom-0 z-[1000] w-full md:w-auto right-0 md:right-4">
-        <div className="relative">
-          {/* Bildirim göstergesi */}
-          {unreadMessagesCount > 0 && (
-            <div className="absolute -top-1 -right-1">
-              <span className="messages-notification flex h-4 w-4">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center">
-                  <span className="text-white text-[10px] font-bold">
-                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
-                  </span>
-                </span>
-              </span>
-            </div>
-          )}
-          
-          <div
-            className="bg-white border border-gray-300 rounded-t-lg shadow-2xl overflow-hidden md:rounded-lg"
-            style={{ width: '100%', maxWidth: '360px' }}
-          >
-            <div
-              className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
-              onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
+        
+        <div className="flex items-center space-x-4 w-full md:w-auto">
+          <nav className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setActiveView('map')
+                setSelectedProfileId(null)
+              }}
+              className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                activeView === 'map' && !selectedProfileId
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
             >
-              <div className="flex items-center space-x-2">
-                <MessageSquare className="w-4 h-4 opacity-90" />
-                <span className="font-medium text-sm tracking-wide">Messaging</span>
-              </div>
-              {unreadMessagesCount > 0 && (
-                <span className="bg-white text-blue-700 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                  {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-                </span>
-              )}
-            </div>
-
-            {isMessagesOverlayOpen && (
-              <div
-                className="fixed inset-0 bg-white z-50 flex flex-col md:fixed md:inset-auto md:bottom-0 md:right-4 md:w-96 md:h-96 md:rounded-lg"
-                style={{ maxHeight: '100vh' }}
+              <MapPin className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => {
+                setActiveView('community')
+                setSelectedProfileId(null)
+              }}
+              className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
+                activeView === 'community' && !selectedProfileId
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+              }`}
+            >
+              <Users className="w-5 h-5" />
+            </button>
+            {/* Network inline button */}
+            {currentUser && (
+              <button
+                onClick={() => setIsConnectionsOpen(true)}
+                className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                aria-label="Network"
               >
-                <div className="flex-1 overflow-y-auto">
-                  <ConversationsList
-                    currentUserId={currentUser?.id || ''}
-                    onSelectConversation={(conv: Conversation) => openChatBox(conv)}
-                    selectedConversationId={undefined}
-                    onUnreadCountChange={setUnreadMessagesCount}
-                    conversationMetadata={conversationMetadata}
-                    onUpdateMetadata={updateConversationMetadata}
-                    compact
-                    playNotificationSound={playNotificationSound}
-                  />
-                </div>
-
-                <button
-                  onClick={() => setIsMessagesOverlayOpen(false)}
-                  className="absolute top-2 right-2 text-gray-500 z-10"
-                >
-                  ✕
-                </button>
-              </div>
+                <UserPlus className="w-5 h-5" />
+              </button>
             )}
-          </div>
+            {/* Account inline icon button */}
+            <AccountDropdown 
+              currentUser={currentUser}
+              onProfileClick={handleProfileClick}
+              onSettingsClick={handleSettingsClick}
+              onSignOut={handleSignOut}
+              onOpenConnections={() => setIsConnectionsOpen(true)}
+            />
+          </nav>
         </div>
       </div>
-
-      {/* Connections Manager Modal */}
-      {isConnectionsOpen && currentUser && (
-        <ConnectionsManager 
-          currentUserId={currentUser.id}
-          onClose={() => setIsConnectionsOpen(false)}
+    
+    <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+      {selectedProfileId ? (
+        <ProfileDetailPage 
+          profileId={selectedProfileId} 
+          onClose={() => setSelectedProfileId(null)}
+          currentUserId={currentUser?.id}
+          onStartConversation={openChatBox}
           connections={connections}
           connectionRequests={connectionRequests}
+          onSendConnectionRequest={sendConnectionRequest}
           onAcceptConnectionRequest={acceptConnectionRequest}
           onRejectConnectionRequest={rejectConnectionRequest}
           onRemoveConnection={removeConnection}
-          onSendConnectionRequest={sendConnectionRequest}
-          onCancelConnectionRequest={cancelConnectionRequest}
+          updateProfileInState={updateProfileInState} // Bu satırı ekleyin
         />
-      )}
-
-      {/* Settings Modal */}
-      {isSettingsOpen && (
-        <SettingsComponent onClose={() => setIsSettingsOpen(false)} />
-      )}
-
-      {/* CV Maker Modal */}
-      {isCVMakerOpen && (
-        <CVMaker 
-          userProfile={userProfile} 
-          onClose={() => setIsCVMakerOpen(false)} 
-        />
-      )}
-
-      {/* Mobile Bottom Navigation */}
-      <div className="md:hidden">
-      {/* Mobile Bottom Navigation */}
-      <MobileBottomNav
-        activeView={activeView}
-        setActiveView={setActiveView}
-        setSelectedProfileId={setSelectedProfileId}
-        setIsConnectionsOpen={setIsConnectionsOpen}
-        setIsAuthModalOpen={setIsAuthModalOpen}
-        currentUser={currentUser}
-        unreadMessagesCount={unreadMessagesCount}
-        setIsMessagesOverlayOpen={setIsMessagesOverlayOpen}
-      />
-      </div>
-
-      {/* Notification Styles */}
-      <style>{`
-        @keyframes pulse {
-          0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-          70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-          100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-        }
-        
-        @keyframes bounce {
-          0%, 20%, 53%, 80%, 100% {
-            transform: translate3d(0,0,0);
-          }
-          40%, 43% {
-            transform: translate3d(0, -8px, 0);
-          }
-          70% {
-            transform: translate3d(0, -4px, 0);
-          }
-          90% {
-            transform: translate3d(0, -2px, 0);
-          }
-        }
-        
-        .notification-pulse {
-          animation: pulse 2s infinite;
-        }
-        
-        .bounce {
-          animation: bounce 1s ease infinite;
-        }
-        
-        .messages-notification::after {
-          content: '';
-          position: absolute;
-          top: -2px;
-          right: -2px;
-          width: 12px;
-          height: 12px;
-          background: #EF4444;
-          border-radius: 50%;
-          border: 2px solid white;
-          animation: pulse 2s infinite;
-        }
-      `}</style>
+      ) : activeView === 'map' ? (
+        <>
+          <SidebarComponent
+            searchTerm={searchTerm}
+            setSearchTerm={setSearchTerm}
+            filters={filters}
+            setFilters={setFilters}
+            onProfileClick={(id: string) => setSelectedProfileId(id)}
+            therapists={filteredTherapists}
+          />
+          
+          <div className="flex-1 relative min-h-[75vh] md:min-h-0">
+            <MapComponent 
+              therapists={filteredTherapists}
+              geocodeLocation={geocodeLocation}
+              onProfileClick={(id: string) => setSelectedProfileId(id)}
+            />
+            
+          </div>
+        </>
+      ) : activeView === 'community' ? (
+        <CommunityComponent />
+      ) : null}
     </div>
-  )
-}
+
+    {isAuthModalOpen && (
+      <AuthModalComponent 
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => {
+          loadProfiles();
+          // Mevcut kullanıcının profilini yeniden yükle
+          if (currentUser?.id) {
+            loadUserProfile(currentUser.id);
+          }
+        }}
+        currentUser={currentUser}
+        userProfile={userProfile}
+        onOpenProfileDetail={(profileId: string) => setSelectedProfileId(profileId)}
+        updateProfileInState={updateProfileInState} // Bu satırı ekleyin
+      />
+    )}
+
+    {/* Chat Boxes */}
+    <div className="hidden md:block">
+    {chatBoxes.map((chatBox, index) => (
+      <ChatBoxComponent
+        key={chatBox.id}
+        chatBox={chatBox}
+        currentUserId={currentUser?.id}
+        userProfile={userProfile}
+        onClose={() => closeChatBox(chatBox.id)}
+        onMinimize={() => minimizeChatBox(chatBox.id)}
+        position={index}
+        baseRightOffset={360 + 16}
+        playNotificationSound={playNotificationSound}
+      />
+    ))}
+    </div>
+
+    {/* Mobile Messages Overlay - Sadece mobilde */}
+    {isMessagesOverlayOpen && (
+      <div className="fixed inset-0 z-50 md:hidden" style={{ bottom: '60px' }}>
+        {/* Arkaplan overlay */}
+        <div 
+          className="absolute inset-0 bg-black bg-opacity-50"
+          onClick={() => {
+            setIsMessagesOverlayOpen(false)
+            setSelectedMobileConversation(null) // Overlay kapatılınca konuşmayı da temizle
+          }}
+        />
+        
+        {/* Mesajlar paneli - MobileBottomNav'ın üstünde */}
+        <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="p-4 border-b border-gray-200 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Messages</h3>
+              <button 
+                onClick={() => {
+                  setIsMessagesOverlayOpen(false)
+                  setSelectedMobileConversation(null) // Overlay kapatılınca konuşmayı da temizle
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+          </div>
+          
+          {/* Mesajlar listesi */}
+          <div className="flex-1 overflow-y-auto">
+            <ConversationsList
+              currentUserId={currentUser?.id || ''}
+              onSelectConversation={(conv: Conversation) => {
+                setSelectedMobileConversation(conv)
+                setMobileChatOpen(true)
+                setIsMessagesOverlayOpen(false)
+              }}
+              selectedConversationId={undefined}
+              onUnreadCountChange={setUnreadMessagesCount}
+              conversationMetadata={conversationMetadata}
+              onUpdateMetadata={updateConversationMetadata}
+              compact={false}
+              playNotificationSound={playNotificationSound}
+            />
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Mobile Chat Screen - Tam ekran mesajlaşma */}
+    {mobileChatOpen && selectedMobileConversation && (
+      <MobileChatScreen
+        conversation={selectedMobileConversation}
+        currentUserId={currentUser?.id}
+        userProfile={userProfile}
+        onBack={() => {
+          // Sadece sohbet ekranını kapat, mesajlar listesine dön
+          setMobileChatOpen(false)
+        }}
+        onClose={() => {
+          // Tamamen kapat
+          setMobileChatOpen(false)
+          setSelectedMobileConversation(null)
+        }}
+      />
+    )}
+
+    {/* Desktop Messages Overlay - Sadece masaüstünde */}
+    <div className="hidden md:block fixed bottom-0 z-[1000] w-full md:w-auto right-0 md:right-4">
+      <div className="relative">
+        {/* Bildirim göstergesi */}
+        {unreadMessagesCount > 0 && (
+          <div className="absolute -top-1 -right-1">
+            <span className="messages-notification flex h-4 w-4">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center">
+                <span className="text-white text-[10px] font-bold">
+                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                </span>
+              </span>
+            </span>
+          </div>
+        )}
+        
+        <div
+          className="bg-white border border-gray-300 rounded-t-lg shadow-2xl overflow-hidden md:rounded-lg"
+          style={{ width: '100%', maxWidth: '360px' }}
+        >
+          <div
+            className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
+            onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
+          >
+            <div className="flex items-center space-x-2">
+              <MessageSquare className="w-4 h-4 opacity-90" />
+              <span className="font-medium text-sm tracking-wide">Messaging</span>
+            </div>
+            {unreadMessagesCount > 0 && (
+              <span className="bg-white text-blue-700 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+              </span>
+            )}
+          </div>
+
+          {isMessagesOverlayOpen && (
+            <div
+              className="fixed inset-0 bg-white z-50 flex flex-col md:fixed md:inset-auto md:bottom-0 md:right-4 md:w-96 md:h-96 md:rounded-lg"
+              style={{ maxHeight: '100vh' }}
+            >
+              <div className="flex-1 overflow-y-auto">
+                <ConversationsList
+                  currentUserId={currentUser?.id || ''}
+                  onSelectConversation={(conv: Conversation) => openChatBox(conv)}
+                  selectedConversationId={undefined}
+                  onUnreadCountChange={setUnreadMessagesCount}
+                  conversationMetadata={conversationMetadata}
+                  onUpdateMetadata={updateConversationMetadata}
+                  compact
+                  playNotificationSound={playNotificationSound}
+                />
+              </div>
+
+              <button
+                onClick={() => setIsMessagesOverlayOpen(false)}
+                className="absolute top-2 right-2 text-gray-500 z-10"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+
+    {/* Connections Manager Modal */}
+    {isConnectionsOpen && currentUser && (
+      <ConnectionsManager 
+        currentUserId={currentUser.id}
+        onClose={() => setIsConnectionsOpen(false)}
+        connections={connections}
+        connectionRequests={connectionRequests}
+        onAcceptConnectionRequest={acceptConnectionRequest}
+        onRejectConnectionRequest={rejectConnectionRequest}
+        onRemoveConnection={removeConnection}
+        onSendConnectionRequest={sendConnectionRequest}
+        onCancelConnectionRequest={cancelConnectionRequest}
+      />
+    )}
+
+    {/* Settings Modal */}
+    {isSettingsOpen && (
+      <SettingsComponent onClose={() => setIsSettingsOpen(false)} />
+    )}
+
+    {/* CV Maker Modal */}
+    {isCVMakerOpen && (
+      <CVMaker 
+        userProfile={userProfile} 
+        onClose={() => setIsCVMakerOpen(false)} 
+      />
+    )}
+
+    {/* Mobile Bottom Navigation */}
+    <div className="md:hidden">
+    {/* Mobile Bottom Navigation */}
+    <MobileBottomNav
+      activeView={activeView}
+      setActiveView={setActiveView}
+      setSelectedProfileId={setSelectedProfileId}
+      setIsConnectionsOpen={setIsConnectionsOpen}
+      setIsAuthModalOpen={setIsAuthModalOpen}
+      currentUser={currentUser}
+      unreadMessagesCount={unreadMessagesCount}
+      setIsMessagesOverlayOpen={setIsMessagesOverlayOpen}
+    />
+    </div>
+
+    {/* Notification Styles */}
+    <style>{`
+      @keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+        70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+      }
+      
+      @keyframes bounce {
+        0%, 20%, 53%, 80%, 100% {
+          transform: translate3d(0,0,0);
+        }
+        40%, 43% {
+          transform: translate3d(0, -8px, 0);
+        }
+        70% {
+          transform: translate3d(0, -4px, 0);
+        }
+        90% {
+          transform: translate3d(0, -2px, 0);
+        }
+      }
+      
+      .notification-pulse {
+        animation: pulse 2s infinite;
+      }
+      
+      .bounce {
+        animation: bounce 1s ease infinite;
+      }
+      
+      .messages-notification::after {
+        content: '';
+        position: absolute;
+        top: -2px;
+        right: -2px;
+        width: 12px;
+        height: 12px;
+        background: #EF4444;
+        border-radius: 50%;
+        border: 2px solid white;
+        animation: pulse 2s infinite;
+      }
+    `}</style>
+  </div>
+)};
 
 function MobileChatScreen({ 
   conversation, 
@@ -5324,6 +5365,12 @@ function ProfileDetailPage({
 }
 
 function CommunityComponent() {
+  const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+  const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({});
+  const [currentVisibleExpandedPost, setCurrentVisibleExpandedPost] = useState<string | null>(null);
+  const [stickyButtonStyle, setStickyButtonStyle] = useState<{ left: string; width: string }>({ left: '0px', width: '0px' });
   const [posts, setPosts] = useState<CommunityPost[]>([])
   const [showNewPostModal, setShowNewPostModal] = useState(false)
   const [newPost, setNewPost] = useState({
@@ -5374,6 +5421,14 @@ function CommunityComponent() {
   const [tagInput, setTagInput] = useState('')
   const [attachmentInput, setAttachmentInput] = useState('')
   const [coAuthorInput, setCoAuthorInput] = useState('')
+  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
+  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({})
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
+  const [postLikes, setPostLikes] = useState<Record<string, number>>({})
+  const [postDislikes, setPostDislikes] = useState<Record<string, number>>({})
+  const [postReactions, setPostReactions] = useState<Record<string, { emoji: string; count: number }[]>>({})
+  const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
   const [editForm, setEditForm] = useState<{
     id: string;
     title: string;
@@ -5398,6 +5453,101 @@ function CommunityComponent() {
   })
   const session = useSession()
   const user = session?.user
+  const [userProfile, setUserProfile] = useState<Profile | null>(null)
+  const [connections, setConnections] = useState<any[]>([])
+  const [suggestedConnections, setSuggestedConnections] = useState<Profile[]>([])
+
+
+  useEffect(() => {
+    const observers: { [key: string]: IntersectionObserver } = {};
+
+    posts.forEach(post => {
+      if (expandedPosts[post.id]) {
+        const el = postRefs.current[post.id];
+        if (el) {
+          const observer = new IntersectionObserver(
+            (entries) => {
+              if (entries[0].isIntersecting) {
+                setCurrentVisibleExpandedPost(post.id);
+              } else if (currentVisibleExpandedPost === post.id) {
+                setCurrentVisibleExpandedPost(null);
+              }
+            },
+            { threshold: 0.1 }
+          );
+          observer.observe(el);
+          observers[post.id] = observer;
+        }
+      }
+    });
+
+    return () => {
+      Object.values(observers).forEach(obs => obs.disconnect());
+    };
+  }, [posts, expandedPosts, currentVisibleExpandedPost]);
+
+  useEffect(() => {
+    const updateButtonPosition = () => {
+      if (currentVisibleExpandedPost) {
+        const el = postRefs.current[currentVisibleExpandedPost];
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          setStickyButtonStyle({
+            left: `${rect.left}px`,
+            width: `${rect.width}px`
+          });
+        }
+      }
+    };
+
+    window.addEventListener('scroll', updateButtonPosition);
+    window.addEventListener('resize', updateButtonPosition);
+    updateButtonPosition();
+
+    return () => {
+      window.removeEventListener('scroll', updateButtonPosition);
+      window.removeEventListener('resize', updateButtonPosition);
+    };
+  }, [currentVisibleExpandedPost]);
+
+  // Load user profile
+  useEffect(() => {
+    if (user?.id) {
+      loadUserProfile()
+      loadConnections()
+      loadSuggestedConnections()
+    }
+  }, [user?.id])
+
+  const loadUserProfile = async () => {
+    if (!user?.id) return
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    if (data) setUserProfile(data)
+  }
+
+  const loadConnections = async () => {
+    if (!user?.id) return
+    const { data } = await supabase
+      .from('connections')
+      .select('*')
+      .or(`user_id.eq.${user.id},connected_user_id.eq.${user.id}`)
+      .eq('status', 'accepted')
+    setConnections(data || [])
+  }
+
+  const loadSuggestedConnections = async () => {
+    if (!user?.id) return
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .neq('id', user.id)
+      .limit(5)
+    setSuggestedConnections(data || [])
+  }
 
   // Dropdown states
   const [dropdowns, setDropdowns] = useState({
@@ -6563,6 +6713,7 @@ function CommunityComponent() {
       setTagInput('')
       setAttachmentInput('')
       setCoAuthorInput('')
+      setShowAdvancedOptions(false)
       setShowNewPostModal(false)
       await loadPosts()
 
@@ -6771,6 +6922,192 @@ function CommunityComponent() {
     setSelectedPost(post)
     loadComments(post.id)
   }
+
+  // Toggle expanded post content
+  const toggleExpandPost = (postId: string) => {
+    setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }))
+  }
+
+  // Toggle comments section
+  const toggleComments = (postId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const isOpen = !openComments[postId]
+    setOpenComments(prev => ({ ...prev, [postId]: isOpen }))
+    if (isOpen && !comments[postId]) {
+      loadComments(postId)
+    }
+  }
+
+  // Handle like/dislike
+  const handleLikePost = async (postId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    const currentReaction = userPostReactions[postId];
+
+    try {
+      if (currentReaction === 'like') {
+        // Remove like
+        setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+        setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+      } else {
+        // Add like, remove old reaction if exists
+        setPostLikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+
+        if (currentReaction) {
+          if (currentReaction === 'dislike') {
+            setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+          } else {
+            // Remove emoji reaction
+            setPostReactions(prev => {
+              const current = prev[postId] || [];
+              return {
+                ...prev,
+                [postId]: current.map(r => 
+                  r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+                ).filter(r => r.count > 0)
+              };
+            });
+          }
+        }
+
+        setUserPostReactions(prev => ({ ...prev, [postId]: 'like' }));
+      }
+    } catch (err) {
+      console.error('Error updating post like:', err);
+    }
+  };
+
+  const handleDislikePost = async (postId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    const currentReaction = userPostReactions[postId];
+
+    try {
+      if (currentReaction === 'dislike') {
+        // Remove dislike
+        setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+        setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+      } else {
+        // Add dislike, remove old reaction if exists
+        setPostDislikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+
+        if (currentReaction) {
+          if (currentReaction === 'like') {
+            setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+          } else {
+            // Remove emoji reaction
+            setPostReactions(prev => {
+              const current = prev[postId] || [];
+              return {
+                ...prev,
+                [postId]: current.map(r => 
+                  r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+                ).filter(r => r.count > 0)
+              };
+            });
+          }
+        }
+
+        setUserPostReactions(prev => ({ ...prev, [postId]: 'dislike' }));
+      }
+    } catch (err) {
+      console.error('Error updating post dislike:', err);
+    }
+  };
+
+  // Handle emoji reaction
+  const handleEmojiReaction = (postId: string, emoji: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    const currentReaction = userPostReactions[postId];
+
+    try {
+      if (currentReaction === emoji) {
+        // Remove emoji reaction
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          return {
+            ...prev,
+            [postId]: current.map(r => 
+              r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+            ).filter(r => r.count > 0)
+          };
+        });
+        setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+      } else {
+        // Add emoji reaction, remove old if exists
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          const existing = current.find(r => r.emoji === emoji);
+          if (existing) {
+            return {
+              ...prev,
+              [postId]: current.map(r => 
+                r.emoji === emoji ? { ...r, count: r.count + 1 } : r
+              )
+            };
+          } else {
+            return {
+              ...prev,
+              [postId]: [...current, { emoji, count: 1 }]
+            };
+          }
+        });
+
+        if (currentReaction) {
+          if (currentReaction === 'like') {
+            setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+          } else if (currentReaction === 'dislike') {
+            setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+          } else {
+            // Remove old emoji
+            setPostReactions(prev => {
+              const current = prev[postId] || [];
+              return {
+                ...prev,
+                [postId]: current.map(r => 
+                  r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+                ).filter(r => r.count > 0)
+              };
+            });
+          }
+        }
+
+        setUserPostReactions(prev => ({ ...prev, [postId]: emoji }));
+      }
+      setShowEmojiPicker(null);
+    } catch (err) {
+      console.error('Error updating emoji reaction:', err);
+    }
+  };
+
+  // Long press handlers
+  const handleLongPressStart = (postId: string, e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation()
+    const timer = setTimeout(() => {
+      setShowEmojiPicker(postId)
+    }, 500) // 500ms for long press
+    setLongPressTimer(timer)
+  }
+
+  const handleLongPressEnd = (e: React.MouseEvent | React.TouchEvent) => {
+    e.stopPropagation()
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+    }
+  }
+
+  // Truncate content for "See more"
+  const getTruncatedContent = (content: string, postId: string, maxLength = 300) => {
+  if (expandedPosts[postId] || content.length <= maxLength) {
+    return content;
+  }
+  return content.slice(0, maxLength) + '...';
+};
 
   const addComment = async (postId: string, parentReplyId: string | null = null) => {
     const commentText = parentReplyId ? replyContents[parentReplyId] : newComments[postId]
@@ -7173,65 +7510,116 @@ const isCommentOwner = (comment: any) => {
 };
 
 return (
-  <div className="flex-1 bg-gray-50 p-4 md:p-6 overflow-y-auto pb-20 md:pb-6">
-    <div className="max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center">
-          <Users className="w-6 h-6 mr-2 text-blue-600" />
-          <h2 className="text-2xl font-bold text-gray-900">Professional Community</h2>
-          
-          {/* Real-time durum göstergesi - Mobilde gizle */}
-          <div className="ml-4 hidden md:flex items-center">
-            <div className={`w-2 h-2 rounded-full mr-2 ${
-              realtimeStatus === 'connected' ? 'bg-green-500' : 
-              realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-            }`} />
-            <span className="text-xs text-gray-500">
-              {realtimeStatus === 'connected' ? 'Live' : 
-              realtimeStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-            </span>
+  <div className="flex-1 bg-gray-50 overflow-y-auto pb-20 md:pb-6">
+    <div className="max-w-7xl mx-auto p-4 md:p-6">
+      {/* LinkedIn-style 3-column layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* Left Sidebar - Profile Snapshot */}
+        <div className="lg:col-span-3 hidden lg:block">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden sticky top-6">
+            {/* Profile Header with gradient */}
+            <div className="h-16 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+            <div className="px-4 pb-4 -mt-8">
+              <div className="flex flex-col items-center">
+                {/* Avatar */}
+                <div className="w-16 h-16 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center text-2xl font-bold text-blue-600">
+                  {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || '?'}
+                </div>
+                <h3 className="mt-2 text-lg font-semibold text-gray-900 text-center">
+                  {userProfile?.full_name || 'Your Name'}
+                </h3>
+                <p className="text-sm text-gray-600 text-center">
+                  {userProfile?.profession || 'Professional'}
+                </p>
+                <p className="text-xs text-gray-500 mt-1 text-center">
+                  {userProfile?.city && userProfile?.county 
+                    ? `${userProfile.city}, ${userProfile.county}`
+                    : 'Location not set'}
+                </p>
+              </div>
+              
+              {/* Stats */}
+              <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Connections</span>
+                  <span className="font-semibold text-gray-900">{connections.length}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Profile Views</span>
+                  <span className="font-semibold text-gray-900">{userProfile?.profile_views || 0}</span>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="mt-4 space-y-2">
+                <button className="w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                  View My Profile
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-        
-        <div className="flex items-center gap-2 md:gap-3">
-          {/* Refresh Button - Mobilde sadece simge */}
-          <button 
-            onClick={() => {
-              loadPosts();
-              loadFollowingPosts();
-            }}
-            className="flex items-center p-2 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            title="Refresh posts"
-          >
-            <RefreshCw className="w-4 h-4 md:mr-2" />
-            <span className="hidden md:inline">Refresh</span>
-          </button>
-          
-          {/* Filters Button - Mobilde sadece simge */}
-          <button 
-            onClick={() => setShowFilters(!showFilters)}
-            className="relative flex items-center p-2 md:px-4 md:py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Filter className="w-4 h-4 md:mr-2" />
-            <span className="hidden md:inline">Filters</span>
-            {Object.values(feedFilters).flat().length > 0 && (
-              <span className="absolute -top-1 -right-1 md:relative md:top-0 md:right-0 md:ml-2 bg-blue-600 text-white text-xs rounded-full w-4 h-4 md:w-5 md:h-5 flex items-center justify-center text-[10px] md:text-xs">
-                {Object.values(feedFilters).flat().length}
-              </span>
-            )}
-          </button>
-          
-          {/* New Post Button - Mobilde sadece simge */}
-          <button 
-            onClick={() => setShowNewPostModal(true)}
-            className="flex items-center p-2 md:px-4 md:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4 md:mr-2" />
-            <span className="hidden md:inline">New Post</span>
-          </button>
-        </div>
-      </div>
+
+        {/* Middle Column - Feed */}
+        <div className="lg:col-span-6 w-full">
+          {/* Header with actions */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center">
+                <Users className="w-5 h-5 mr-2 text-blue-600" />
+                <h2 className="text-xl font-bold text-gray-900">Feed</h2>
+                
+                {/* Real-time status */}
+                <div className="ml-3 hidden md:flex items-center">
+                  <div className={`w-2 h-2 rounded-full mr-1.5 ${
+                    realtimeStatus === 'connected' ? 'bg-green-500' : 
+                    realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+                  }`} />
+                  <span className="text-xs text-gray-500">
+                    {realtimeStatus === 'connected' ? 'Live' : 
+                    realtimeStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+                  </span>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={() => {
+                    loadPosts();
+                    loadFollowingPosts();
+                  }}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Refresh posts"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                
+                <button 
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="relative p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Filter className="w-4 h-4" />
+                  {Object.values(feedFilters).flat().length > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                      {Object.values(feedFilters).flat().length}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* New Post Input */}
+            <button 
+              onClick={() => setShowNewPostModal(true)}
+              className="w-full flex items-center gap-3 px-4 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors text-left"
+            >
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold">
+                {userProfile?.full_name?.charAt(0) || '?'}
+              </div>
+              <span className="text-gray-500 flex-1">Share an update, question or insight...</span>
+            </button>
+          </div>
 
       {/* Filters Panel */}
       {showFilters && (
@@ -7500,7 +7888,9 @@ return (
       {/* Posts Feed */}
       <div className="space-y-4">
         {posts.map(post => (
-          <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 cursor-pointer" onClick={() => viewPostDetail(post)}>
+          <div 
+            key={post.id} 
+            className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
             {/* Post Header with Menu */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
@@ -7643,14 +8033,311 @@ return (
               </div>
             </div>
 
-            <p className="text-gray-700 mb-4 whitespace-pre-line">{getContentSnippet(post.content)}</p>
+            {/* Post Content with See More/Less */}
+            <div className="group relative text-gray-700 mb-4 whitespace-pre-line">
+              {post.content.length > 300 && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                    className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
+                  >
+                    See less
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                    className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
+                  >
+                    See more
+                  </button>
+                </>
+              )}
 
-            <div className="border-t border-gray-200 pt-4">
-              <div className="flex items-center text-sm text-gray-500">
-                <MessageSquare className="w-4 h-4 mr-1" />
-                {post.replies_count} comments
+              <div 
+                className={`
+                  ${expandedPosts[post.id] || post.content.length <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                `}
+              >
+                {post.content}
+              </div>
+
+              {!expandedPosts[post.id] && post.content.length > 300 && (
+                <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+              )}
+            </div>
+
+            {/* Reaction Summary */}
+            {(postReactions[post.id]?.length > 0 || postLikes[post.id] || postDislikes[post.id]) && (
+              <div className="flex items-center gap-3 mb-3 text-sm text-gray-600">
+                {postReactions[post.id]?.map((reaction, idx) => (
+                  <span key={idx} className="flex items-center gap-1">
+                    <span className="text-lg">{reaction.emoji}</span>
+                    <span>{reaction.count}</span>
+                  </span>
+                ))}
+                {(postLikes[post.id] || 0) > 0 && (
+                  <span className="flex items-center gap-1">
+                    <ThumbsUp className="w-4 h-4 text-blue-600" />
+                    {postLikes[post.id]}
+                  </span>
+                )}
+                {(postDislikes[post.id] || 0) > 0 && (
+                  <span className="flex items-center gap-1">
+                    <ThumbsDown className="w-4 h-4 text-gray-600" />
+                    {postDislikes[post.id]}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Action Bar */}
+            <div className="border-t border-gray-200 pt-3">
+              <div className="flex items-center justify-between gap-4">
+                {/* Like Button with Long Press */}
+                <div className="relative">
+                  <button
+                    onClick={(e) => handleLikePost(post.id, e)}
+                    onMouseDown={(e) => handleLongPressStart(post.id, e)}
+                    onMouseUp={handleLongPressEnd}
+                    onMouseLeave={handleLongPressEnd}
+                    onTouchStart={(e) => handleLongPressStart(post.id, e)}
+                    onTouchEnd={handleLongPressEnd}
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors flex-1 justify-center"
+                  >
+                    <ThumbsUp className="w-4 h-4" />
+                    <span>Like</span>
+                  </button>
+
+                  {/* Emoji Picker Overlay */}
+                  {showEmojiPicker === post.id && (
+                    <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-3 py-2 flex gap-2 z-50">
+                      {EMOJI_REACTIONS.map((reaction) => (
+                        <button
+                          key={reaction.emoji}
+                          onClick={(e) => handleEmojiReaction(post.id, reaction.emoji, e)}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          className="text-2xl hover:scale-125 transition-transform"
+                          title={reaction.label}
+                        >
+                          {reaction.emoji}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Dislike Button */}
+                <button
+                  onClick={(e) => handleDislikePost(post.id, e)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 rounded-lg transition-colors flex-1 justify-center"
+                >
+                  <ThumbsDown className="w-4 h-4" />
+                  <span>Dislike</span>
+                </button>
+
+                {/* Comments Button */}
+                <button
+                  onClick={(e) => toggleComments(post.id, e)}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-lg transition-colors flex-1 justify-center"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>{post.replies_count || 0} Comments</span>
+                </button>
               </div>
             </div>
+
+            {/* Inline Comments Section */}
+            {openComments[post.id] && (
+              <div className="mt-4 border-t border-gray-200 pt-4">
+                {/* Add Comment */}
+                {!postSettings[post.id]?.comments_disabled && (
+                  <div className="mb-4">
+                    <div className="flex gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                        {userProfile?.full_name?.charAt(0) || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <textarea
+                          value={newComments[post.id] || ''}
+                          onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
+                          placeholder="Write a comment..."
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                          rows={2}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault()
+                              addComment(post.id)
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => addComment(post.id)}
+                          disabled={!newComments[post.id]?.trim()}
+                          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+                        >
+                          Post Comment
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Comments List */}
+                {comments[post.id] && comments[post.id].length > 0 && (
+                  <div className="space-y-4">
+                    {comments[post.id].map(comment => (
+                      <div key={comment.id} className="flex gap-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                          {comment.user?.full_name?.charAt(0) || 'U'}
+                        </div>
+                        <div className="flex-1">
+                          <div className="bg-gray-50 rounded-lg px-3 py-2">
+                            <div className="font-semibold text-sm text-gray-900">{comment.user?.full_name || 'User'}</div>
+                            <p className="text-gray-700 text-sm mt-1">{comment.content}</p>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                            <span>{formatTime(comment.created_at)}</span>
+                            <button
+                              onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
+                              className="hover:text-blue-600 font-medium"
+                            >
+                              Reply
+                            </button>
+                          </div>
+
+                          {/* Reply Input */}
+                          {replyingTo[comment.id] && (
+                            <div className="mt-2 ml-4">
+                              <textarea
+                                value={replyContents[comment.id] || ''}
+                                onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                                placeholder="Write a reply..."
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+                                rows={2}
+                              />
+                              <div className="flex gap-2 mt-2">
+                                <button
+                                  onClick={() => addComment(post.id, comment.id)}
+                                  disabled={!replyContents[comment.id]?.trim()}
+                                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                                >
+                                  Reply
+                                </button>
+                                <button
+                                  onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: false }))}
+                                  className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Collapsible Replies */}
+                          {comment.replies && comment.replies.length > 0 && (
+                            <div className="mt-2 ml-4">
+                              <button
+                                onClick={() => setExpandedComments(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
+                                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                              >
+                                {expandedComments[comment.id] ? 'Hide' : 'View'} {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
+                              </button>
+                              {expandedComments[comment.id] && (
+                                <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
+                                  {comment.replies.map(reply => (
+                                    <div key={reply.id} className="flex gap-2">
+                                      <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                        {reply.user?.full_name?.charAt(0) || 'U'}
+                                      </div>
+                                      <div className="flex-1">
+                                        <div className="bg-gray-50 rounded-lg px-3 py-2">
+                                          <div className="font-semibold text-xs text-gray-900">{reply.user?.full_name || 'User'}</div>
+                                          <p className="text-gray-700 text-xs mt-1">{reply.content}</p>
+                                        </div>
+                                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                          <span>{formatTime(reply.created_at)}</span>
+                                          <button
+                                            onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: !prev[reply.id] }))}
+                                            className="hover:text-blue-600 font-medium"
+                                          >
+                                            Reply
+                                          </button>
+                                        </div>
+
+                                        {/* Reply to Reply Input */}
+                                        {replyingTo[reply.id] && (
+                                          <div className="mt-2">
+                                            <textarea
+                                              value={replyContents[reply.id] || ''}
+                                              onChange={(e) => setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }))}
+                                              placeholder="Write a reply..."
+                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
+                                              rows={2}
+                                            />
+                                            <div className="flex gap-2 mt-2">
+                                              <button
+                                                onClick={() => addComment(post.id, reply.id)}
+                                                disabled={!replyContents[reply.id]?.trim()}
+                                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                                              >
+                                                Reply
+                                              </button>
+                                              <button
+                                                onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: false }))}
+                                                className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+                                              >
+                                                Cancel
+                                              </button>
+                                            </div>
+                                          </div>
+                                        )}
+
+                                        {/* Collapsible Nested Replies */}
+                                        {reply.replies && reply.replies.length > 0 && (
+                                          <div className="mt-2">
+                                            <button
+                                              onClick={() => setExpandedReplies(prev => ({ ...prev, [reply.id]: !prev[reply.id] }))}
+                                              className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                                            >
+                                              {expandedReplies[reply.id] ? 'Hide' : 'View'} {reply.replies.length} {reply.replies.length === 1 ? 'reply' : 'replies'}
+                                            </button>
+                                            {expandedReplies[reply.id] && (
+                                              <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
+                                                {reply.replies.map(nestedReply => (
+                                                  <div key={nestedReply.id} className="flex gap-2">
+                                                    <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                                      {nestedReply.user?.full_name?.charAt(0) || 'U'}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                      <div className="bg-gray-50 rounded-lg px-3 py-2">
+                                                        <div className="font-semibold text-xs text-gray-900">{nestedReply.user?.full_name || 'User'}</div>
+                                                        <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
+                                                      </div>
+                                                      <span className="text-xs text-gray-500 ml-2">{formatTime(nestedReply.created_at)}</span>
+                                                    </div>
+                                                  </div>
+                                                ))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {comments[post.id] && comments[post.id].length === 0 && (
+                  <p className="text-center text-gray-500 text-sm py-4">No comments yet. Be the first to comment!</p>
+                )}
+              </div>
+            )}
           </div>
         ))}
 
@@ -7668,62 +8355,190 @@ return (
           </div>
         )}
       </div>
+        </div>
+
+        {/* Right Sidebar - Suggestions & Tips */}
+        <div className="lg:col-span-3 hidden lg:block">
+          <div className="sticky top-6 space-y-6">
+            
+            {/* Suggested Connections */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h3 className="font-semibold text-gray-900">People You May Know</h3>
+              </div>
+              <div className="p-4 space-y-4">
+                {suggestedConnections.length > 0 ? (
+                  suggestedConnections.slice(0, 3).map(profile => (
+                    <div key={profile.id} className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold flex-shrink-0">
+                        {profile.full_name?.charAt(0) || '?'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm text-gray-900 truncate">
+                          {profile.full_name}
+                        </p>
+                        <p className="text-xs text-gray-600 truncate">
+                          {profile.profession}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {profile.city && profile.county ? `${profile.city}, ${profile.county}` : 'UK'}
+                        </p>
+                        <button className="mt-2 px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full hover:bg-blue-100 transition-colors">
+                          Connect
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-gray-500">No suggestions available</p>
+                )}
+              </div>
+            </div>
+
+            {/* Professional Tip */}
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                  <Info className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-gray-900 text-sm mb-1">Professional Tip</h4>
+                  <p className="text-xs text-gray-600">
+                    Keep your languages and specialties updated — clients and colleagues search by them!
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Network Activity</h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Total Members</span>
+                  <span className="font-semibold text-gray-900">2,500+</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Active Today</span>
+                  <span className="font-semibold text-green-600">347</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">Posts This Week</span>
+                  <span className="font-semibold text-blue-600">89</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer Links */}
+            <div className="text-xs text-gray-500 text-center space-y-1">
+              <p>© 2025 UK Therapist Network</p>
+              <div className="flex justify-center gap-3">
+                <a href="#" className="hover:text-blue-600">About</a>
+                <span>•</span>
+                <a href="#" className="hover:text-blue-600">Privacy</a>
+                <span>•</span>
+                <a href="#" className="hover:text-blue-600">Contact</a>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+      {/* INSERT THE SNIPPET HERE */}
+      {currentVisibleExpandedPost && (
+        <div 
+          className="fixed bottom-0 bg-white border-t border-gray-200 p-4 z-50"
+          style={{
+            position: 'fixed',
+            bottom: 0,
+            left: stickyButtonStyle.left,
+            width: stickyButtonStyle.width,
+          }}
+        >
+          <button 
+            onClick={() => toggleExpandPost(currentVisibleExpandedPost)}
+            className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            See less
+          </button>
+        </div>
+      )}
     </div>
 
-    {/* Enhanced New Post Modal */}
+    {/* LinkedIn-Style New Post Modal */}
     {showNewPostModal && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900">Create New Post</h3>
-            <button 
-              onClick={() => setShowNewPostModal(false)} 
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-              disabled={loading}
-            >
-              <X className="w-6 h-6" />
-            </button>
+        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          {/* Header with User Info */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
+                  {userProfile?.full_name?.charAt(0) || 'U'}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-gray-900">{userProfile?.full_name || 'User'}</h3>
+                  <button className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1 mt-0.5">
+                    <span>{newPost.metadata.is_public ? 'Public' : 'Private'}</span>
+                    <ChevronDown className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowAdvancedOptions(false)
+                  setShowNewPostModal(false)
+                }} 
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={loading}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            {/* Basic Information */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Post Title *
-              </label>
-              <input
-                type="text"
-                placeholder="Enter a clear and descriptive title..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={newPost.title}
-                onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-                disabled={loading}
-              />
-            </div>
+          <div className="p-4 space-y-3">
+            {/* Title Input - Minimalist */}
+            <input
+              type="text"
+              placeholder="Title (required)"
+              className="w-full px-0 py-2 text-lg font-medium border-0 focus:ring-0 focus:outline-none placeholder-gray-400"
+              value={newPost.title}
+              onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
+              disabled={loading}
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content *
-              </label>
-              <textarea
-                placeholder="Share your knowledge, ask questions, or start a discussion..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px]"
-                value={newPost.content}
-                onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
-                disabled={loading}
-              />
-            </div>
+            {/* Content Textarea - Large and Prominent */}
+            <textarea
+              placeholder="What do you want to talk about?"
+              className="w-full px-0 py-2 border-0 focus:ring-0 focus:outline-none placeholder-gray-400 resize-none min-h-[120px]"
+              value={newPost.content}
+              onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+              disabled={loading}
+            />
 
-            {/* Metadata Section */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Advanced Options Toggle */}
+            <button
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedOptions ? 'rotate-180' : ''}`} />
+              {showAdvancedOptions ? 'Hide' : 'Show'} advanced options
+            </button>
+
+            {/* Advanced Options - Collapsible */}
+            {showAdvancedOptions && (
+            <div className="border-t border-gray-200 pt-4 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Profession */}
               <div className="relative" ref={dropdownRefs.professions}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Relevant Professions *
                 </label>
                 <button
                   onClick={() => setDropdowns(prev => ({ ...prev, professions: !prev.professions }))}
-                  className="w-full px-4 py-3 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center"
+                  className="w-full px-3 py-2 text-left border border-gray-300 rounded-lg bg-white flex justify-between items-center text-sm"
                 >
                   <span className="text-sm text-gray-700">
                     {newPost.metadata.professions.length > 0 
@@ -7759,7 +8574,7 @@ return (
 
               {/* Clinical Areas */}
               <div className="relative" ref={dropdownRefs.clinical_areas}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Clinical Areas *
                 </label>
                 <button
@@ -7800,7 +8615,7 @@ return (
 
               {/* Content Type */}
               <div className="relative" ref={dropdownRefs.content_type}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Content Type *
                 </label>
                 <button
@@ -7835,7 +8650,7 @@ return (
 
               {/* Audience Level */}
               <div className="relative" ref={dropdownRefs.audience_level}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Audience Level *
                 </label>
                 <button
@@ -7870,7 +8685,7 @@ return (
 
               {/* Language */}
               <div className="relative" ref={dropdownRefs.language}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Language *
                 </label>
                 <button
@@ -7905,7 +8720,7 @@ return (
 
               {/* Related Conditions */}
               <div className="relative" ref={dropdownRefs.related_conditions}>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-xs font-medium text-gray-700 mb-1">
                   Related Conditions
                 </label>
                 <button
@@ -7947,14 +8762,14 @@ return (
 
             {/* Tags */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
                 Tags & Keywords
               </label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Add tags (press Enter to add)"
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Add tags (press Enter)"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
@@ -7963,7 +8778,7 @@ return (
                 <button
                   type="button"
                   onClick={addTag}
-                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Add
                 </button>
@@ -7988,14 +8803,14 @@ return (
 
             {/* Attachments */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
                 Attachments & Links
               </label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Add file URLs or links..."
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Add file URLs or links"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={attachmentInput}
                   onChange={(e) => setAttachmentInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addAttachment())}
@@ -8004,7 +8819,7 @@ return (
                 <button
                   type="button"
                   onClick={addAttachment}
-                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Add
                 </button>
@@ -8029,14 +8844,14 @@ return (
 
             {/* Co-authors */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-xs font-medium text-gray-700 mb-1">
                 Co-authors / Mentions
               </label>
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Mention other users by username..."
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder="Mention users by username"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   value={coAuthorInput}
                   onChange={(e) => setCoAuthorInput(e.target.value)}
                   onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addCoAuthor())}
@@ -8045,7 +8860,7 @@ return (
                 <button
                   type="button"
                   onClick={addCoAuthor}
-                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
                 >
                   Add
                 </button>
@@ -8080,36 +8895,55 @@ return (
                   })}
                   className="mr-2 rounded border-gray-300"
                 />
-                <span className="text-sm text-gray-700">
+                <span className="text-xs text-gray-700">
                   Make this post public (visible to all healthcare professionals)
                 </span>
               </label>
             </div>
+            </div>
+            )}
+          </div>
+
+          {/* Bottom Toolbar - LinkedIn Style */}
+          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <button 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
+                title="Add media"
+              >
+                <ImageIcon className="w-5 h-5 text-gray-600" />
+              </button>
+              <button 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
+                title="Add document"
+              >
+                <FileText className="w-5 h-5 text-gray-600" />
+              </button>
+              <button 
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
+                title="Create poll"
+              >
+                <BarChart3 className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
 
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-2">
               <button
                 onClick={createPost}
                 disabled={loading || !newPost.title.trim() || !newPost.content.trim() || 
                          !newPost.metadata.professions.length || !newPost.metadata.clinical_areas.length ||
                          !newPost.metadata.content_type || !newPost.metadata.audience_level}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
               >
                 {loading ? (
                   <>
                     <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    Creating Post...
+                    Posting...
                   </>
                 ) : (
-                  'Create Post'
+                  'Post'
                 )}
-              </button>
-              <button
-                onClick={() => setShowNewPostModal(false)}
-                disabled={loading}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
-              >
-                Cancel
               </button>
             </div>
           </div>
