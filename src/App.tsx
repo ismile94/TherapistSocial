@@ -8,7 +8,7 @@ import {
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
     UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
-    Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw 
+    Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw, Printer 
 } from 'lucide-react'
 
 
@@ -9299,18 +9299,25 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
     }
   }
 
-  const generatePDF = async () => {
+  const printCV = async () => {
     setLoading(true)
     try {
       const cvContent = generateCVContent()
       const printWindow = window.open('', '_blank')
       
       if (printWindow) {
+        const fullName = (userProfile.full_name || 'Professional').trim()
+        const now = new Date()
+        const dd = String(now.getDate()).padStart(2, '0')
+        const mm = String(now.getMonth() + 1).padStart(2, '0')
+        const yyyy = now.getFullYear()
+        const dateStr = `${dd}.${mm}.${yyyy}`
+        const fileBase = `${fullName} CV - ${dateStr}`
         printWindow.document.write(`
           <!DOCTYPE html>
           <html>
             <head>
-              <title>CV_${userProfile.full_name?.replace(/\s+/g, '_') || 'Professional'}</title>
+              <title>${fileBase}</title>
               <meta charset="UTF-8">
               <style>
                 ${getCVStyles(cvStyle)}
@@ -9328,7 +9335,7 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
                     setTimeout(() => window.close(), 500);
                   }, 250);
                 }
-              </script>
+              <\/script>
             </body>
           </html>
         `)
@@ -9338,6 +9345,51 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
     } catch (error) {
       console.error('Error generating CV:', error)
       alert('Error generating CV')
+    }
+    setLoading(false)
+  }
+
+  const downloadPDF = async () => {
+    setLoading(true)
+    try {
+      const ensureHtml2Pdf = () => new Promise<void>((resolve, reject) => {
+        if ((window as any).html2pdf) return resolve()
+        const script = document.createElement('script')
+        script.src = 'https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.1/dist/html2pdf.bundle.min.js'
+        script.onload = () => resolve()
+        script.onerror = () => reject(new Error('Failed to load html2pdf.js'))
+        document.body.appendChild(script)
+      })
+
+      await ensureHtml2Pdf()
+
+      // Build a detached DOM with styles so html2pdf captures correct look
+      const wrapper = document.createElement('div')
+      wrapper.innerHTML = `
+        <style>${getCVStyles(cvStyle)}</style>
+        <div class="cv-container">${generateCVContent()}</div>
+      `
+
+      const now = new Date()
+      const dd = String(now.getDate()).padStart(2, '0')
+      const mm = String(now.getMonth() + 1).padStart(2, '0')
+      const yyyy = now.getFullYear()
+      const dateStr = `${dd}.${mm}.${yyyy}`
+      const fullName = (userProfile.full_name || 'Professional').trim()
+      const fileBase = `${fullName} CV - ${dateStr}`
+
+      const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${fileBase}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      }
+
+      await (window as any).html2pdf().set(opt).from(wrapper).save()
+    } catch (err) {
+      console.error('PDF export error:', err)
+      alert('Failed to export PDF')
     }
     setLoading(false)
   }
@@ -10043,14 +10095,31 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
               Preview CV
             </button>
             <button
-              onClick={generatePDF}
+              onClick={printCV}
+              disabled={loading}
+              className="flex-1 py-3 bg-gray-800 text-white rounded-lg font-medium hover:bg-gray-900 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  Preparing...
+                </>
+              ) : (
+                <>
+                  <Printer className="w-5 h-5" />
+                  Print
+                </>
+              )}
+            </button>
+            <button
+              onClick={downloadPDF}
               disabled={loading}
               className="flex-1 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  Generating...
+                  Exporting...
                 </>
               ) : (
                 <>
