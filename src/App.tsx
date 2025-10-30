@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
+import { IoHome } from "react-icons/io5";
 import { useSession } from '@supabase/auth-helpers-react'
 import { 
     Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
@@ -1789,20 +1790,68 @@ return (
         </div>
       </div>
       
-      <nav className="flex space-x-6 text-gray-600">
-        <button className="hover:text-blue-600 transition-colors">
-          <MapPin className="w-5 h-5" />
-        </button>
-        <button className="hover:text-blue-600 transition-colors">
-          <Users className="w-5 h-5" />
-        </button>
-        <button className="hover:text-blue-600 transition-colors">
-          <MessageCircle className="w-5 h-5" />
-        </button>
-        <button className="hover:text-blue-600 transition-colors">
-          <Bell className="w-5 h-5" />
-        </button>
-      </nav>
+        <nav className="flex space-x-6 text-gray-600">
+          {/* Home Button */}
+          <button
+            onClick={() => {
+              setActiveView('community')
+              setSelectedProfileId(null)
+            }}
+            className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
+              activeView === 'community' && !selectedProfileId
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <IoHome className="w-5 h-5" />
+          </button>
+        
+          {/* Network Button (Visible only if logged in) */}
+          {currentUser && (
+            <button
+              onClick={() => setIsConnectionsOpen(true)}
+              className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+              aria-label="Network"
+            >
+              <UserPlus className="w-5 h-5" />
+            </button>
+          )}
+        
+          {/* Map Button */}
+          <button
+            onClick={() => {
+              setActiveView('map')
+              setSelectedProfileId(null)
+            }}
+            className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
+              activeView === 'map' && !selectedProfileId
+                ? 'bg-blue-100 text-blue-700'
+                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+            }`}
+          >
+            <MapPin className="w-5 h-5" />
+          </button>
+        
+          {/* Messages */}
+          <button className="hover:text-blue-600 transition-colors">
+            <MessageCircle className="w-5 h-5" />
+          </button>
+        
+          {/* Notifications */}
+          <button className="hover:text-blue-600 transition-colors">
+            <Bell className="w-5 h-5" />
+          </button>
+        
+          {/* Account Dropdown */}
+          <AccountDropdown
+            currentUser={currentUser}
+            onProfileClick={handleProfileClick}
+            onSettingsClick={handleSettingsClick}
+            onSignOut={handleSignOut}
+            onOpenConnections={() => setIsConnectionsOpen(true)}
+          />
+        </nav>
+
     </header>
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center space-x-2">
