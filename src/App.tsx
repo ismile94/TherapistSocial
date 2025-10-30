@@ -1776,7 +1776,7 @@ return (
     <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
       <div className="flex items-center space-x-2">
         {/* <img src="/logo.png" alt="UK Therapist Network" className="h-8 w-8" /> */} 
-        <h1 className="text-xl font-semibold text-gray-800">UK Therapist Network</h1>
+        <h1 className="text-2xl font-bold text-gray-900">UK Therapist Network</h1>
       </div>
 
       <div className="flex-1 mx-6">
