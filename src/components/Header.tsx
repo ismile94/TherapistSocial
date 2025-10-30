@@ -39,7 +39,7 @@ function Header({ activeView, onViewChange, onAccountClick }: HeaderProps) {
               }`}
             >
               <Users className="w-4 h-4 mr-2" />
-              Community
+              Feed
             </button>
           </nav>
           

@@ -1093,12 +1093,18 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
 }
 
 function App() {
+  const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
+  const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+  const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({});
+  const [currentVisibleExpandedPost, setCurrentVisibleExpandedPost] = useState<string | null>(null);
+  const [stickyButtonStyle, setStickyButtonStyle] = useState<{ left: string; width: string }>({ left: '0px', width: '0px' });
   const [activeView, setActiveView] = useState<'map' | 'community'>('community')
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedMobileConversation, setSelectedMobileConversation] = useState<Conversation | null>(null);
-  const [userProfile, setUserProfile] = useState<any>(null) // SADECE BİR KEZ
+  const [userProfile, setUserProfile] = useState<any>(null)
   const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -1121,32 +1127,36 @@ function App() {
   const [connectionRequests, setConnectionRequests] = useState<Connection[]>([])
   const [isConnectionsOpen, setIsConnectionsOpen] = useState(false)
   
-  // New state for settings
+  // Settings state
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   
-  // New state for CV Maker
+  // CV Maker state
   const [isCVMakerOpen, setIsCVMakerOpen] = useState(false)
   
-  // Cache - SADECE BİR KEZ
+  // Notifications state
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [notifications, setNotifications] = useState<any[]>([])
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0)
+  
+  // Messages dropdown state
+  const [showMessagesDropdown, setShowMessagesDropdown] = useState(false)
+  const messagesDropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Cache
   const profileCacheRef = useRef<{ [key: string]: { data: any, timestamp: number } }>({})
   const loadingProfileRef = useRef<{ [key: string]: boolean }>({})
-
-  // Ana App bileşeninize bu fonksiyonları ekleyin:
 
   const updateProfileInState = (updatedProfile: Profile) => {
     console.log('🔄 Updating profile in state:', updatedProfile.id);
     
-    // Therapists listesini güncelle
     setTherapists(prev => prev.map(t => 
       t.id === updatedProfile.id ? { ...t, ...updatedProfile } : t
     ));
     
-    // Eğer güncel kullanıcının profili ise userProfile'ı güncelle
     if (currentUser?.id === updatedProfile.id) {
       setUserProfile(updatedProfile);
     }
     
-    // Profile cache'i güncelle
     profileCacheRef.current[updatedProfile.id] = {
       data: updatedProfile,
       timestamp: Date.now()
@@ -1156,17 +1166,14 @@ function App() {
   const updateProfileInAllComponents = (profileId: string, updates: Partial<Profile>) => {
     console.log('🔄 Updating profile in all components:', profileId);
     
-    // Therapists listesini güncelle
     setTherapists(prev => prev.map(t => 
       t.id === profileId ? { ...t, ...updates } : t
     ));
     
-    // Eğer güncel kullanıcının profili ise userProfile'ı güncelle
     if (currentUser?.id === profileId && userProfile) {
       setUserProfile({ ...userProfile, ...updates });
     }
     
-    // Profile cache'i güncelle
     if (profileCacheRef.current[profileId]) {
       profileCacheRef.current[profileId] = {
         data: { ...profileCacheRef.current[profileId].data, ...updates },
@@ -1176,19 +1183,16 @@ function App() {
   };
 
   useEffect(() => {
-    // Global fonksiyonları tanımla
     const globalWindow = window as any;
     globalWindow.updateProfileInState = updateProfileInState;
     globalWindow.updateProfileInAllComponents = updateProfileInAllComponents;
     
     return () => {
-      // Cleanup
       globalWindow.updateProfileInState = undefined;
       globalWindow.updateProfileInAllComponents = undefined;
     };
   }, [currentUser?.id, userProfile, therapists]);
 
-  // Browser notification permission and page title setup
   useEffect(() => {
     setOriginalTitle(document.title)
     
@@ -1211,7 +1215,6 @@ function App() {
     }
   }, [])
 
-  // Profile Detail sayfasını açmak için event listener
   useEffect(() => {
     const handleOpenProfileDetail = (event: CustomEvent) => {
       setSelectedProfileId(event.detail.profileId)
@@ -1221,7 +1224,6 @@ function App() {
     return () => window.removeEventListener('openProfileDetail', handleOpenProfileDetail as EventListener)
   }, [])
 
-  // CV Maker açmak için event listener
   useEffect(() => {
     const handleOpenCVMaker = () => {
       setIsCVMakerOpen(true)
@@ -1231,7 +1233,6 @@ function App() {
     return () => window.removeEventListener('openCVMaker', handleOpenCVMaker)
   }, [])
 
-  // Update page title when unread count changes
   useEffect(() => {
     updatePageTitle(unreadMessagesCount > 0)
   }, [unreadMessagesCount, originalTitle])
@@ -1305,7 +1306,6 @@ function App() {
     }
   }, [])
 
-  // Global message subscription for real-time updates
   useEffect(() => {
     if (!currentUser?.id) return
 
@@ -1322,17 +1322,11 @@ function App() {
         async (payload) => {
           const newMsg = payload.new as Message
           
-          // Only show notifications for messages from others
           if (newMsg.sender_id !== currentUser.id) {
-            // Update unread count
             setUnreadMessagesCount(prev => prev + 1)
-            
-            // Play sound
             playNotificationSound()
             
-            // Show browser notification if permitted
             if ('Notification' in window && Notification.permission === 'granted') {
-              // Get conversation info for notification
               const { data: conversation } = await supabase
                 .from('conversations')
                 .select(`
@@ -1357,10 +1351,8 @@ function App() {
                 notification.onclick = () => {
                   window.focus()
                   setIsMessagesOverlayOpen(true)
-                  // Find and open the conversation
                   const existingConv = chatBoxes.find(box => box.id === newMsg.conversation_id)
                   if (!existingConv) {
-                    // Create a new chat box for this conversation
                     openChatBox({
                       ...conversation,
                       other_user: otherUser
@@ -1381,12 +1373,60 @@ function App() {
     }
   }, [currentUser?.id, chatBoxes])
 
-  // Connection functions
+  // Close messages dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (messagesDropdownRef.current && !messagesDropdownRef.current.contains(event.target as Node)) {
+        setShowMessagesDropdown(false)
+      }
+    }
+
+    if (showMessagesDropdown) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showMessagesDropdown])
+
+  // Real-time notifications subscription
+  useEffect(() => {
+    if (!currentUser?.id) return
+
+    const channel = supabase
+      .channel('notifications-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          const newNotification = payload.new
+          setNotifications(prev => [newNotification, ...prev])
+          setUnreadNotificationsCount(prev => prev + 1)
+          
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(newNotification.title, {
+              body: newNotification.message,
+              icon: '/favicon.ico'
+            })
+          }
+          
+          playNotificationSound?.()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUser?.id])
+
   const loadConnections = async () => {
     if (!currentUser?.id) return
     
     try {
-      // Kendi connection'larımı yükle
       const { data: connectionsData, error } = await supabase
         .from('connections')
         .select('*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)')
@@ -1397,7 +1437,6 @@ function App() {
         setConnections(connectionsData)
       }
       
-      // Bekleyen connection isteklerini yükle
       const { data: requestsData } = await supabase
         .from('connections')
         .select('*, sender:profiles!sender_id(*)')
@@ -1411,140 +1450,213 @@ function App() {
       console.error('Error loading connections:', err)
     }
   }
+
+  const loadNotifications = async () => {
+    if (!currentUser?.id) return
+    
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      
+      if (error) {
+        console.error('Error loading notifications:', error)
+        return
+      }
+      
+      setNotifications(data || [])
+      const unreadCount = (data || []).filter(n => !n.read).length
+      setUnreadNotificationsCount(unreadCount)
+    } catch (err) {
+      console.error('Error loading notifications:', err)
+    }
+  }
   
   const sendConnectionRequest = async (receiverId: string) => {
     if (!currentUser?.id) {
-      setIsAuthModalOpen(true)
-    return
+      setIsAuthModalOpen(true);
+      return;
     }
-  
-  try {
-    const { data, error } = await supabase
-      .from('connections')
-      .insert({
-        sender_id: currentUser.id,
-        receiver_id: receiverId,
-        status: 'pending'
-      })
-      .select()
-      .single()
-    
-    if (error) {
-      console.error('Connection request error:', error)
-      throw error
-    }
-    
-    // Başarılı olduğunda sender bilgisini al
-    const { data: senderProfile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', currentUser.id)
-      .single()
-    
-    if (senderProfile) {
-      const connectionWithSender = {
-        ...data,
-        sender: senderProfile
+
+    try {
+      // Önce aynı connection'ın olup olmadığını kontrol et
+      const { data: existingConnection } = await supabase
+        .from('connections')
+        .select('id, status')
+        .or(`and(sender_id.eq.${currentUser.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUser.id})`)
+        .maybeSingle();
+
+      if (existingConnection) {
+        if (existingConnection.status === 'pending') {
+          alert('Connection request already sent');
+          return;
+        } else if (existingConnection.status === 'accepted') {
+          alert('You are already connected with this user');
+          return;
+        }
       }
-      setConnectionRequests(prev => [...prev, connectionWithSender])
-    } else {
-      setConnectionRequests(prev => [...prev, data])
+
+      // Yeni connection request oluştur
+      const { data, error } = await supabase
+        .from('connections')
+        .insert({
+          sender_id: currentUser.id,
+          receiver_id: receiverId,
+          status: 'pending'
+        })
+        .select(`
+          *,
+          sender:profiles!sender_id(*),
+          receiver:profiles!receiver_id(*)
+        `)
+        .single();
+
+      if (error) {
+        console.error('Connection request error:', error);
+        throw error;
+      }
+
+      // Notification oluştur (title olmadan)
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: receiverId,
+          message: `${currentUser.user_metadata?.full_name || 'Someone'} sent you a connection request`,
+          type: 'connection_request',
+          related_entity_type: 'connection',
+          related_entity_id: data.id
+        });
+
+      // State'i güncelle
+      setConnectionRequests(prev => [...prev, data]);
+
+    } catch (err: any) {
+      console.error('Error sending connection request:', err);
+      
+      if (err.code === '23505') {
+        alert('Connection request already sent');
+      } else if (err.code === '42501') {
+        alert('Permission denied. Please check your database permissions.');
+      } else {
+        alert('Failed to send connection request. Please try again.');
+      }
     }
-    
-  } catch (err: any) {
-    console.error('Error sending connection request:', err)
-    
-    // Daha spesifik hata mesajı
-    if (err.code === '23505') {
-      alert('Connection request already sent')
-    } else if (err.code === '42501') {
-      alert('Permission denied. Please check if the connections table exists and you have proper permissions.')
-    } else {
-      alert('Failed to send connection request. Please try again.')
+  };
+
+  const acceptConnectionRequest = async (connectionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('connections')
+        .update({ status: 'accepted' })
+        .eq('id', connectionId)
+      
+      if (error) throw error
+      
+      const acceptedRequest = connectionRequests.find(req => req.id === connectionId)
+      if (acceptedRequest) {
+        setConnections(prev => [...prev, { ...acceptedRequest, status: 'accepted' }])
+        setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
+      }
+      
+    } catch (err: any) {
+      console.error('Error accepting connection request:', err)
+      alert('Failed to accept connection request')
     }
   }
-}
 
-const acceptConnectionRequest = async (connectionId: string) => {
-  try {
-    const { error } = await supabase
-      .from('connections')
-      .update({ status: 'accepted' })
-      .eq('id', connectionId)
-    
-    if (error) throw error
-    
-    // State'leri güncelle
-    const acceptedRequest = connectionRequests.find(req => req.id === connectionId)
-    if (acceptedRequest) {
-      setConnections(prev => [...prev, { ...acceptedRequest, status: 'accepted' }])
+  const rejectConnectionRequest = async (connectionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('connections')
+        .delete()
+        .eq('id', connectionId)
+      
+      if (error) throw error
+      
       setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
+      
+    } catch (err: any) {
+      console.error('Error rejecting connection request:', err)
+      alert('Failed to reject connection request')
     }
-    
-  } catch (err: any) {
-    console.error('Error accepting connection request:', err)
-    alert('Failed to accept connection request')
   }
-}
 
-const rejectConnectionRequest = async (connectionId: string) => {
-  try {
-    const { error } = await supabase
-      .from('connections')
-      .delete()
-      .eq('id', connectionId)
-    
-    if (error) throw error
-    
-    // State'ten kaldır
-    setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
-    
-  } catch (err: any) {
-    console.error('Error rejecting connection request:', err)
-    alert('Failed to reject connection request')
+  const removeConnection = async (connectionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('connections')
+        .delete()
+        .eq('id', connectionId)
+      
+      if (error) throw error
+      
+      setConnections(prev => prev.filter(conn => conn.id !== connectionId))
+      
+    } catch (err: any) {
+      console.error('Error removing connection:', err)
+      alert('Failed to remove connection')
+    }
   }
-}
 
-const removeConnection = async (connectionId: string) => {
-  try {
-    const { error } = await supabase
-      .from('connections')
-      .delete()
-      .eq('id', connectionId)
-    
-    if (error) throw error
-    
-    // State'ten kaldır
-    setConnections(prev => prev.filter(conn => conn.id !== connectionId))
-    
-  } catch (err: any) {
-    console.error('Error removing connection:', err)
-    alert('Failed to remove connection')
+  const cancelConnectionRequest = async (connectionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('connections')
+        .delete()
+        .eq('id', connectionId)
+      
+      if (error) throw error
+      
+      setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
+      
+    } catch (err: any) {
+      console.error('Error canceling connection request:', err)
+      alert('Failed to cancel connection request')
+    }
   }
-}
 
-const cancelConnectionRequest = async (connectionId: string) => {
-  try {
-    const { error } = await supabase
-      .from('connections')
-      .delete()
-      .eq('id', connectionId)
-    
-    if (error) throw error
-    
-    // State'ten kaldır
-    setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
-    
-  } catch (err: any) {
-    console.error('Error canceling connection request:', err)
-    alert('Failed to cancel connection request')
+  const markNotificationAsRead = async (notificationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('id', notificationId)
+      
+      if (error) throw error
+      
+      setNotifications(prev => 
+        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+      )
+      setUnreadNotificationsCount(prev => Math.max(0, prev - 1))
+    } catch (err) {
+      console.error('Error marking notification as read:', err)
+    }
   }
-}
 
-  // Connection'ları yükle
+  const markAllNotificationsAsRead = async () => {
+    try {
+      const { error } = await supabase
+        .from('notifications')
+        .update({ read: true })
+        .eq('user_id', currentUser?.id)
+        .eq('read', false)
+      
+      if (error) throw error
+      
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      setUnreadNotificationsCount(0)
+    } catch (err) {
+      console.error('Error marking all notifications as read:', err)
+    }
+  }
+
   useEffect(() => {
     if (currentUser?.id) {
       loadConnections()
+      loadNotifications()
     }
   }, [currentUser?.id])
 
@@ -1734,7 +1846,6 @@ const cancelConnectionRequest = async (connectionId: string) => {
     return matchesSearch && matchesProfession && matchesLanguages
   })
 
-  // Account dropdown handler'ları
   const handleProfileClick = () => {
     setIsAuthModalOpen(true)
   }
@@ -1771,25 +1882,24 @@ const cancelConnectionRequest = async (connectionId: string) => {
     )
   }
 
-return (
-  <div className="h-screen flex flex-col">
-    {/* Header */}
-    <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
-      <div className="flex items-center space-x-2">
-        {/* <img src="/logo.png" alt="UK Therapist Network" className="h-8 w-8" /> */} 
-        <h1 className="text-2xl font-bold text-gray-900">UK Therapist Network</h1>
-      </div>
-
-      <div className="flex-1 mx-6">
-        <div className="max-w-2xl mx-auto">
-          <input
-            aria-label="Search"
-            className="w-full rounded-full border px-4 py-2 shadow-sm bg-white focus:outline-none"
-            placeholder="Search therapists or posts..."
-          />
+  return (
+    <div className="h-screen flex flex-col">
+      {/* Header */}
+      <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
+        <div className="flex items-center space-x-2">
+          <h1 className="text-2xl font-bold text-gray-900">UK Therapist Network</h1>
         </div>
-      </div>
-      
+
+        <div className="flex-1 mx-6">
+          <div className="max-w-2xl mx-auto">
+            <input
+              aria-label="Search"
+              className="w-full rounded-full border px-4 py-2 shadow-sm bg-white focus:outline-none"
+              placeholder="Search therapists or posts..."
+            />
+          </div>
+        </div>
+        
         <nav className="flex space-x-6 text-gray-600">
           {/* Home Button */}
           <button
@@ -1833,14 +1943,144 @@ return (
           </button>
         
           {/* Messages */}
-          <button className="hover:text-blue-600 transition-colors">
-            <MessageCircle className="w-5 h-5" />
-          </button>
+          <div className="relative" ref={messagesDropdownRef}>
+            <button 
+              onClick={() => setShowMessagesDropdown(!showMessagesDropdown)}
+              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100"
+            >
+              <MessageCircle className="w-5 h-5" />
+            </button>
+            
+            {/* Messages Dropdown */}
+            {showMessagesDropdown && (
+              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[70vh] overflow-hidden flex flex-col animate-slideDown">
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <MessageCircle className="w-5 h-5 text-blue-600" />
+                    Messages
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowMessagesDropdown(false)
+                      setIsMessagesOverlayOpen(true)
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    View all
+                  </button>
+                </div>
+                
+                <div className="overflow-y-auto flex-1">
+                  <ConversationsList
+                    currentUserId={currentUser?.id || ''}
+                    onSelectConversation={(conv: Conversation) => {
+                      openChatBox(conv)
+                      setShowMessagesDropdown(false)
+                    }}
+                    selectedConversationId={undefined}
+		    onUnreadCountChange={setUnreadMessagesCount}
+                    conversationMetadata={conversationMetadata}
+                    onUpdateMetadata={updateConversationMetadata}
+                    compact={true}
+                    playNotificationSound={playNotificationSound}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
         
           {/* Notifications */}
-          <button className="hover:text-blue-600 transition-colors">
-            <Bell className="w-5 h-5" />
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100"
+            >
+              <Bell className="w-5 h-5" />
+            </button>
+            
+            {/* Notifications Dropdown */}
+            {showNotifications && (
+              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[80vh] overflow-hidden flex flex-col animate-slideDown">
+                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                    <Bell className="w-5 h-5 text-purple-600" />
+                    Notifications
+                  </h3>
+                  {unreadNotificationsCount > 0 && (
+                    <button
+                      onClick={markAllNotificationsAsRead}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
+                </div>
+                
+                <div className="overflow-y-auto flex-1">
+                  {notifications.length > 0 ? (
+                    notifications.map((notification) => (
+                      <div
+                        key={notification.id}
+                        onClick={() => {
+                          if (!notification.read) {
+                            markNotificationAsRead(notification.id)
+                          }
+                          if (notification.type === 'connection_request') {
+                            setIsConnectionsOpen(true)
+                          }
+                          setShowNotifications(false)
+                        }}
+                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
+                          !notification.read ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
+                            !notification.read ? 'bg-blue-600' : 'bg-transparent'
+                          }`} />
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm ${!notification.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                              {notification.title}
+                            </p>
+                            {notification.message && (
+                              <p className="text-xs text-gray-600 mt-1">
+                                {notification.message}
+                              </p>
+                            )}
+                            <p className="text-xs text-gray-500 mt-1">
+                              {new Date(notification.created_at).toLocaleDateString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center">
+                      <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                      <p className="text-gray-500">No notifications yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Badges for unread counts */}
+          {unreadMessagesCount > 0 && (
+            <span className="absolute top-2 right-48 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center pointer-events-none">
+              {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+            </span>
+          )}
+          {unreadNotificationsCount > 0 && (
+            <span className="absolute top-2 right-32 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center pointer-events-none">
+              {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+            </span>
+          )}
         
           {/* Account Dropdown */}
           <AccountDropdown
@@ -1851,364 +2091,314 @@ return (
             onOpenConnections={() => setIsConnectionsOpen(true)}
           />
         </nav>
-
-    </header>
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center space-x-2">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <Users className="w-5 h-5 text-white" />
-          </div>
-          <h1 className="text-xl font-bold text-gray-900">UK Therapist Network</h1>
-        </div>
+      </header>
         
-        <div className="flex items-center space-x-4 w-full md:w-auto">
-          <nav className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => {
-                setActiveView('map')
-                setSelectedProfileId(null)
-              }}
-              className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
-                activeView === 'map' && !selectedProfileId
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              <MapPin className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {
-                setActiveView('community')
-                setSelectedProfileId(null)
-              }}
-              className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
-                activeView === 'community' && !selectedProfileId
-                  ? 'bg-blue-100 text-blue-700'
-                  : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-              }`}
-            >
-              <Users className="w-5 h-5" />
-            </button>
-            {/* Network inline button */}
-            {currentUser && (
-              <button
-                onClick={() => setIsConnectionsOpen(true)}
-                className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
-                aria-label="Network"
-              >
-                <UserPlus className="w-5 h-5" />
-              </button>
-            )}
-            {/* Account inline icon button */}
-            <AccountDropdown 
-              currentUser={currentUser}
-              onProfileClick={handleProfileClick}
-              onSettingsClick={handleSettingsClick}
-              onSignOut={handleSignOut}
-              onOpenConnections={() => setIsConnectionsOpen(true)}
+      
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
+        {selectedProfileId ? (
+          <ProfileDetailPage 
+            profileId={selectedProfileId} 
+            onClose={() => setSelectedProfileId(null)}
+            currentUserId={currentUser?.id}
+            onStartConversation={openChatBox}
+            connections={connections}
+            connectionRequests={connectionRequests}
+            onSendConnectionRequest={sendConnectionRequest}
+            onAcceptConnectionRequest={acceptConnectionRequest}
+            onRejectConnectionRequest={rejectConnectionRequest}
+            onRemoveConnection={removeConnection}
+            updateProfileInState={updateProfileInState}
+          />
+        ) : activeView === 'map' ? (
+          <>
+            <SidebarComponent
+              searchTerm={searchTerm}
+              setSearchTerm={setSearchTerm}
+              filters={filters}
+              setFilters={setFilters}
+              onProfileClick={(id: string) => setSelectedProfileId(id)}
+              therapists={filteredTherapists}
             />
-          </nav>
+            
+            <div className="flex-1 relative min-h-[75vh] md:min-h-0">
+              <MapComponent 
+                therapists={filteredTherapists}
+                geocodeLocation={geocodeLocation}
+                onProfileClick={(id: string) => setSelectedProfileId(id)}
+              />
+              
+            </div>
+          </>
+        ) : activeView === 'community' ? (
+          <CommunityComponent />
+        ) : null}
+      </div>
+
+      {isAuthModalOpen && (
+        <AuthModalComponent 
+          onClose={() => setIsAuthModalOpen(false)}
+          onSuccess={() => {
+            loadProfiles();
+            if (currentUser?.id) {
+              loadUserProfile(currentUser.id);
+            }
+          }}
+          currentUser={currentUser}
+          userProfile={userProfile}
+          onOpenProfileDetail={(profileId: string) => setSelectedProfileId(profileId)}
+          updateProfileInState={updateProfileInState}
+        />
+      )}
+
+      {/* Chat Boxes */}
+      <div className="hidden md:block">
+        {chatBoxes.map((chatBox, index) => (
+          <ChatBoxComponent
+            key={chatBox.id}
+            chatBox={chatBox}
+            currentUserId={currentUser?.id}
+            userProfile={userProfile}
+            onClose={() => closeChatBox(chatBox.id)}
+            onMinimize={() => minimizeChatBox(chatBox.id)}
+            position={index}
+            baseRightOffset={360 + 16}
+            playNotificationSound={playNotificationSound}
+          />
+        ))}
+      </div>
+
+      {/* Mobile Messages Overlay */}
+      {isMessagesOverlayOpen && (
+        <div className="fixed inset-0 z-50 md:hidden" style={{ bottom: '60px' }}>
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => {
+              setIsMessagesOverlayOpen(false)
+              setSelectedMobileConversation(null)
+            }}
+          />
+          
+          <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b border-gray-200 flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-gray-900">Messages</h3>
+                <button 
+                  onClick={() => {
+                    setIsMessagesOverlayOpen(false)
+                    setSelectedMobileConversation(null)
+                  }}
+                  className="p-2 text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto">
+              <ConversationsList
+                currentUserId={currentUser?.id || ''}
+                onSelectConversation={(conv: Conversation) => {
+                  setSelectedMobileConversation(conv)
+                  setMobileChatOpen(true)
+                  setIsMessagesOverlayOpen(false)
+                }}
+                selectedConversationId={undefined}
+                onUnreadCountChange={setUnreadMessagesCount}
+                conversationMetadata={conversationMetadata}
+                onUpdateMetadata={updateConversationMetadata}
+                compact={false}
+                playNotificationSound={playNotificationSound}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Chat Screen */}
+      {mobileChatOpen && selectedMobileConversation && (
+        <MobileChatScreen
+          conversation={selectedMobileConversation}
+          currentUserId={currentUser?.id}
+          userProfile={userProfile}
+          onBack={() => {
+            setMobileChatOpen(false)
+          }}
+          onClose={() => {
+            setMobileChatOpen(false)
+            setSelectedMobileConversation(null)
+          }}
+        />
+      )}
+
+      {/* Desktop Messages Overlay */}
+      <div className="hidden md:block fixed bottom-0 z-[1000] w-full md:w-auto right-0 md:right-4">
+        <div className="relative">
+          {unreadMessagesCount > 0 && (
+            <div className="absolute -top-1 -right-1">
+              <span className="messages-notification flex h-4 w-4">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center">
+                  <span className="text-white text-[10px] font-bold">
+                    {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                  </span>
+                </span>
+              </span>
+            </div>
+          )}
+          
+          <div
+            className="bg-white border border-gray-300 rounded-t-lg shadow-2xl overflow-hidden md:rounded-lg"
+            style={{ width: '100%', maxWidth: '360px' }}
+          >
+            <div
+              className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
+              onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
+            >
+              <div className="flex items-center space-x-2">
+                <MessageSquare className="w-4 h-4 opacity-90" />
+                <span className="font-medium text-sm tracking-wide">Messaging</span>
+              </div>
+              {unreadMessagesCount > 0 && (
+                <span className="bg-white text-blue-700 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
+                </span>
+              )}
+            </div>
+
+            {isMessagesOverlayOpen && (
+              <div
+                className="fixed inset-0 bg-white z-50 flex flex-col md:fixed md:inset-auto md:bottom-0 md:right-4 md:w-96 md:h-96 md:rounded-lg"
+                style={{ maxHeight: '100vh' }}
+              >
+                <div className="flex-1 overflow-y-auto">
+                  <ConversationsList
+                    currentUserId={currentUser?.id || ''}
+                    onSelectConversation={(conv: Conversation) => openChatBox(conv)}
+                    selectedConversationId={undefined}
+                    onUnreadCountChange={setUnreadMessagesCount}
+                    conversationMetadata={conversationMetadata}
+                    onUpdateMetadata={updateConversationMetadata}
+                    compact
+                    playNotificationSound={playNotificationSound}
+                  />
+                </div>
+
+                <button
+                  onClick={() => setIsMessagesOverlayOpen(false)}
+                  className="absolute top-2 right-2 text-gray-500 z-10"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    
-    <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-      {selectedProfileId ? (
-        <ProfileDetailPage 
-          profileId={selectedProfileId} 
-          onClose={() => setSelectedProfileId(null)}
-          currentUserId={currentUser?.id}
-          onStartConversation={openChatBox}
+
+      {/* Connections Manager Modal */}
+      {isConnectionsOpen && currentUser && (
+        <ConnectionsManager 
+          currentUserId={currentUser.id}
+          onClose={() => setIsConnectionsOpen(false)}
           connections={connections}
           connectionRequests={connectionRequests}
-          onSendConnectionRequest={sendConnectionRequest}
           onAcceptConnectionRequest={acceptConnectionRequest}
           onRejectConnectionRequest={rejectConnectionRequest}
           onRemoveConnection={removeConnection}
-          updateProfileInState={updateProfileInState} // Bu satırı ekleyin
+          onSendConnectionRequest={sendConnectionRequest}
+          onCancelConnectionRequest={cancelConnectionRequest}
         />
-      ) : activeView === 'map' ? (
-        <>
-          <SidebarComponent
-            searchTerm={searchTerm}
-            setSearchTerm={setSearchTerm}
-            filters={filters}
-            setFilters={setFilters}
-            onProfileClick={(id: string) => setSelectedProfileId(id)}
-            therapists={filteredTherapists}
-          />
-          
-          <div className="flex-1 relative min-h-[75vh] md:min-h-0">
-            <MapComponent 
-              therapists={filteredTherapists}
-              geocodeLocation={geocodeLocation}
-              onProfileClick={(id: string) => setSelectedProfileId(id)}
-            />
-            
-          </div>
-        </>
-      ) : activeView === 'community' ? (
-        <CommunityComponent />
-      ) : null}
-    </div>
+      )}
 
-    {isAuthModalOpen && (
-      <AuthModalComponent 
-        onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={() => {
-          loadProfiles();
-          // Mevcut kullanıcının profilini yeniden yükle
-          if (currentUser?.id) {
-            loadUserProfile(currentUser.id);
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <SettingsComponent onClose={() => setIsSettingsOpen(false)} />
+      )}
+
+      {/* CV Maker Modal */}
+      {isCVMakerOpen && (
+        <CVMaker 
+          userProfile={userProfile} 
+          onClose={() => setIsCVMakerOpen(false)} 
+        />
+      )}
+
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden">
+        <MobileBottomNav
+          activeView={activeView}
+          setActiveView={setActiveView}
+          setSelectedProfileId={setSelectedProfileId}
+          setIsConnectionsOpen={setIsConnectionsOpen}
+          setIsAuthModalOpen={setIsAuthModalOpen}
+          currentUser={currentUser}
+          unreadMessagesCount={unreadMessagesCount}
+          setIsMessagesOverlayOpen={setIsMessagesOverlayOpen}
+        />
+      </div>
+
+      {/* Notification Styles */}
+      <style>{`
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
           }
-        }}
-        currentUser={currentUser}
-        userProfile={userProfile}
-        onOpenProfileDetail={(profileId: string) => setSelectedProfileId(profileId)}
-        updateProfileInState={updateProfileInState} // Bu satırı ekleyin
-      />
-    )}
-
-    {/* Chat Boxes */}
-    <div className="hidden md:block">
-    {chatBoxes.map((chatBox, index) => (
-      <ChatBoxComponent
-        key={chatBox.id}
-        chatBox={chatBox}
-        currentUserId={currentUser?.id}
-        userProfile={userProfile}
-        onClose={() => closeChatBox(chatBox.id)}
-        onMinimize={() => minimizeChatBox(chatBox.id)}
-        position={index}
-        baseRightOffset={360 + 16}
-        playNotificationSound={playNotificationSound}
-      />
-    ))}
-    </div>
-
-    {/* Mobile Messages Overlay - Sadece mobilde */}
-    {isMessagesOverlayOpen && (
-      <div className="fixed inset-0 z-50 md:hidden" style={{ bottom: '60px' }}>
-        {/* Arkaplan overlay */}
-        <div 
-          className="absolute inset-0 bg-black bg-opacity-50"
-          onClick={() => {
-            setIsMessagesOverlayOpen(false)
-            setSelectedMobileConversation(null) // Overlay kapatılınca konuşmayı da temizle
-          }}
-        />
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
         
-        {/* Mesajlar paneli - MobileBottomNav'ın üstünde */}
-        <div className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl max-h-[80vh] overflow-hidden flex flex-col">
-          {/* Header */}
-          <div className="p-4 border-b border-gray-200 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Messages</h3>
-              <button 
-                onClick={() => {
-                  setIsMessagesOverlayOpen(false)
-                  setSelectedMobileConversation(null) // Overlay kapatılınca konuşmayı da temizle
-                }}
-                className="p-2 text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-          </div>
-          
-          {/* Mesajlar listesi */}
-          <div className="flex-1 overflow-y-auto">
-            <ConversationsList
-              currentUserId={currentUser?.id || ''}
-              onSelectConversation={(conv: Conversation) => {
-                setSelectedMobileConversation(conv)
-                setMobileChatOpen(true)
-                setIsMessagesOverlayOpen(false)
-              }}
-              selectedConversationId={undefined}
-              onUnreadCountChange={setUnreadMessagesCount}
-              conversationMetadata={conversationMetadata}
-              onUpdateMetadata={updateConversationMetadata}
-              compact={false}
-              playNotificationSound={playNotificationSound}
-            />
-          </div>
-        </div>
-      </div>
-    )}
-
-    {/* Mobile Chat Screen - Tam ekran mesajlaşma */}
-    {mobileChatOpen && selectedMobileConversation && (
-      <MobileChatScreen
-        conversation={selectedMobileConversation}
-        currentUserId={currentUser?.id}
-        userProfile={userProfile}
-        onBack={() => {
-          // Sadece sohbet ekranını kapat, mesajlar listesine dön
-          setMobileChatOpen(false)
-        }}
-        onClose={() => {
-          // Tamamen kapat
-          setMobileChatOpen(false)
-          setSelectedMobileConversation(null)
-        }}
-      />
-    )}
-
-    {/* Desktop Messages Overlay - Sadece masaüstünde */}
-    <div className="hidden md:block fixed bottom-0 z-[1000] w-full md:w-auto right-0 md:right-4">
-      <div className="relative">
-        {/* Bildirim göstergesi */}
-        {unreadMessagesCount > 0 && (
-          <div className="absolute -top-1 -right-1">
-            <span className="messages-notification flex h-4 w-4">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-red-500 justify-center items-center">
-                <span className="text-white text-[10px] font-bold">
-                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
-                </span>
-              </span>
-            </span>
-          </div>
-        )}
+        .animate-slideDown {
+          animation: slideDown 0.2s ease-out;
+        }
         
-        <div
-          className="bg-white border border-gray-300 rounded-t-lg shadow-2xl overflow-hidden md:rounded-lg"
-          style={{ width: '100%', maxWidth: '360px' }}
-        >
-          <div
-            className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
-            onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
-          >
-            <div className="flex items-center space-x-2">
-              <MessageSquare className="w-4 h-4 opacity-90" />
-              <span className="font-medium text-sm tracking-wide">Messaging</span>
-            </div>
-            {unreadMessagesCount > 0 && (
-              <span className="bg-white text-blue-700 text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                {unreadMessagesCount > 99 ? '99+' : unreadMessagesCount}
-              </span>
-            )}
-          </div>
-
-          {isMessagesOverlayOpen && (
-            <div
-              className="fixed inset-0 bg-white z-50 flex flex-col md:fixed md:inset-auto md:bottom-0 md:right-4 md:w-96 md:h-96 md:rounded-lg"
-              style={{ maxHeight: '100vh' }}
-            >
-              <div className="flex-1 overflow-y-auto">
-                <ConversationsList
-                  currentUserId={currentUser?.id || ''}
-                  onSelectConversation={(conv: Conversation) => openChatBox(conv)}
-                  selectedConversationId={undefined}
-                  onUnreadCountChange={setUnreadMessagesCount}
-                  conversationMetadata={conversationMetadata}
-                  onUpdateMetadata={updateConversationMetadata}
-                  compact
-                  playNotificationSound={playNotificationSound}
-                />
-              </div>
-
-              <button
-                onClick={() => setIsMessagesOverlayOpen(false)}
-                className="absolute top-2 right-2 text-gray-500 z-10"
-              >
-                ✕
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
+        @keyframes pulse {
+          0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+          70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
+        
+        @keyframes bounce {
+          0%, 20%, 53%, 80%, 100% {
+            transform: translate3d(0,0,0);
+          }
+          40%, 43% {
+            transform: translate3d(0, -8px, 0);
+          }
+          70% {
+            transform: translate3d(0, -4px, 0);
+          }
+          90% {
+            transform: translate3d(0, -2px, 0);
+          }
+        }
+        
+        .notification-pulse {
+          animation: pulse 2s infinite;
+        }
+        
+        .bounce {
+          animation: bounce 1s ease infinite;
+        }
+        
+        .messages-notification::after {
+          content: '';
+          position: absolute;
+          top: -2px;
+          right: -2px;
+          width: 12px;
+          height: 12px;
+          background: #EF4444;
+          border-radius: 50%;
+          border: 2px solid white;
+          animation: pulse 2s infinite;
+        }
+      `}</style>
     </div>
-
-    {/* Connections Manager Modal */}
-    {isConnectionsOpen && currentUser && (
-      <ConnectionsManager 
-        currentUserId={currentUser.id}
-        onClose={() => setIsConnectionsOpen(false)}
-        connections={connections}
-        connectionRequests={connectionRequests}
-        onAcceptConnectionRequest={acceptConnectionRequest}
-        onRejectConnectionRequest={rejectConnectionRequest}
-        onRemoveConnection={removeConnection}
-        onSendConnectionRequest={sendConnectionRequest}
-        onCancelConnectionRequest={cancelConnectionRequest}
-      />
-    )}
-
-    {/* Settings Modal */}
-    {isSettingsOpen && (
-      <SettingsComponent onClose={() => setIsSettingsOpen(false)} />
-    )}
-
-    {/* CV Maker Modal */}
-    {isCVMakerOpen && (
-      <CVMaker 
-        userProfile={userProfile} 
-        onClose={() => setIsCVMakerOpen(false)} 
-      />
-    )}
-
-    {/* Mobile Bottom Navigation */}
-    <div className="md:hidden">
-    {/* Mobile Bottom Navigation */}
-    <MobileBottomNav
-      activeView={activeView}
-      setActiveView={setActiveView}
-      setSelectedProfileId={setSelectedProfileId}
-      setIsConnectionsOpen={setIsConnectionsOpen}
-      setIsAuthModalOpen={setIsAuthModalOpen}
-      currentUser={currentUser}
-      unreadMessagesCount={unreadMessagesCount}
-      setIsMessagesOverlayOpen={setIsMessagesOverlayOpen}
-    />
-    </div>
-
-    {/* Notification Styles */}
-    <style>{`
-      @keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
-        70% { box-shadow: 0 0 0 10px rgba(59, 130, 246, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
-      }
-      
-      @keyframes bounce {
-        0%, 20%, 53%, 80%, 100% {
-          transform: translate3d(0,0,0);
-        }
-        40%, 43% {
-          transform: translate3d(0, -8px, 0);
-        }
-        70% {
-          transform: translate3d(0, -4px, 0);
-        }
-        90% {
-          transform: translate3d(0, -2px, 0);
-        }
-      }
-      
-      .notification-pulse {
-        animation: pulse 2s infinite;
-      }
-      
-      .bounce {
-        animation: bounce 1s ease infinite;
-      }
-      
-      .messages-notification::after {
-        content: '';
-        position: absolute;
-        top: -2px;
-        right: -2px;
-        width: 12px;
-        height: 12px;
-        background: #EF4444;
-        border-radius: 50%;
-        border: 2px solid white;
-        animation: pulse 2s infinite;
-      }
-    `}</style>
-  </div>
-)};
+  )
+}
 
 function MobileChatScreen({ 
   conversation, 
@@ -2989,7 +3179,7 @@ function ChatBoxComponent({
 
   async function sendMessage() {
     if (!chatBox.conversation || !newMessage.trim() || sending) return
-  
+
     setSending(true)
     
     const tempMessage: Message = {
@@ -3005,30 +3195,55 @@ function ChatBoxComponent({
     setMessages(prev => [...prev, tempMessage])
     setNewMessage('')
     
-    const { data, error } = await supabase
-      .from('messages')
-      .insert({
-        conversation_id: chatBox.conversation.id,
-        sender_id: currentUserId,
-        content: newMessage.trim()
-      })
-      .select(`*, sender:profiles(*)`)
-      .single()
-  
-    if (error) {
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: chatBox.conversation.id,
+          sender_id: currentUserId,
+          content: newMessage.trim()
+        })
+        .select(`*, sender:profiles(*)`)
+        .single()
+
+      if (error) {
+        console.error('Message send error:', error)
+        
+        // Hata durumunda temporary mesajı kaldır
+        setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id))
+        
+        // Daha spesifik hata mesajları
+        if (error.code === '23503') {
+          alert('Failed to send message: Conversation or user not found')
+        } else if (error.code === '42501') {
+          alert('Failed to send message: Permission denied')
+        } else if (error.code === '42703') {
+          alert('Failed to send message: Database column error - please refresh the page')
+        } else {
+          alert('Failed to send message. Please try again.')
+        }
+      } else {
+        // Başarılı durumda temporary mesajı gerçek mesajla değiştir
+        setMessages(prev => prev.map(msg => 
+          msg.id === tempMessage.id ? data : msg
+        ))
+        
+        // Conversation'ın updated_at zamanını güncelle
+        await supabase
+          .from('conversations')
+          .update({ 
+            last_message_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', chatBox.conversation.id)
+      }
+    } catch (err: any) {
+      console.error('Error sending message:', err)
       setMessages(prev => prev.filter(msg => msg.id !== tempMessage.id))
-      alert('Failed to send message')
-    } else {
-      setMessages(prev => prev.map(msg => 
-        msg.id === tempMessage.id ? data : msg
-      ))
-      
-      await supabase
-        .from('conversations')
-        .update({ last_message_at: new Date().toISOString() })
-        .eq('id', chatBox.conversation.id)
+      alert('Failed to send message. Please try again.')
+    } finally {
+      setSending(false)
     }
-    setSending(false)
   }
 
   function scrollToBottom() {
