@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { supabase } from './lib/supabaseClient'
+import { ToastProvider } from './components/ToastProvider'
+import { useToast } from './components/useToast'
+import GlobalSearch from './components/GlobalSearch'
+import Avatar from './components/Avatar'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { IoHome } from "react-icons/io5";
@@ -10,25 +14,11 @@ import {
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
     UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
     Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw, Printer,
-    Image as ImageIcon, FileText, BarChart3, MessageCircle
+    Image as ImageIcon, FileText, BarChart3, MessageCircle, Bookmark
 } from 'lucide-react'
 
 
-// Supabase Client
-const supabaseUrl = 'https://ukxcfzcvkmtjtwtrsotb.supabase.co'
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVreGNmemN2a210anR3dHJzb3RiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAwMzczOTQsImV4cCI6MjA3NTYxMzM5NH0.hD3eW9c1mESHOpQVVI-lAVEW_SBCeyB40Ox1OCGjDy4'
-
-const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  },
-  realtime: {
-    params: {
-      eventsPerSecond: 10
-    }
-  }
-})
+// Supabase client provided by ./lib/supabaseClient
   // Sort helper for displaying experiences (does not mutate state)
   const getSortedExperiences = (items: any[]) => {
     const parseDate = (d?: string) => {
@@ -194,6 +184,7 @@ interface Profile {
   bio?: string; 
   contact_email?: string
   regulator_number?: string
+  avatar_url?: string | null
   connection_stats?: ConnectionStats
   is_connected?: boolean
   connection_status?: 'pending' | 'accepted' | 'rejected' | 'not_connected'
@@ -258,6 +249,7 @@ interface Comment {
   user_id: string;
   content: string;
   created_at: string;
+  updated_at?: string;
   parent_reply_id?: string | null;
   user: Profile;
   replies?: Comment[];
@@ -379,7 +371,6 @@ console.log(calculateTotalExperience([
   { start_date: '2021-03-01', end_date: 'present' }
 ])) // Output: "3+ years" or "approximately 3.5 years" depending on current month
 
-// Account Dropdown Component
 function AccountDropdown({ 
   currentUser, 
   onProfileClick, 
@@ -394,7 +385,6 @@ function AccountDropdown({
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -570,6 +560,8 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   const sections = [
     { id: 'account', name: 'Account preferences', icon: Settings },
@@ -582,11 +574,135 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     initializeUser()
     loadSettings()
+    loadUserProfile()
   }, [])
 
   const initializeUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUser(user)
+  }
+
+  const loadUserProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url')
+        .eq('id', user.id)
+        .single()
+      
+      if (!error && data) {
+        setUserProfile(data)
+      }
+    } catch (err) {
+      console.error('Error loading user profile:', err)
+    }
+  }
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file || !currentUser) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size must be less than 5MB')
+      return
+    }
+
+    setUploadingAvatar(true)
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${currentUser.id}-${Date.now()}.${fileExt}`
+      // Don't include 'avatars/' prefix since we're already specifying the bucket with .from('avatars')
+      const filePath = fileName
+
+      // Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        })
+
+      if (uploadError) {
+        console.error('Error uploading avatar:', uploadError)
+        if (uploadError.message?.includes('Bucket not found')) {
+          alert('Storage bucket not found. Please create an "avatars" bucket in Supabase Storage first.')
+        } else {
+          alert('Error uploading image: ' + uploadError.message)
+        }
+        setUploadingAvatar(false)
+        return
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
+
+      // Update profile
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', currentUser.id)
+
+      if (updateError) {
+        console.error('Error updating profile:', updateError)
+        alert('Error updating profile. Please try again.')
+      } else {
+        setUserProfile({ ...userProfile, avatar_url: publicUrl })
+        // Show success toast
+        const successEvent = new CustomEvent('showToast', {
+          detail: { message: 'Profile picture updated successfully!', type: 'success' }
+        })
+        window.dispatchEvent(successEvent)
+        
+        // Trigger page reload to update all avatars
+        window.location.reload()
+      }
+    } catch (err) {
+      console.error('Error uploading avatar:', err)
+      alert('Error uploading image. Please try again.')
+    } finally {
+      setUploadingAvatar(false)
+    }
+  }
+
+  const handleRemoveAvatar = async () => {
+    if (!currentUser || !confirm('Are you sure you want to remove your profile picture?')) return
+
+    setUploadingAvatar(true)
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ avatar_url: null })
+        .eq('id', currentUser.id)
+
+      if (error) {
+        console.error('Error removing avatar:', error)
+        alert('Error removing profile picture. Please try again.')
+      } else {
+        setUserProfile({ ...userProfile, avatar_url: null })
+        const successEvent = new CustomEvent('showToast', {
+          detail: { message: 'Profile picture removed successfully!', type: 'success' }
+        })
+        window.dispatchEvent(successEvent)
+        window.location.reload()
+      }
+    } catch (err) {
+      console.error('Error removing avatar:', err)
+      alert('Error removing profile picture. Please try again.')
+    } finally {
+      setUploadingAvatar(false)
+    }
   }
 
   const loadSettings = async () => {
@@ -806,6 +922,42 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-gray-900">Account Preferences</h3>
               <div className="space-y-4">
+                {/* Profile Picture Section */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Profile Picture</h4>
+                  <div className="flex items-center gap-6">
+                    <div className="relative">
+                      <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} size={96} className="border-2 border-gray-200" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <div className="flex gap-2">
+                        <label className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 cursor-pointer transition-colors inline-block">
+                          {uploadingAvatar ? 'Uploading...' : 'Upload Photo'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleAvatarUpload}
+                            disabled={uploadingAvatar}
+                            className="hidden"
+                          />
+                        </label>
+                        {userProfile?.avatar_url && (
+                          <button
+                            onClick={handleRemoveAvatar}
+                            disabled={uploadingAvatar}
+                            className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors disabled:bg-gray-100"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        Recommended: Square image, at least 400x400 pixels. Max size: 5MB
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Language & Region</h4>
                   <div className="space-y-3">
@@ -1092,14 +1244,16 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   )
 }
 
-function App() {
+function AppInner() {
   const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
+  const toast = useToast();
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({});
   const [currentVisibleExpandedPost, setCurrentVisibleExpandedPost] = useState<string | null>(null);
   const [stickyButtonStyle, setStickyButtonStyle] = useState<{ left: string; width: string }>({ left: '0px', width: '0px' });
   const [activeView, setActiveView] = useState<'map' | 'community'>('community')
+  const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved'>('all')
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -1116,6 +1270,23 @@ function App() {
   const [therapists, setTherapists] = useState<Profile[]>([])
   const [unreadMessagesCount, setUnreadMessagesCount] = useState(0)
   const [originalTitle, setOriginalTitle] = useState('')
+  
+  // Community feed states
+  const [posts, setPosts] = useState<CommunityPost[]>([])
+  const [comments, setComments] = useState<Record<string, Comment[]>>({});
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
+  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
+  const [feedFilters, setFeedFilters] = useState<FeedFilters>({
+    professions: [],
+    clinical_areas: [],
+    content_types: [],
+    tags: [],
+    audience_levels: [],
+    related_conditions: [],
+    languages: [],
+    show_only_my_profession: false,
+    show_only_my_network: false
+  })
   
   // Chat boxes state
   const [chatBoxes, setChatBoxes] = useState<ChatBox[]>([])
@@ -1182,6 +1353,149 @@ function App() {
     }
   };
 
+  // Community feed functions
+  const loadPosts = async () => {
+    try {
+      let query = supabase
+        .from('posts')
+        .select(`
+          *,
+          user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
+        `)
+        .order('created_at', { ascending: false })
+
+      // Apply filters
+      if (feedFilters.professions.length > 0) {
+        query = query.contains('post_metadata->professions', feedFilters.professions)
+      }
+      if (feedFilters.clinical_areas.length > 0) {
+        query = query.contains('post_metadata->clinical_areas', feedFilters.clinical_areas)
+      }
+      if (feedFilters.content_types.length > 0) {
+        query = query.in('post_metadata->content_type', feedFilters.content_types)
+      }
+      if (feedFilters.show_only_my_profession && userProfile?.profession) {
+        query = query.contains('post_metadata->professions', [userProfile.profession])
+      }
+
+      const { data, error } = await query
+
+      if (error) throw error
+      setPosts(data || [])
+    } catch (err) {
+      console.error('Error loading posts:', err)
+    }
+  }
+
+  const loadComments = async (postId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .select(`
+          *,
+          user:profiles(*)
+        `)
+        .eq('post_id', postId)
+        .is('parent_reply_id', null)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Load replies for each comment
+      const commentsWithReplies = await Promise.all(
+        (data || []).map(async (comment) => {
+          const { data: replies } = await supabase
+            .from('post_comments')
+            .select(`
+              *,
+              user:profiles(*)
+            `)
+            .eq('parent_reply_id', comment.id)
+            .order('created_at', { ascending: true })
+
+          return { ...comment, replies: replies || [] }
+        })
+      )
+
+      // Updated: Set for specific postId
+      setComments(prev => ({ ...prev, [postId]: commentsWithReplies }));
+    } catch (err) {
+      console.error('Error loading comments:', err)
+    }
+  }
+
+  const addReaction = async (postId: string, emoji: string) => {
+    if (!currentUser?.id) {
+      setIsAuthModalOpen(true)
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('post_reactions')
+        .upsert({
+          post_id: postId,
+          user_id: currentUser.id,
+          reaction_type: emoji
+        })
+
+      if (error) throw error
+
+      setUserPostReactions(prev => ({ ...prev, [postId]: emoji }))
+    } catch (err) {
+      console.error('Error adding reaction:', err)
+    }
+  }
+
+  const addComment = async (postId: string, content: string, parentReplyId?: string) => {
+    if (!currentUser?.id) {
+      setIsAuthModalOpen(true)
+      return
+    }
+
+    try {
+      const { error } = await supabase
+        .from('post_comments')
+        .insert({
+          post_id: postId,
+          user_id: currentUser.id,
+          content,
+          parent_reply_id: parentReplyId || null
+        })
+
+      if (error) throw error
+
+      loadComments(postId)
+    } catch (err) {
+      console.error('Error adding comment:', err)
+    }
+  }
+
+  const loadUserReactions = async () => {
+    if (!currentUser?.id) return
+    try {
+      const { data, error } = await supabase
+        .from('post_reactions')
+        .select('post_id, reaction_type')
+        .eq('user_id', currentUser.id)
+
+      if (error) throw error
+
+      if (data) {
+        const reactions: Record<string, string> = {}
+        data.forEach(r => {
+          reactions[r.post_id] = r.reaction_type
+        })
+        setUserPostReactions(reactions)
+      }
+    } catch (e: any) {
+      // If table doesn't exist yet, skip silently to avoid 404 spam
+      if (e?.code !== 'PGRST205') {
+        console.error('loadUserReactions error:', e)
+      }
+    }
+  }
+
   useEffect(() => {
     const globalWindow = window as any;
     globalWindow.updateProfileInState = updateProfileInState;
@@ -1236,6 +1550,42 @@ function App() {
   useEffect(() => {
     updatePageTitle(unreadMessagesCount > 0)
   }, [unreadMessagesCount, originalTitle])
+
+  // Load posts when community view is active
+  useEffect(() => {
+    if (activeView === 'community') {
+      loadPosts()
+    }
+  }, [activeView, feedFilters, userProfile])
+
+  // Load user reactions when user logs in
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadUserReactions()
+    }
+  }, [currentUser?.id])
+
+  // Sticky button position update
+  useEffect(() => {
+    const updateStickyButtonPosition = () => {
+      if (currentVisibleExpandedPost && postRefs.current[currentVisibleExpandedPost]) {
+        const postElement = postRefs.current[currentVisibleExpandedPost]
+        const rect = postElement.getBoundingClientRect()
+        setStickyButtonStyle({
+          left: `${rect.left}px`,
+          width: `${rect.width}px`
+        })
+      }
+    }
+
+    window.addEventListener('scroll', updateStickyButtonPosition)
+    window.addEventListener('resize', updateStickyButtonPosition)
+
+    return () => {
+      window.removeEventListener('scroll', updateStickyButtonPosition)
+      window.removeEventListener('resize', updateStickyButtonPosition)
+    }
+  }, [currentVisibleExpandedPost])
 
   const updatePageTitle = (hasNotification: boolean) => {
     if (hasNotification && unreadMessagesCount > 0) {
@@ -1325,42 +1675,6 @@ function App() {
           if (newMsg.sender_id !== currentUser.id) {
             setUnreadMessagesCount(prev => prev + 1)
             playNotificationSound()
-            
-            if ('Notification' in window && Notification.permission === 'granted') {
-              const { data: conversation } = await supabase
-                .from('conversations')
-                .select(`
-                  *,
-                  user1:profiles!user1_id(*),
-                  user2:profiles!user2_id(*)
-                `)
-                .eq('id', newMsg.conversation_id)
-                .single()
-              
-              if (conversation) {
-                const otherUser = conversation.user1_id === currentUser.id ? conversation.user2 : conversation.user1
-                const title = `Yeni mesaj - ${otherUser.full_name}`
-                const body = newMsg.content?.slice(0, 100) || 'Yeni mesajınız var'
-                
-                const notification = new Notification(title, {
-                  body,
-                  icon: '/favicon.ico',
-                  tag: `message-${newMsg.id}`
-                })
-                
-                notification.onclick = () => {
-                  window.focus()
-                  setIsMessagesOverlayOpen(true)
-                  const existingConv = chatBoxes.find(box => box.id === newMsg.conversation_id)
-                  if (!existingConv) {
-                    openChatBox({
-                      ...conversation,
-                      other_user: otherUser
-                    })
-                  }
-                }
-              }
-            }
           }
         }
       )
@@ -1422,6 +1736,136 @@ function App() {
       supabase.removeChannel(channel)
     }
   }, [currentUser?.id])
+
+  // Fallback polling to ensure notifications stay fresh even if a realtime event is missed
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const interval = setInterval(() => {
+      loadNotifications()
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [currentUser?.id])
+
+  // Real-time connections subscription
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const channel = supabase
+      .channel('connections-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'connections',
+          filter: `receiver_id=eq.${currentUser.id}`
+        },
+        async (payload) => {
+          console.log('Connection change (receiver):', payload);
+
+          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
+            // New incoming request
+            const { data: sender } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', payload.new.sender_id)
+              .single();
+
+            const newRequest: Connection = {
+              id: payload.new.id,
+              created_at: payload.new.created_at,
+              sender_id: payload.new.sender_id,
+              receiver_id: payload.new.receiver_id,
+              status: payload.new.status,
+              sender,
+              receiver: userProfile
+            };
+
+            setConnectionRequests(prev => [...prev, newRequest]);
+          } else if (payload.eventType === 'UPDATE') {
+            // Status change for incoming
+            if (payload.new.status === 'accepted') {
+              const acceptedConnection: Connection = {
+                id: payload.new.id,
+                created_at: payload.new.created_at,
+                sender_id: payload.new.sender_id,
+                receiver_id: payload.new.receiver_id,
+                status: 'accepted',
+                sender: payload.old?.sender,
+                receiver: userProfile
+              };
+              setConnections(prev => [...prev, acceptedConnection]);
+              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
+            } else if (payload.new.status === 'rejected') {
+              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setConnectionRequests(prev => prev.filter(req => req.id !== payload.old.id));
+            setConnections(prev => prev.filter(conn => conn.id !== payload.old.id));
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'connections',
+          filter: `sender_id=eq.${currentUser.id}`
+        },
+        async (payload) => {
+          console.log('Connection change (sender):', payload);
+
+          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
+            // New outgoing request (though sender initiates via function)
+            const { data: receiver } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', payload.new.receiver_id)
+              .single();
+
+            const newRequest: Connection = {
+              id: payload.new.id,
+              created_at: payload.new.created_at,
+              sender_id: payload.new.sender_id,
+              receiver_id: payload.new.receiver_id,
+              status: payload.new.status,
+              sender: userProfile,
+              receiver
+            };
+
+            setConnectionRequests(prev => [...prev, newRequest]);
+          } else if (payload.eventType === 'UPDATE') {
+            // Status change for outgoing
+            if (payload.new.status === 'accepted') {
+              const acceptedConnection: Connection = {
+                id: payload.new.id,
+                created_at: payload.new.created_at,
+                sender_id: payload.new.sender_id,
+                receiver_id: payload.new.receiver_id,
+                status: 'accepted',
+                sender: userProfile,
+                receiver: payload.old?.receiver
+              };
+              setConnections(prev => [...prev, acceptedConnection]);
+              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
+            } else if (payload.new.status === 'rejected') {
+              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
+            }
+          } else if (payload.eventType === 'DELETE') {
+            setConnectionRequests(prev => prev.filter(req => req.id !== payload.old.id));
+            setConnections(prev => prev.filter(conn => conn.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Connections subscription:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, userProfile]);
 
   const loadConnections = async () => {
     if (!currentUser?.id) return
@@ -1548,17 +1992,29 @@ function App() {
 
   const acceptConnectionRequest = async (connectionId: string) => {
     try {
-      const { error } = await supabase
+      const { data: connection, error: updateError } = await supabase
         .from('connections')
         .update({ status: 'accepted' })
         .eq('id', connectionId)
+        .select('*, sender:profiles!sender_id(*), receiver:profiles!receiver_id(*)')
+        .single();
       
-      if (error) throw error
+      if (updateError) throw updateError;
       
-      const acceptedRequest = connectionRequests.find(req => req.id === connectionId)
-      if (acceptedRequest) {
-        setConnections(prev => [...prev, { ...acceptedRequest, status: 'accepted' }])
-        setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
+      if (connection) {
+        setConnections(prev => [...prev, connection]);
+        setConnectionRequests(prev => prev.filter(req => req.id !== connectionId));
+
+        // Notify the sender about acceptance
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: connection.sender_id,
+            message: `${userProfile?.full_name || 'Someone'} accepted your connection request`,
+            type: 'connection_accepted',
+            related_entity_type: 'connection',
+            related_entity_id: connection.id
+          });
       }
       
     } catch (err: any) {
@@ -1569,14 +2025,29 @@ function App() {
 
   const rejectConnectionRequest = async (connectionId: string) => {
     try {
-      const { error } = await supabase
+      const { data: connection, error: deleteError } = await supabase
         .from('connections')
         .delete()
         .eq('id', connectionId)
+        .select('sender_id')
+        .single();
       
-      if (error) throw error
+      if (deleteError) throw deleteError;
       
-      setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
+      setConnectionRequests(prev => prev.filter(req => req.id !== connectionId));
+
+      // Optionally notify sender about rejection
+      if (connection) {
+        await supabase
+          .from('notifications')
+          .insert({
+            user_id: connection.sender_id,
+            message: `${userProfile?.full_name || 'Someone'} rejected your connection request`,
+            type: 'connection_rejected',
+            related_entity_type: 'connection',
+            related_entity_id: connectionId
+          });
+      }
       
     } catch (err: any) {
       console.error('Error rejecting connection request:', err)
@@ -1690,7 +2161,7 @@ function App() {
             setUserProfile(null)
             setSelectedProfileId(null)
             setChatBoxes([])
-            profileCacheRef.current = {}
+profileCacheRef.current = {}
           }
         }, 1000)
       })
@@ -1892,10 +2363,25 @@ function App() {
 
         <div className="flex-1 mx-6">
           <div className="max-w-2xl mx-auto">
-            <input
-              aria-label="Search"
-              className="w-full rounded-full border px-4 py-2 shadow-sm bg-white focus:outline-none"
-              placeholder="Search therapists or posts..."
+            <GlobalSearch
+              onSelectPerson={(id) => {
+                setSelectedProfileId(id)
+                setActiveView('community')
+              }}
+              onSelectPost={(postId) => {
+                const target = postRefs.current[postId]
+                if (target?.scrollIntoView) {
+                  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+                setSelectedPost(posts.find(p => p.id === postId) || null)
+                loadComments(postId)
+              }}
+              isConnected={(profileId) => {
+                try {
+                  const connSet = new Set((connections || []).map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id)))
+                  return connSet.has(profileId)
+                } catch { return false }
+              }}
             />
           </div>
         </div>
@@ -2400,6 +2886,14 @@ function App() {
   )
 }
 
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppInner />
+    </ToastProvider>
+  )
+}
+
 function MobileChatScreen({ 
   conversation, 
   currentUserId,
@@ -2582,9 +3076,7 @@ function MobileChatScreen({
             <ArrowLeft className="w-6 h-6 text-white" />
           </button>
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-blue-700 rounded-full flex items-center justify-center text-white font-bold">
-              {conversation.other_user.full_name?.charAt(0) || 'U'}
-            </div>
+            <Avatar src={conversation.other_user?.avatar_url} name={conversation.other_user?.full_name} size={40} />
             <div>
               <h2 className="font-semibold text-white">{conversation.other_user.full_name}</h2>
               <p className="text-blue-100 text-sm">{conversation.other_user.profession}</p>
@@ -2881,9 +3373,7 @@ function ConnectionsManager({
                     onClick={() => otherUser?.id && handleProfileClick(otherUser.id)}
                   >
                     <div className="flex items-center space-x-3 flex-1">
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
-                        {otherUser?.full_name?.charAt(0) || 'U'}
-                      </div>
+                      <Avatar src={otherUser?.avatar_url} name={otherUser?.full_name} className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" useInlineSize={false} />
                       <div className="flex-1">
                         <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{otherUser?.full_name}</h3>
                         <p className="text-xs sm:text-sm text-gray-600">{otherUser?.profession}</p>
@@ -2917,9 +3407,7 @@ function ConnectionsManager({
                   onClick={() => request.sender?.id && handleProfileClick(request.sender.id)}
                 >
                   <div className="flex items-center space-x-3 flex-1">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
-                      {request.sender?.full_name?.charAt(0) || 'U'}
-                    </div>
+                    <Avatar src={request.sender?.avatar_url} name={request.sender?.full_name} className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" useInlineSize={false} />
                     <div className="flex-1">
                       <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{request.sender?.full_name}</h3>
                       <p className="text-xs sm:text-sm text-gray-600">{request.sender?.profession}</p>
@@ -2957,9 +3445,7 @@ function ConnectionsManager({
                   onClick={() => request.receiver?.id && handleProfileClick(request.receiver.id)}
                 >
                   <div className="flex items-center space-x-3 flex-1">
-                    <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
-                      {request.receiver?.full_name?.charAt(0) || 'U'}
-                    </div>
+                    <Avatar src={request.receiver?.avatar_url} name={request.receiver?.full_name} className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" useInlineSize={false} />
                     <div className="flex-1">
                       <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{request.receiver?.full_name}</h3>
                       <p className="text-xs sm:text-sm text-gray-600">{request.receiver?.profession}</p>
@@ -2998,9 +3484,7 @@ function ConnectionsManager({
                       onClick={() => handleProfileClick(profile.id)}
                     >
                       <div className="flex items-center space-x-3 flex-1">
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-base">
-                          {profile.full_name?.charAt(0) || 'U'}
-                        </div>
+                        <Avatar src={profile.avatar_url} name={profile.full_name} className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" useInlineSize={false} />
                         <div className="flex-1">
                           <h3 className="font-medium sm:font-semibold text-gray-900 text-sm sm:text-base">{profile.full_name}</h3>
                           <p className="text-xs sm:text-sm text-gray-600">{profile.profession}</p>
@@ -3106,6 +3590,11 @@ function ChatBoxComponent({
         },
         async (payload) => {
           const newMsg = payload.new as Message
+
+          // Avoid duplicating own messages (already optimistically added)
+          if (newMsg.sender_id === currentUserId) {
+            return;
+          }
           
           // Sender bilgisini fetch et
           const { data: senderData } = await supabase
@@ -3276,9 +3765,7 @@ function ChatBoxComponent({
         onClick={onMinimize}
       >
         <div className="flex items-center space-x-2 flex-1 min-w-0">
-          <div className="w-8 h-8 bg-blue-700 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">
-            {chatBox.conversation.other_user.full_name?.charAt(0) || 'U'}
-          </div>
+          <Avatar src={chatBox.conversation.other_user?.avatar_url} name={chatBox.conversation.other_user?.full_name} className="w-8 h-8 flex-shrink-0" useInlineSize={false} />
           <div className="min-w-0 flex-1">
             <p className="font-semibold text-sm truncate">
               {chatBox.conversation.other_user.full_name}
@@ -3680,9 +4167,7 @@ function ConversationsList({
               >
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-600 to-indigo-500 text-white flex items-center justify-center font-semibold text-lg shadow-sm">
-                    {c.other_user.full_name?.[0] || "U"}
-                  </div>
+                  <Avatar src={c.other_user?.avatar_url} name={c.other_user?.full_name} className="w-12 h-12 shadow-sm" useInlineSize={false} />
                   {(c.unread_count ?? 0) > 0 && (
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-blue-500 border-2 border-white rounded-full"></span>
                   )}
@@ -4068,9 +4553,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
                       className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all cursor-pointer"
                     >
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
-                          {therapist.full_name?.charAt(0) || 'T'}
-                        </div>
+                        <Avatar src={therapist.avatar_url} name={therapist.full_name} className="w-10 h-10 flex-shrink-0" useInlineSize={false} />
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-sm text-gray-900">{therapist.full_name}</h4>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
@@ -4152,9 +4635,17 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
               }`}
             >
               <div className="flex items-start gap-3">
+                {therapist.avatar_url ? (
+                  <img
+                    src={therapist.avatar_url}
+                    alt={therapist.full_name || 'Therapist'}
+                    className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                  />
+                ) : (
                 <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                   {therapist.full_name?.charAt(0) || 'T'}
                 </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <h4 className="font-semibold text-sm text-gray-900">
                     {therapist.full_name}
@@ -4825,8 +5316,90 @@ function ProfileDetailPage({
         {/* Profile Header Card - TEK BİR KEZ RENDER EDİLİYOR */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 mb-6">
           <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
-            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold flex-shrink-0">
-              {profile?.full_name?.charAt(0) || 'T'}
+            <div className="relative flex-shrink-0">
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt={profile?.full_name || 'Profile photo'}
+                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold">
+                  {profile?.full_name?.charAt(0) || 'T'}
+                </div>
+              )}
+              {isOwnProfile && editingSection === 'basic' && (
+                <div className="mt-2 flex items-center gap-2">
+                  <label className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 cursor-pointer">
+                    Change photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0]
+                        if (!file) return
+                        // Validate
+                        if (!file.type.startsWith('image/')) { alert('Please select an image file'); return }
+                        if (file.size > 5 * 1024 * 1024) { alert('Image size must be less than 5MB'); return }
+                        try {
+                          const { data: { user } } = await supabase.auth.getUser()
+                          if (!user) { alert('Not signed in'); return }
+                          const fileExt = file.name.split('.').pop()
+                          const fileName = `${user.id}-${Date.now()}.${fileExt}`
+                          const filePath = fileName
+                          const { error: uploadError } = await supabase.storage
+                            .from('avatars')
+                            .upload(filePath, file, { cacheControl: '3600', upsert: true })
+                          if (uploadError) { alert('Error uploading image: ' + uploadError.message); return }
+                          const { data: { publicUrl } } = supabase.storage
+                            .from('avatars')
+                            .getPublicUrl(filePath)
+                          const { error: updateError } = await supabase
+                            .from('profiles')
+                            .update({ avatar_url: publicUrl })
+                            .eq('id', profileId)
+                          if (updateError) { alert('Error updating profile: ' + updateError.message); return }
+                          // Update local and parent state
+                          const updated = { ...profile, avatar_url: publicUrl } as any
+                          setProfile(updated)
+                          if (updateProfileInState) updateProfileInState(updated as any)
+                          const successEvent = new CustomEvent('showToast', { detail: { message: 'Profile picture updated successfully!', type: 'success' } })
+                          window.dispatchEvent(successEvent)
+                        } catch (err: any) {
+                          console.error('Error uploading avatar from detail:', err)
+                          alert('Error uploading image. Please try again.')
+                        }
+                      }}
+                    />
+                  </label>
+                  {profile?.avatar_url && (
+                    <button
+                      type="button"
+                      className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50"
+                      onClick={async () => {
+                        try {
+                          const { error } = await supabase
+                            .from('profiles')
+                            .update({ avatar_url: null })
+                            .eq('id', profileId)
+                          if (error) { alert('Error removing profile picture. Please try again.'); return }
+                          const updated = { ...profile, avatar_url: null } as any
+                          setProfile(updated)
+                          if (updateProfileInState) updateProfileInState(updated as any)
+                          const successEvent = new CustomEvent('showToast', { detail: { message: 'Profile picture removed successfully!', type: 'success' } })
+                          window.dispatchEvent(successEvent)
+                        } catch (err) {
+                          console.error('Error removing avatar from detail:', err)
+                          alert('Error removing profile picture. Please try again.')
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             <div className="flex-1">
               {editingSection === 'basic' && isOwnProfile ? (
@@ -5630,6 +6203,7 @@ function ProfileDetailPage({
 
 function CommunityComponent() {
   const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
+  const toast = useToast();
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
   const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({});
@@ -5661,6 +6235,12 @@ function CommunityComponent() {
   const [commentFavorites, setCommentFavorites] = useState<Record<string, boolean>>({});
   const [userReactions, setUserReactions] = useState<Record<string, 'like' | 'dislike' | 'favorite' | null>>({});
   const [activeCommentMenu, setActiveCommentMenu] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentContent, setEditCommentContent] = useState<string>('');
+  const [reportModalOpen, setReportModalOpen] = useState(false);
+  const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState('');
+  const [reportDetails, setReportDetails] = useState('');
   const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({})
   const [newComments, setNewComments] = useState<{ [postId: string]: string }>({})
   const [replyingTo, setReplyingTo] = useState<{ [commentId: string]: boolean }>({});
@@ -5688,6 +6268,10 @@ function CommunityComponent() {
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({})
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
+  const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved'>('all')
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
+
+  
   const [postLikes, setPostLikes] = useState<Record<string, number>>({})
   const [postDislikes, setPostDislikes] = useState<Record<string, number>>({})
   const [postReactions, setPostReactions] = useState<Record<string, { emoji: string; count: number }[]>>({})
@@ -5720,6 +6304,8 @@ function CommunityComponent() {
   const [userProfile, setUserProfile] = useState<Profile | null>(null)
   const [connections, setConnections] = useState<any[]>([])
   const [suggestedConnections, setSuggestedConnections] = useState<Profile[]>([])
+  const [connectingIds, setConnectingIds] = useState<Record<string, boolean>>({})
+  const [networkStats, setNetworkStats] = useState<{ totalMembers: number; activeToday: number; postsThisWeek: number }>({ totalMembers: 0, activeToday: 0, postsThisWeek: 0 })
 
 
   useEffect(() => {
@@ -5780,8 +6366,42 @@ function CommunityComponent() {
       loadUserProfile()
       loadConnections()
       loadSuggestedConnections()
+      loadNetworkStats()
     }
   }, [user?.id])
+
+  // Load bookmarks (after user is available)
+  useEffect(() => {
+    async function loadBookmarks() {
+      try {
+        const { data } = await supabase
+          .from('post_bookmarks')
+          .select('post_id')
+          .eq('user_id', user?.id || '')
+        if (data) setBookmarkedPosts(data.map((d: any) => d.post_id))
+        else setBookmarkedPosts([])
+      } catch (e) {
+        console.error('Error loading bookmarks:', e)
+      }
+    }
+    if (user?.id) loadBookmarks(); else setBookmarkedPosts([])
+  }, [user?.id])
+
+  const handleBookmarkPost = async (postId: string) => {
+    if (!user?.id) { toast.info('Please sign in to save posts'); return }
+    const isBookmarked = bookmarkedPosts.includes(postId)
+    setBookmarkedPosts(prev => isBookmarked ? prev.filter(id => id !== postId) : [...prev, postId])
+    try {
+      if (isBookmarked) {
+        await supabase.from('post_bookmarks').delete().eq('post_id', postId).eq('user_id', user.id)
+      } else {
+        await supabase.from('post_bookmarks').insert({ post_id: postId, user_id: user.id })
+      }
+    } catch (error) {
+      setBookmarkedPosts(prev => isBookmarked ? [...prev, postId] : prev.filter(id => id !== postId))
+      toast.error('Failed to save post')
+    }
+  }
 
   const loadUserProfile = async () => {
     if (!user?.id) return
@@ -5798,7 +6418,7 @@ function CommunityComponent() {
     const { data } = await supabase
       .from('connections')
       .select('*')
-      .or(`user_id.eq.${user.id},connected_user_id.eq.${user.id}`)
+      .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .eq('status', 'accepted')
     setConnections(data || [])
   }
@@ -5811,6 +6431,86 @@ function CommunityComponent() {
       .neq('id', user.id)
       .limit(5)
     setSuggestedConnections(data || [])
+  }
+
+  const loadNetworkStats = async () => {
+    try {
+      // Total members
+      const { count: profilesCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+
+      // Posts this week
+      const weekAgo = new Date()
+      weekAgo.setDate(weekAgo.getDate() - 7)
+      const { count: postsWeekCount } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', weekAgo.toISOString())
+
+      // Active today (proxy: posts in last 24h)
+      const dayAgo = new Date()
+      dayAgo.setDate(dayAgo.getDate() - 1)
+      const { count: postsDayCount } = await supabase
+        .from('posts')
+        .select('*', { count: 'exact', head: true })
+        .gte('created_at', dayAgo.toISOString())
+
+      setNetworkStats({
+        totalMembers: profilesCount || 0,
+        activeToday: postsDayCount || 0,
+        postsThisWeek: postsWeekCount || 0
+      })
+    } catch (e) {
+      console.error('Failed to load network stats', e)
+    }
+  }
+
+  const handleSuggestedConnect = async (receiverId: string) => {
+    if (!user?.id) {
+      alert('Please sign in to connect')
+      return
+    }
+    try {
+      setConnectingIds(prev => ({ ...prev, [receiverId]: true }))
+      // Check existing
+      const { data: existing } = await supabase
+        .from('connections')
+        .select('id, status')
+        .or(`and(sender_id.eq.${user.id},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${user.id})`)
+        .maybeSingle()
+
+      if (existing) {
+        alert(existing.status === 'accepted' ? 'You are already connected' : 'Request already sent')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('connections')
+        .insert({ sender_id: user.id, receiver_id: receiverId, status: 'pending' })
+        .select('*')
+        .single()
+      if (error) throw error
+
+      // Notify receiver
+      await supabase
+        .from('notifications')
+        .insert({
+          user_id: receiverId,
+          message: `${userProfile?.full_name || 'Someone'} sent you a connection request`,
+          type: 'connection_request',
+          related_entity_type: 'connection',
+          related_entity_id: data.id
+        })
+
+      // Reflect locally
+      setConnections(prev => [...prev, data])
+    } catch (err) {
+      console.error('Connect error', err)
+      alert('Failed to send request')
+    } finally {
+      setConnectingIds(prev => ({ ...prev, [receiverId]: false }))
+    }
   }
 
   // Dropdown states
@@ -5895,6 +6595,7 @@ function CommunityComponent() {
     let postsChannel: any;
     let repliesChannel: any;
     let commentReactionsChannel: any;
+    let bookmarksChannel: any;
   
     const setupRealtimeSubscriptions = async () => {
       try {
@@ -5924,14 +6625,14 @@ function CommunityComponent() {
             }
           });
   
-        // Post replies channel - DÜZELTİLDİ: subscribe callback eklendi
+        // Post comments channel
         repliesChannel = supabase.channel('replies-follow')
           .on(
             'postgres_changes',
             {
               event: '*',
               schema: 'public',
-              table: 'post_replies',
+              table: 'post_comments',
             },
             (payload) => {
               console.log('Reply real-time update:', payload);
@@ -5965,6 +6666,32 @@ function CommunityComponent() {
               console.error('Comment reactions channel error:', error);
             }
           });
+
+        // Bookmarks channel - real-time subscription
+        bookmarksChannel = supabase.channel('bookmarks-follow')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'post_bookmarks',
+              filter: `user_id=eq.${user?.id || ''}`,
+            },
+            (payload) => {
+              console.log('Bookmark real-time update:', payload);
+              if (payload.eventType === 'INSERT') {
+                setBookmarkedPosts(prev => [...prev, payload.new.post_id]);
+              } else if (payload.eventType === 'DELETE') {
+                setBookmarkedPosts(prev => prev.filter(id => id !== payload.old.post_id));
+              }
+            }
+          )
+          .subscribe((status, error) => {
+            console.log('Bookmarks channel subscription status:', status);
+            if (error) {
+              console.error('Bookmarks channel error:', error);
+            }
+          });
   
       } catch (error) {
         console.error('Error setting up real-time subscriptions:', error);
@@ -5980,6 +6707,7 @@ function CommunityComponent() {
         postsChannel?.unsubscribe();
         repliesChannel?.unsubscribe();
         commentReactionsChannel?.unsubscribe();
+        bookmarksChannel?.unsubscribe();
         setRealtimeStatus('disconnected');
       } catch (e) {
         console.error('Error unsubscribing channels:', e);
@@ -6029,8 +6757,8 @@ function CommunityComponent() {
         })
         .subscribe()
   
-      const repliesChannel = supabase.channel('public:post_replies')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'post_replies' }, (payload) => {
+      const repliesChannel = supabase.channel('public:post_comments')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, (payload) => {
           handleReplyRealtime(payload)
         })
         .subscribe()
@@ -6041,11 +6769,27 @@ function CommunityComponent() {
           handleCommentReactionRealtime(payload)
         })
         .subscribe()
+
+      const bookmarksChannel = supabase.channel('public:post_bookmarks')
+        .on('postgres_changes', { 
+          event: '*', 
+          schema: 'public', 
+          table: 'post_bookmarks',
+          filter: `user_id=eq.${user?.id || ''}`,
+        }, (payload) => {
+          if (payload.eventType === 'INSERT') {
+            setBookmarkedPosts(prev => [...prev, payload.new.post_id]);
+          } else if (payload.eventType === 'DELETE') {
+            setBookmarkedPosts(prev => prev.filter(id => id !== payload.old.post_id));
+          }
+        })
+        .subscribe()
   
       return () => {
         try { postsChannel.unsubscribe() } catch (e) {}
         try { repliesChannel.unsubscribe() } catch (e) {}
         try { commentReactionsChannel.unsubscribe() } catch (e) {}
+        try { bookmarksChannel.unsubscribe() } catch (e) {}
       }
     }
   }, [user, feedFilters])
@@ -6428,23 +7172,235 @@ function CommunityComponent() {
     try {
       switch (action) {
         case 'edit':
-          console.log('Edit comment:', commentId);
+          // Find comment to edit in all posts (including nested replies)
+          let foundComment: Comment | null = null;
+          for (const postId in comments) {
+            const findComment = (comments: Comment[]): Comment | null => {
+              for (const c of comments) {
+                if (c.id === commentId) return c;
+                if (c.replies && c.replies.length > 0) {
+                  for (const r of c.replies) {
+                    if (r.id === commentId) return r;
+                    if (r.replies && r.replies.length > 0) {
+                      const nested = r.replies.find(nr => nr.id === commentId);
+                      if (nested) return nested;
+                    }
+                  }
+                }
+              }
+              return null;
+            };
+            const result = findComment(comments[postId] || []);
+            if (result) {
+              foundComment = result;
           break;
-        case 'delete':
-          if (confirm('Are you sure you want to delete this comment?')) {
-            console.log('Delete comment:', commentId);
+            }
+          }
+          if (foundComment) {
+            setEditingCommentId(commentId);
+            setEditCommentContent(foundComment.content);
           }
           break;
+        case 'delete':
+          handleDeleteComment(commentId);
+          break;
         case 'report':
-          console.log('Report comment:', commentId);
+          setReportingCommentId(commentId);
+          setReportModalOpen(true);
           break;
         default:
           console.log('Unknown action:', action);
       }
     } catch (err) {
       console.error('Error handling comment menu action:', err);
+      toast.error('Failed to perform action');
     } finally {
       setActiveCommentMenu(null);
+    }
+  };
+
+  const handleEditComment = async (commentId: string, postId: string) => {
+    if (!editCommentContent.trim()) {
+      toast.error('Comment cannot be empty');
+      return;
+    }
+
+    // Find original content for revert
+    let originalContent = '';
+    for (const pId in comments) {
+      const findComment = (comments: Comment[]): Comment | null => {
+        for (const c of comments) {
+          if (c.id === commentId) return c;
+          if (c.replies) {
+            const found = findComment(c.replies);
+            if (found) return found;
+          }
+        }
+        return null;
+      };
+      const found = findComment(comments[pId] || []);
+      if (found) {
+        originalContent = found.content;
+        break;
+      }
+    }
+
+    // Optimistic update
+    setComments(prev => {
+      const postComments = prev[postId] || [];
+      const updateComment = (comments: Comment[]): Comment[] => {
+        return comments.map(c => {
+          if (c.id === commentId) {
+            return { ...c, content: editCommentContent.trim(), updated_at: new Date().toISOString() };
+          }
+          if (c.replies && c.replies.length > 0) {
+            return { ...c, replies: updateComment(c.replies) };
+          }
+          return c;
+        });
+      };
+      return { ...prev, [postId]: updateComment(postComments) };
+    });
+
+    try {
+      const { error } = await supabase
+        .from('post_comments')
+        .update({ 
+          content: editCommentContent.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', commentId);
+
+      if (error) throw error;
+
+      setEditingCommentId(null);
+      setEditCommentContent('');
+      toast.success('Comment updated');
+    } catch (error) {
+      // Revert on error
+      setComments(prev => {
+        const postComments = prev[postId] || [];
+        const revertComment = (comments: Comment[]): Comment[] => {
+          return comments.map(c => {
+            if (c.id === commentId) {
+              return { ...c, content: originalContent };
+            }
+            if (c.replies) {
+              return { ...c, replies: revertComment(c.replies) };
+            }
+            return c;
+          });
+        };
+        return { ...prev, [postId]: revertComment(postComments) };
+      });
+      toast.error('Failed to update comment');
+    }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!toast) return;
+    
+    if (!confirm('Are you sure you want to delete this comment?')) {
+      return;
+    }
+
+    // Find which post this comment belongs to
+    let targetPostId: string | null = null;
+    for (const postId in comments) {
+      const found = comments[postId].find(c => c.id === commentId) ||
+                   comments[postId].flatMap(c => c.replies || []).find(r => r.id === commentId);
+      if (found) {
+        targetPostId = postId;
+        break;
+      }
+    }
+
+    if (!targetPostId) {
+      toast.error('Comment not found');
+      return;
+    }
+
+    // Optimistic update
+    const originalComments = { ...comments };
+    setComments(prev => {
+      const postComments = prev[targetPostId!] || [];
+      const deleteComment = (comments: Comment[]): Comment[] => {
+        return comments.filter(c => {
+          if (c.id === commentId) return false;
+          if (c.replies) {
+            return { ...c, replies: c.replies.filter(r => r.id !== commentId) };
+          }
+          return true;
+        }).map(c => {
+          if (c.replies) {
+            return { ...c, replies: c.replies.filter(r => r.id !== commentId) };
+          }
+          return c;
+        });
+      };
+      return { ...prev, [targetPostId!]: deleteComment(postComments) };
+    });
+
+    try {
+      const { error } = await supabase
+        .from('post_comments')
+        .delete()
+        .eq('id', commentId);
+
+      if (error) throw error;
+
+      // Update replies_count in posts
+      if (targetPostId) {
+        setPosts(prev => prev.map(p => 
+          p.id === targetPostId 
+            ? { ...p, replies_count: Math.max(0, (p.replies_count || 1) - 1) }
+            : p
+        ))
+      }
+
+      toast.success('Comment deleted');
+    } catch (error) {
+      // Revert on error
+      setComments(originalComments);
+      toast.error('Failed to delete comment');
+    }
+  };
+
+  const handleReportComment = async () => {
+    const finalReason = reportReason === 'Other' ? reportDetails.trim() : reportReason.trim();
+    if (!finalReason || !reportingCommentId || !user?.id) {
+      toast.error('Please provide a reason');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('content_reports')
+        .insert({
+          reporter_id: user.id,
+          content_type: 'comment',
+          content_id: reportingCommentId,
+          reason: finalReason
+        });
+
+      if (error) throw error;
+
+      setReportModalOpen(false);
+      setReportingCommentId(null);
+      setReportReason('');
+      setReportDetails('');
+      toast.success('Comment reported. Thank you for your feedback.');
+    } catch (error: any) {
+      // If table doesn't exist yet, still show success
+      if (error?.code === 'PGRST116') {
+        setReportModalOpen(false);
+        setReportingCommentId(null);
+        setReportReason('');
+        setReportDetails('');
+        toast.success('Report feature will be available soon');
+      } else {
+        toast.error('Failed to report comment');
+      }
     }
   };
 
@@ -6737,7 +7693,7 @@ function CommunityComponent() {
         .from('posts')
         .select(`
           *,
-          user:profiles!user_id (id, full_name, profession, specialties, languages)
+          user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
         `)
         .order('created_at', { ascending: false })
 
@@ -6790,9 +7746,10 @@ function CommunityComponent() {
 
       const postsWithDetails = await Promise.all(
         (data || []).map(async (post) => {
-          const { count: repliesCount } = await supabase
-            .from('post_replies')
-            .select('*', { count: 'exact', head: false })
+          // Count all comments (including nested replies) for this post
+          const { count: commentsCount } = await supabase
+            .from('post_comments')
+            .select('*', { count: 'exact', head: true })
             .eq('post_id', post.id)
 
           setPostSettings(prev => ({
@@ -6811,7 +7768,7 @@ function CommunityComponent() {
               profession: '', 
               id: post.user_id 
             },
-            replies_count: repliesCount || 0,
+            replies_count: commentsCount || 0,
             post_metadata: post.post_metadata || {}
           }
         })
@@ -6855,10 +7812,10 @@ function CommunityComponent() {
   const loadComments = async (postId: string) => {
     try {
       const { data: topLevelComments, error: topLevelError } = await supabase
-        .from('post_replies')
+        .from('post_comments')
         .select(`
           *,
-          profiles!inner(id, full_name, profession, avatar_url)
+          user:profiles(id, full_name, profession, avatar_url)
         `)
         .eq('post_id', postId)
         .is('parent_reply_id', null)
@@ -6871,50 +7828,42 @@ function CommunityComponent() {
   
       const commentsWithReplies = await Promise.all(
         (topLevelComments || []).map(async (comment) => {
-          // Yanıtları yükle - GÜNCELLENDİ: profiles join eklendi
           const { data: replies, error: repliesError } = await supabase
-            .from('post_replies')
+            .from('post_comments')
             .select(`
               *,
-              profiles!inner(id, full_name, profession, avatar_url)
+              user:profiles(id, full_name, profession, avatar_url)
             `)
             .eq('parent_reply_id', comment.id)
             .order('created_at', { ascending: true })
   
           if (!repliesError && replies) {
-            // Yanıtların yanıtlarını (nested replies) yükle
             const repliesWithNested = await Promise.all(
               replies.map(async (reply) => {
                 const { data: nestedReplies } = await supabase
-                  .from('post_replies')
+                  .from('post_comments')
                   .select(`
                     *,
-                    profiles!inner(id, full_name, profession, avatar_url)
+                    user:profiles(id, full_name, profession, avatar_url)
                   `)
                   .eq('parent_reply_id', reply.id)
                   .order('created_at', { ascending: true });
             
                 return {
                   ...reply,
-                  user: reply.profiles,
-                  replies: nestedReplies ? nestedReplies.map(nested => ({
-                    ...nested,
-                    user: nested.profiles
-                  })) : []
+                  replies: nestedReplies || []
                 };
               })
             );
   
             return {
               ...comment,
-              user: comment.profiles,
               replies: repliesWithNested
             }
           }
           
           return {
             ...comment,
-            user: comment.profiles,
             replies: []
           }
         })
@@ -6936,7 +7885,7 @@ function CommunityComponent() {
     const { data: { user: currentUser } } = await supabase.auth.getUser()
 
     if (!currentUser) {
-      alert('Please sign in to create posts')
+      toast.info('Please sign in to create posts')
       setLoading(false)
       return
     }
@@ -6953,7 +7902,7 @@ function CommunityComponent() {
 
       if (error) {
         console.error('Error creating post:', error)
-        alert('Failed to create post. Please try again.')
+        toast.error('Failed to create post. Please try again.')
         return
       }
 
@@ -6983,7 +7932,7 @@ function CommunityComponent() {
 
     } catch (err) {
       console.error('Error creating post:', err)
-      alert('Failed to create post. Please try again.')
+      toast.error('Failed to create post. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -7016,7 +7965,7 @@ function CommunityComponent() {
       setEditForm({ ...editForm, id: '' }) // Close modal
     } catch (err) {
       console.error('Error updating post:', err)
-      alert('Failed to update post')
+      toast.error('Failed to update post')
       throw err // Re-throw to handle in calling function
     }
   }
@@ -7044,7 +7993,7 @@ function CommunityComponent() {
       
     } catch (err) {
       console.error('Error deleting post:', err)
-      alert('Failed to delete post')
+      toast.error('Failed to delete post')
       throw err
     }
   }
@@ -7078,7 +8027,7 @@ function CommunityComponent() {
       }
     } catch (err) {
       console.error('Error updating post settings:', err)
-      alert('Failed to update post settings')
+      toast.error('Failed to update post settings')
       // Revert optimistic UI update
       setPostSettings(prev => ({ 
         ...prev, 
@@ -7214,6 +8163,12 @@ function CommunityComponent() {
         // Remove like
         setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
         setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+        // Persist removal
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
       } else {
         // Add like, remove old reaction if exists
         setPostLikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
@@ -7235,7 +8190,23 @@ function CommunityComponent() {
           }
         }
 
+        // Persist replacement of previous reaction (if any)
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
         setUserPostReactions(prev => ({ ...prev, [postId]: 'like' }));
+
+        // Persist like
+        await supabase
+          .from('post_reactions')
+          .upsert({
+            post_id: postId,
+            user_id: user.id,
+            reaction_type: 'like'
+          });
       }
     } catch (err) {
       console.error('Error updating post like:', err);
@@ -7253,6 +8224,12 @@ function CommunityComponent() {
         // Remove dislike
         setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
         setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+        // Persist removal
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
       } else {
         // Add dislike, remove old reaction if exists
         setPostDislikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
@@ -7274,7 +8251,23 @@ function CommunityComponent() {
           }
         }
 
+        // Persist replacement of previous reaction (if any)
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id);
+
         setUserPostReactions(prev => ({ ...prev, [postId]: 'dislike' }));
+
+        // Persist dislike
+        await supabase
+          .from('post_reactions')
+          .upsert({
+            post_id: postId,
+            user_id: user.id,
+            reaction_type: 'dislike'
+          });
       }
     } catch (err) {
       console.error('Error updating post dislike:', err);
@@ -7282,7 +8275,7 @@ function CommunityComponent() {
   };
 
   // Handle emoji reaction
-  const handleEmojiReaction = (postId: string, emoji: string, e: React.MouseEvent) => {
+  const handleEmojiReaction = async (postId: string, emoji: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) return;
 
@@ -7301,6 +8294,12 @@ function CommunityComponent() {
           };
         });
         setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+        // Persist removal
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', user.id)
       } else {
         // Add emoji reaction, remove old if exists
         setPostReactions(prev => {
@@ -7338,9 +8337,21 @@ function CommunityComponent() {
               };
             });
           }
+
+          // Remove previous persisted reaction
+          await supabase
+            .from('post_reactions')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', user.id)
         }
 
         setUserPostReactions(prev => ({ ...prev, [postId]: emoji }));
+
+        // Persist new emoji reaction
+        await supabase
+          .from('post_reactions')
+          .upsert({ post_id: postId, user_id: user.id, reaction_type: emoji })
       }
       setShowEmojiPicker(null);
     } catch (err) {
@@ -7402,17 +8413,39 @@ function CommunityComponent() {
         const postComments = prev[postId] || []
         
         if (parentReplyId) {
-          // Yanıt ekleme
-          const updatedComments = postComments.map(comment => {
+          // Yanıt ekleme - recursive search for nested replies
+          const findAndAddReply = (comments: Comment[]): Comment[] => {
+            return comments.map(comment => {
+              // Check if this comment is the parent
             if (comment.id === parentReplyId) {
               return {
                 ...comment,
                 replies: [...(comment.replies || []), newComment]
               }
             }
+              // Check in nested replies
+              if (comment.replies && comment.replies.length > 0) {
+                const foundInReplies = comment.replies.find((r: any) => r.id === parentReplyId)
+                if (foundInReplies) {
+                  return {
+                    ...comment,
+                    replies: comment.replies.map((r: any) => 
+                      r.id === parentReplyId 
+                        ? { ...r, replies: [...(r.replies || []), newComment] }
+                        : r
+                    )
+                  }
+                }
+                // Recursively search deeper
+                return {
+                  ...comment,
+                  replies: findAndAddReply(comment.replies)
+              }
+            }
             return comment
           })
-          return { ...prev, [postId]: updatedComments }
+          }
+          return { ...prev, [postId]: findAndAddReply(postComments) }
         } else {
           // Yeni yorum ekleme
           return { 
@@ -7431,14 +8464,14 @@ function CommunityComponent() {
         setNewComments(prev => ({ ...prev, [postId]: '' }))
       }
   
-      // Veritabanına kaydet
+  // Veritabanına kaydet - parentReplyId null değilse ve geçerli bir UUID ise
       const { error } = await supabase
-        .from('post_replies')
+    .from('post_comments')
         .insert({
           post_id: postId,
           user_id: user.id,
           content: commentText.trim(),
-          parent_reply_id: parentReplyId
+      parent_reply_id: parentReplyId && parentReplyId.startsWith('temp-') ? null : parentReplyId
         })
   
       if (error) {
@@ -7446,16 +8479,24 @@ function CommunityComponent() {
         setComments(prev => {
           const postComments = prev[postId] || []
           if (parentReplyId) {
-            const updatedComments = postComments.map(comment => {
+            const removeTempReply = (comments: Comment[]): Comment[] => {
+              return comments.map(comment => {
               if (comment.id === parentReplyId) {
                 return {
                   ...comment,
                   replies: (comment.replies || []).filter((reply: any) => reply.id !== tempId)
                 }
               }
+                if (comment.replies && comment.replies.length > 0) {
+                  return {
+                    ...comment,
+                    replies: removeTempReply(comment.replies)
+                }
+              }
               return comment
             })
-            return { ...prev, [postId]: updatedComments }
+            }
+            return { ...prev, [postId]: removeTempReply(postComments) }
           } else {
             return { 
               ...prev, 
@@ -7465,10 +8506,66 @@ function CommunityComponent() {
         })
         throw error
       }
+      
+      // Veritabanından gerçek yorumu al ve optimistic update'i güncelle
+      const { data: insertedComment, error: fetchError } = await supabase
+        .from('post_comments')
+        .select(`
+          *,
+          user:profiles(*)
+        `)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single()
+
+      if (!fetchError && insertedComment) {
+        // Gerçek yorumu state'e ekle (temp ID'yi gerçek ID ile değiştir)
+        setComments(prev => {
+          const postComments = prev[postId] || []
+          
+          if (parentReplyId) {
+            const replaceTempWithReal = (comments: Comment[]): Comment[] => {
+              return comments.map(comment => {
+                if (comment.id === parentReplyId) {
+                  return {
+                    ...comment,
+                    replies: (comment.replies || []).map((r: any) => 
+                      r.id === tempId ? { ...insertedComment, replies: [] } : r
+                    )
+                  }
+                }
+                if (comment.replies && comment.replies.length > 0) {
+                  return {
+                    ...comment,
+                    replies: replaceTempWithReal(comment.replies)
+                  }
+                }
+                return comment
+              })
+            }
+            return { ...prev, [postId]: replaceTempWithReal(postComments) }
+          } else {
+            return {
+              ...prev,
+              [postId]: postComments.map(c => 
+                c.id === tempId ? { ...insertedComment, replies: [] } : c
+              )
+            }
+          }
+        })
+        
+        // Update replies_count in posts
+        setPosts(prev => prev.map(p => 
+          p.id === postId 
+            ? { ...p, replies_count: (p.replies_count || 0) + 1 }
+            : p
+        ))
+      }
   
     } catch (err) {
       console.error('Error adding comment:', err)
-      alert('Failed to add comment')
+      toast.error('Failed to add comment')
     }
   }
 
@@ -7763,6 +8860,7 @@ const getUserProfession = (user: any): string => {
   return user.profession || '';
 };
 
+
 const getUserId = (user: any): string => {
   if (!user) return '';
   return user.id || '';
@@ -7787,9 +8885,7 @@ return (
             <div className="px-4 pb-4 -mt-8">
               <div className="flex flex-col items-center">
                 {/* Avatar */}
-                <div className="w-16 h-16 rounded-full bg-white border-4 border-white shadow-md flex items-center justify-center text-2xl font-bold text-blue-600">
-                  {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || '?'}
-                </div>
+                <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || user?.email || 'User'} className="w-16 h-16 border-4 border-white shadow-md" useInlineSize={false} />
                 <h3 className="mt-2 text-lg font-semibold text-gray-900 text-center">
                   {userProfile?.full_name || 'Your Name'}
                 </h3>
@@ -7812,6 +8908,10 @@ return (
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">Profile Views</span>
                   <span className="font-semibold text-gray-900">{userProfile?.profile_views || 0}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-gray-600">Saved Posts</span>
+                  <span className="font-semibold text-gray-900">{bookmarkedPosts.length}</span>
                 </div>
               </div>
 
@@ -7878,9 +8978,7 @@ return (
               onClick={() => setShowNewPostModal(true)}
               className="w-full flex items-center gap-3 px-4 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors text-left"
             >
-              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold">
-                {userProfile?.full_name?.charAt(0) || '?'}
-              </div>
+              <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-10 h-10" useInlineSize={false} />
               <span className="text-gray-500 flex-1">Share an update, question or insight...</span>
             </button>
           </div>
@@ -8151,7 +9249,68 @@ return (
 
       {/* Posts Feed */}
       <div className="space-y-4">
-        {posts.map(post => (
+        {/* Feed tabs */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveFeedTab('all')}
+              className={`px-3 py-1.5 text-sm rounded-full border ${activeFeedTab === 'all' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              All
+            </button>
+            <button
+              onClick={() => setActiveFeedTab('saved')}
+              className={`px-3 py-1.5 text-sm rounded-full border ${activeFeedTab === 'saved' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              Saved
+            </button>
+          </div>
+          {activeFeedTab === 'saved' && bookmarkedPosts.length > 0 && (
+            <button
+              onClick={async () => {
+                const savedPostIds = bookmarkedPosts;
+                const savedPostsData = posts.filter(p => savedPostIds.includes(p.id));
+                const exportData = {
+                  exportedAt: new Date().toISOString(),
+                  count: savedPostsData.length,
+                  posts: savedPostsData.map(p => ({
+                    id: p.id,
+                    title: p.title,
+                    content: p.content.substring(0, 200),
+                    author: getUserDisplayName(p.user),
+                    createdAt: p.created_at,
+                    url: `${window.location.origin}?post=${p.id}`
+                  }))
+                };
+                const jsonStr = JSON.stringify(exportData, null, 2);
+                try {
+                  await navigator.clipboard.writeText(jsonStr);
+                  toast.success('Saved posts exported to clipboard!');
+                } catch (e) {
+                  const blob = new Blob([jsonStr], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `saved-posts-${new Date().toISOString().split('T')[0]}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success('Saved posts exported!');
+                }
+              }}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-blue-600 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+              title="Export saved posts"
+            >
+              <Download className="w-4 h-4" />
+              Export
+            </button>
+          )}
+        </div>
+
+        {(activeFeedTab === 'saved' && posts.filter(p => bookmarkedPosts.includes(p.id)).length === 0) && (
+          <div className="p-6 text-center text-gray-500 bg-white border rounded-lg">No saved posts yet</div>
+        )}
+
+        {(activeFeedTab === 'all' ? posts : posts.filter(p => bookmarkedPosts.includes(p.id))).map(post => (
           <div 
             key={post.id} 
             className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
@@ -8161,9 +9320,9 @@ return (
                 <div className="flex items-center gap-3 mb-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
-                    className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors cursor-pointer"
+                    className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
                   >
-                    {getUserDisplayName(post.user)?.charAt(0) || 'U'}
+                    <Avatar src={post.user?.avatar_url} name={getUserDisplayName(post.user)} className="w-10 h-10" useInlineSize={false} />
                   </button>
                   <div>
                     <button
@@ -8280,6 +9439,7 @@ return (
                         </button>
                       </>
                     ) : (
+                      <>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -8291,6 +9451,24 @@ return (
                         <Bell className="w-4 h-4 mr-3 text-purple-600" />
                         {followingPosts.includes(post.id) ? 'Unfollow Post' : 'Follow Post'}
                       </button>
+                        <button
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            const postUrl = `${window.location.origin}?post=${post.id}`;
+                            try {
+                              await navigator.clipboard.writeText(postUrl);
+                              toast.success('Post link copied to clipboard!');
+                            } catch (err) {
+                              toast.error('Failed to copy link');
+                            }
+                          }}
+                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          <Download className="w-4 h-4 mr-3 text-blue-600" />
+                          Share Post
+                        </button>
+                      </>
                     )}
                   </div>
                 )}
@@ -8404,7 +9582,42 @@ return (
                   className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-lg transition-colors flex-1 justify-center"
                 >
                   <MessageSquare className="w-4 h-4" />
-                  <span>{post.replies_count || 0} Comments</span>
+                  <span>
+                    {(() => {
+                      // If comments are loaded, use actual count
+                      const postComments = comments[post.id];
+                      if (postComments !== undefined) {
+                        // Count all top-level comments (not replies)
+                        const topLevelCount = postComments.filter(c => !c.parent_reply_id).length;
+                        // Count all replies recursively
+                        const countReplies = (commentList: Comment[]): number => {
+                          let count = 0;
+                          commentList.forEach(comment => {
+                            if (comment.replies && comment.replies.length > 0) {
+                              count += comment.replies.length;
+                              count += countReplies(comment.replies);
+                            }
+                          });
+                          return count;
+                        };
+                        const repliesCount = countReplies(postComments);
+                        return topLevelCount + repliesCount;
+                      }
+                      // Otherwise use replies_count from post
+                      return post.replies_count || 0;
+                    })()} Comments
+                  </span>
+                </button>
+
+                {/* Bookmark Button */}
+                <button
+                  onClick={() => handleBookmarkPost(post.id)}
+                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors flex-1 justify-center ${bookmarkedPosts.includes(post.id) ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'}`}
+                  title={bookmarkedPosts.includes(post.id) ? 'Saved' : 'Save post'}
+                  aria-label={bookmarkedPosts.includes(post.id) ? 'Unsave post' : 'Save post'}
+                >
+                  <Bookmark className={`w-4 h-4 ${bookmarkedPosts.includes(post.id) ? 'fill-amber-500 stroke-amber-600' : ''}`} />
+                  <span>{bookmarkedPosts.includes(post.id) ? 'Saved' : 'Save'}</span>
                 </button>
               </div>
             </div>
@@ -8415,30 +9628,36 @@ return (
                 {/* Add Comment */}
                 {!postSettings[post.id]?.comments_disabled && (
                   <div className="mb-4">
-                    <div className="flex gap-3">
-                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-                        {userProfile?.full_name?.charAt(0) || 'U'}
-                      </div>
-                      <div className="flex-1">
+                    <div className="flex gap-2">
+                      <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-7 h-7 flex-shrink-0" useInlineSize={false} />
+                      <div className="flex-1 flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                         <textarea
                           value={newComments[post.id] || ''}
-                          onChange={(e) => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
+                          onChange={(e) => {
+                            setNewComments(prev => ({ ...prev, [post.id]: e.target.value }));
+                            // Auto-resize textarea
+                            e.target.style.height = 'auto';
+                            e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                          }}
                           placeholder="Write a comment..."
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                          rows={2}
+                          className="flex-1 resize-none border-none outline-none text-sm py-1"
+                          rows={1}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
                               addComment(post.id)
                             }
+                            // Shift+Enter allows new line (default behavior)
                           }}
+                          style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
                         />
                         <button
                           onClick={() => addComment(post.id)}
                           disabled={!newComments[post.id]?.trim()}
-                          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium"
+                          className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                          title="Post comment"
                         >
-                          Post Comment
+                          <Send className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
@@ -8450,16 +9669,108 @@ return (
                   <div className="space-y-4">
                     {comments[post.id].map(comment => (
                       <div key={comment.id} className="flex gap-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            viewUserProfile(comment.user_id || getUserId(comment.user));
+                          }}
+                          className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          {comment.user?.avatar_url ? (
+                            <img
+                              src={comment.user.avatar_url}
+                              alt={comment.user?.full_name || 'User'}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
                           {comment.user?.full_name?.charAt(0) || 'U'}
                         </div>
+                          )}
+                        </button>
                         <div className="flex-1">
                           <div className="bg-gray-50 rounded-lg px-3 py-2">
-                            <div className="font-semibold text-sm text-gray-900">{comment.user?.full_name || 'User'}</div>
+                            <div className="flex items-start justify-between">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  viewUserProfile(comment.user_id || getUserId(comment.user));
+                                }}
+                                className="font-semibold text-sm text-gray-900 hover:text-blue-600 transition-colors text-left"
+                              >
+                                {comment.user?.full_name || 'User'}
+                              </button>
+                              {isCommentOwner(comment) && (
+                                <div className="relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setActiveCommentMenu(activeCommentMenu === comment.id ? null : comment.id);
+                                    }}
+                                    className="text-gray-400 hover:text-gray-600"
+                                  >
+                                    <MoreHorizontal className="w-4 h-4" />
+                                  </button>
+                                  {activeCommentMenu === comment.id && (
+                                    <div className="absolute right-0 top-6 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-1">
+                                      <button
+                                        onClick={(e) => handleCommentMenuAction('edit', comment.id, e)}
+                                        className="flex items-center w-full px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
+                                      >
+                                        <Edit2 className="w-3 h-3 mr-2 text-blue-600" />
+                                        Edit
+                                      </button>
+                                      <button
+                                        onClick={(e) => handleCommentMenuAction('delete', comment.id, e)}
+                                        className="flex items-center w-full px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
+                                      >
+                                        <Trash2 className="w-3 h-3 mr-2" />
+                                        Delete
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            {editingCommentId === comment.id ? (
+                              <div className="mt-2 space-y-2">
+                                <textarea
+                                  value={editCommentContent}
+                                  onChange={(e) => setEditCommentContent(e.target.value)}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                  rows={3}
+                                  autoFocus
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleEditComment(comment.id, post.id)}
+                                    disabled={!editCommentContent.trim()}
+                                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                                  >
+                                    Save
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setEditingCommentId(null);
+                                      setEditCommentContent('');
+                                    }}
+                                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
                             <p className="text-gray-700 text-sm mt-1">{comment.content}</p>
+                            )}
                           </div>
                           <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                            <span>{formatTime(comment.created_at)}</span>
+                            <span>
+                              {formatTime(comment.created_at)}
+                              {comment.updated_at && comment.updated_at !== comment.created_at && (
+                                <span className="ml-1 text-gray-400">(edited)</span>
+                              )}
+                            </span>
                             <button
                               onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
                               className="hover:text-blue-600 font-medium"
@@ -8471,26 +9782,33 @@ return (
                           {/* Reply Input */}
                           {replyingTo[comment.id] && (
                             <div className="mt-2 ml-4">
+                              <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                               <textarea
                                 value={replyContents[comment.id] || ''}
-                                onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
+                                  onChange={(e) => {
+                                    setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }));
+                                    // Auto-resize textarea
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                                  }}
                                 placeholder="Write a reply..."
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-                                rows={2}
-                              />
-                              <div className="flex gap-2 mt-2">
+                                  className="flex-1 resize-none border-none outline-none text-sm py-1"
+                                  rows={1}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault()
+                                      addComment(post.id, comment.id)
+                                    }
+                                  }}
+                                  style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                                />
                                 <button
                                   onClick={() => addComment(post.id, comment.id)}
                                   disabled={!replyContents[comment.id]?.trim()}
-                                  className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                                  className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                                  title="Send reply"
                                 >
-                                  Reply
-                                </button>
-                                <button
-                                  onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: false }))}
-                                  className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
-                                >
-                                  Cancel
+                                  <Send className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
@@ -8509,16 +9827,108 @@ return (
                                 <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                   {comment.replies.map(reply => (
                                     <div key={reply.id} className="flex gap-2">
-                                      <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          viewUserProfile(reply.user_id || getUserId(reply.user));
+                                        }}
+                                        className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                                      >
+                                        {reply.user?.avatar_url ? (
+                                          <img
+                                            src={reply.user.avatar_url}
+                                            alt={reply.user?.full_name || 'User'}
+                                            className="w-6 h-6 rounded-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-6 h-6 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-semibold text-xs">
                                         {reply.user?.full_name?.charAt(0) || 'U'}
                                       </div>
+                                        )}
+                                      </button>
                                       <div className="flex-1">
                                         <div className="bg-gray-50 rounded-lg px-3 py-2">
-                                          <div className="font-semibold text-xs text-gray-900">{reply.user?.full_name || 'User'}</div>
+                                          <div className="flex items-start justify-between">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                viewUserProfile(reply.user_id || getUserId(reply.user));
+                                              }}
+                                              className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                            >
+                                              {reply.user?.full_name || 'User'}
+                                            </button>
+                                            {isCommentOwner(reply) && (
+                                              <div className="relative">
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setActiveCommentMenu(activeCommentMenu === reply.id ? null : reply.id);
+                                                  }}
+                                                  className="text-gray-400 hover:text-gray-600"
+                                                >
+                                                  <MoreHorizontal className="w-3 h-3" />
+                                                </button>
+                                                {activeCommentMenu === reply.id && (
+                                                  <div className="absolute right-0 top-4 w-36 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-1">
+                                                    <button
+                                                      onClick={(e) => handleCommentMenuAction('edit', reply.id, e)}
+                                                      className="flex items-center w-full px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                                    >
+                                                      <Edit2 className="w-3 h-3 mr-2 text-blue-600" />
+                                                      Edit
+                                                    </button>
+                                                    <button
+                                                      onClick={(e) => handleCommentMenuAction('delete', reply.id, e)}
+                                                      className="flex items-center w-full px-3 py-1 text-xs text-red-600 hover:bg-red-50"
+                                                    >
+                                                      <Trash2 className="w-3 h-3 mr-2" />
+                                                      Delete
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            )}
+                                          </div>
+                                          {editingCommentId === reply.id ? (
+                                            <div className="mt-2 space-y-2">
+                                              <textarea
+                                                value={editCommentContent}
+                                                onChange={(e) => setEditCommentContent(e.target.value)}
+                                                className="w-full px-2 py-1 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                                                rows={2}
+                                                autoFocus
+                                              />
+                                              <div className="flex gap-2">
+                                                <button
+                                                  onClick={() => handleEditComment(reply.id, post.id)}
+                                                  disabled={!editCommentContent.trim()}
+                                                  className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                >
+                                                  Save
+                                                </button>
+                                                <button
+                                                  onClick={() => {
+                                                    setEditingCommentId(null);
+                                                    setEditCommentContent('');
+                                                  }}
+                                                  className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                                                >
+                                                  Cancel
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
                                           <p className="text-gray-700 text-xs mt-1">{reply.content}</p>
+                                          )}
                                         </div>
                                         <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                                          <span>{formatTime(reply.created_at)}</span>
+                                          <span>
+                                            {formatTime(reply.created_at)}
+                                            {reply.updated_at && reply.updated_at !== reply.created_at && (
+                                              <span className="ml-1 text-gray-400">(edited)</span>
+                                            )}
+                                          </span>
                                           <button
                                             onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: !prev[reply.id] }))}
                                             className="hover:text-blue-600 font-medium"
@@ -8530,26 +9940,33 @@ return (
                                         {/* Reply to Reply Input */}
                                         {replyingTo[reply.id] && (
                                           <div className="mt-2">
+                                            <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                                             <textarea
                                               value={replyContents[reply.id] || ''}
-                                              onChange={(e) => setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }))}
+                                                onChange={(e) => {
+                                                  setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }));
+                                                  // Auto-resize textarea
+                                                  e.target.style.height = 'auto';
+                                                  e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                                                }}
                                               placeholder="Write a reply..."
-                                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none text-sm"
-                                              rows={2}
-                                            />
-                                            <div className="flex gap-2 mt-2">
+                                                className="flex-1 resize-none border-none outline-none text-xs py-1"
+                                                rows={1}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault()
+                                                    addComment(post.id, reply.id)
+                                                  }
+                                                }}
+                                                style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                                              />
                                               <button
                                                 onClick={() => addComment(post.id, reply.id)}
                                                 disabled={!replyContents[reply.id]?.trim()}
-                                                className="px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+                                                className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                                                title="Send reply"
                                               >
-                                                Reply
-                                              </button>
-                                              <button
-                                                onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: false }))}
-                                                className="px-3 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
-                                              >
-                                                Cancel
+                                                <Send className="w-4 h-4" />
                                               </button>
                                             </div>
                                           </div>
@@ -8568,15 +9985,107 @@ return (
                                               <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                                 {reply.replies.map(nestedReply => (
                                                   <div key={nestedReply.id} className="flex gap-2">
-                                                    <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
+                                                      }}
+                                                      className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                                                    >
+                                                      {nestedReply.user?.avatar_url ? (
+                                                        <img
+                                                          src={nestedReply.user.avatar_url}
+                                                          alt={nestedReply.user?.full_name || 'User'}
+                                                          className="w-6 h-6 rounded-full object-cover"
+                                                        />
+                                                      ) : (
+                                                        <div className="w-6 h-6 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-semibold text-xs">
                                                       {nestedReply.user?.full_name?.charAt(0) || 'U'}
                                                     </div>
+                                                      )}
+                                                    </button>
                                                     <div className="flex-1">
                                                       <div className="bg-gray-50 rounded-lg px-3 py-2">
-                                                        <div className="font-semibold text-xs text-gray-900">{nestedReply.user?.full_name || 'User'}</div>
+                                                        <div className="flex items-start justify-between">
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
+                                                            }}
+                                                            className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                                          >
+                                                            {nestedReply.user?.full_name || 'User'}
+                                                          </button>
+                                                          {isCommentOwner(nestedReply) && (
+                                                            <div className="relative">
+                                                              <button
+                                                                onClick={(e) => {
+                                                                  e.stopPropagation();
+                                                                  setActiveCommentMenu(activeCommentMenu === nestedReply.id ? null : nestedReply.id);
+                                                                }}
+                                                                className="text-gray-400 hover:text-gray-600"
+                                                              >
+                                                                <MoreHorizontal className="w-3 h-3" />
+                                                              </button>
+                                                              {activeCommentMenu === nestedReply.id && (
+                                                                <div className="absolute right-0 top-4 w-32 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-1">
+                                                                  <button
+                                                                    onClick={(e) => handleCommentMenuAction('edit', nestedReply.id, e)}
+                                                                    className="flex items-center w-full px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                                                                  >
+                                                                    <Edit2 className="w-3 h-3 mr-1 text-blue-600" />
+                                                                    Edit
+                                                                  </button>
+                                                                  <button
+                                                                    onClick={(e) => handleCommentMenuAction('delete', nestedReply.id, e)}
+                                                                    className="flex items-center w-full px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                                                                  >
+                                                                    <Trash2 className="w-3 h-3 mr-1" />
+                                                                    Delete
+                                                                  </button>
+                                                                </div>
+                                                              )}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                        {editingCommentId === nestedReply.id ? (
+                                                          <div className="mt-2 space-y-1">
+                                                            <textarea
+                                                              value={editCommentContent}
+                                                              onChange={(e) => setEditCommentContent(e.target.value)}
+                                                              className="w-full px-2 py-1 border border-gray-300 rounded resize-none focus:ring-2 focus:ring-blue-500 text-xs"
+                                                              rows={2}
+                                                              autoFocus
+                                                            />
+                                                            <div className="flex gap-1">
+                                                              <button
+                                                                onClick={() => handleEditComment(nestedReply.id, post.id)}
+                                                                disabled={!editCommentContent.trim()}
+                                                                className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                              >
+                                                                Save
+                                                              </button>
+                                                              <button
+                                                                onClick={() => {
+                                                                  setEditingCommentId(null);
+                                                                  setEditCommentContent('');
+                                                                }}
+                                                                className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                                                              >
+                                                                Cancel
+                                                              </button>
+                                                            </div>
+                                                          </div>
+                                                        ) : (
                                                         <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
+                                                        )}
                                                       </div>
-                                                      <span className="text-xs text-gray-500 ml-2">{formatTime(nestedReply.created_at)}</span>
+                                                      <span className="text-xs text-gray-500 ml-2">
+                                                        {formatTime(nestedReply.created_at)}
+                                                        {nestedReply.updated_at && nestedReply.updated_at !== nestedReply.created_at && (
+                                                          <span className="ml-1 text-gray-400">(edited)</span>
+                                                        )}
+                                                      </span>
                                                     </div>
                                                   </div>
                                                 ))}
@@ -8634,9 +10143,7 @@ return (
                 {suggestedConnections.length > 0 ? (
                   suggestedConnections.slice(0, 3).map(profile => (
                     <div key={profile.id} className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-semibold flex-shrink-0">
-                        {profile.full_name?.charAt(0) || '?'}
-                      </div>
+                      <Avatar src={profile.avatar_url} name={profile.full_name} className="w-10 h-10 flex-shrink-0" useInlineSize={false} />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm text-gray-900 truncate">
                           {profile.full_name}
@@ -8647,8 +10154,12 @@ return (
                         <p className="text-xs text-gray-500 truncate">
                           {profile.city && profile.county ? `${profile.city}, ${profile.county}` : 'UK'}
                         </p>
-                        <button className="mt-2 px-3 py-1 text-xs font-medium text-blue-600 bg-blue-50 rounded-full hover:bg-blue-100 transition-colors">
-                          Connect
+                        <button
+                          onClick={() => handleSuggestedConnect(profile.id)}
+                          disabled={!!connectingIds[profile.id]}
+                          className={`mt-2 px-3 py-1 text-xs font-medium rounded-full transition-colors ${connectingIds[profile.id] ? 'bg-gray-200 text-gray-500' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
+                        >
+                          {connectingIds[profile.id] ? 'Sending…' : 'Connect'}
                         </button>
                       </div>
                     </div>
@@ -8674,21 +10185,27 @@ return (
               </div>
             </div>
 
+            {/* Upcoming Activities (placeholder) */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Upcoming Activities</h3>
+              <p className="text-xs text-gray-600">No upcoming activities. Check back later.</p>
+            </div>
+
             {/* Quick Stats */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
               <h3 className="font-semibold text-gray-900 mb-3 text-sm">Network Activity</h3>
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Total Members</span>
-                  <span className="font-semibold text-gray-900">2,500+</span>
+                  <span className="font-semibold text-gray-900">{networkStats.totalMembers}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Active Today</span>
-                  <span className="font-semibold text-green-600">347</span>
+                  <span className="font-semibold text-green-600">{networkStats.activeToday}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600">Posts This Week</span>
-                  <span className="font-semibold text-blue-600">89</span>
+                  <span className="font-semibold text-blue-600">{networkStats.postsThisWeek}</span>
                 </div>
               </div>
             </div>
@@ -8738,9 +10255,7 @@ return (
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold">
-                  {userProfile?.full_name?.charAt(0) || 'U'}
-                </div>
+                <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-12 h-12" useInlineSize={false} />
                 <div>
                   <h3 className="font-semibold text-gray-900">{userProfile?.full_name || 'User'}</h3>
                   <button className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1 mt-0.5">
@@ -9661,9 +11176,7 @@ return (
           <div className="p-6 space-y-6">
             {/* Profile Header */}
             <div className="flex items-center gap-4">
-              <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                {selectedUserProfile.full_name?.charAt(0) || 'U'}
-              </div>
+              <Avatar src={selectedUserProfile.avatar_url} name={selectedUserProfile.full_name} className="w-20 h-20" useInlineSize={false} />
               <div>
                 <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
                 <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
@@ -9739,9 +11252,19 @@ return (
                   viewUserProfile(selectedPost.user_id || getUserId(selectedPost.user))
                   setSelectedPost(null)
                 }}
-                className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors"
+                className="flex-shrink-0 hover:opacity-80 transition-opacity"
               >
+                {selectedPost.user?.avatar_url ? (
+                  <img
+                    src={selectedPost.user.avatar_url}
+                    alt={getUserDisplayName(selectedPost.user)}
+                    className="w-12 h-12 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors">
                 {getUserDisplayName(selectedPost.user)?.charAt(0) || 'U'}
+                  </div>
+                )}
               </button>
               <div>
                 <button
@@ -9826,28 +11349,69 @@ return (
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center text-sm text-gray-500">
                   <MessageSquare className="w-4 h-4 mr-1" />
-                  {selectedPost.replies_count} comments
+                  {(() => {
+                    // If comments are loaded, use actual count
+                    const postComments = comments[selectedPost.id];
+                    if (postComments !== undefined) {
+                      // Count all top-level comments (not replies)
+                      const topLevelCount = postComments.filter(c => !c.parent_reply_id).length;
+                      // Count all replies recursively
+                      const countReplies = (commentList: Comment[]): number => {
+                        let count = 0;
+                        commentList.forEach(comment => {
+                          if (comment.replies && comment.replies.length > 0) {
+                            count += comment.replies.length;
+                            count += countReplies(comment.replies);
+                          }
+                        });
+                        return count;
+                      };
+                      const repliesCount = countReplies(postComments);
+                      return topLevelCount + repliesCount;
+                    }
+                    // Otherwise use replies_count from post
+                    return selectedPost.replies_count || 0;
+                  })()} comments
                 </div>
               </div>
 
               {/* Comment Input */}
               {user && !postSettings[selectedPost.id]?.comments_disabled && (
                 <div className="mb-4">
+                  <div className="flex gap-2 items-center">
+                    <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
+                      {userProfile?.full_name?.charAt(0) || 'U'}
+                    </div>
+                    <div className="flex-1 flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                   <textarea
                     placeholder="Add a comment..."
                     value={newComments[selectedPost.id] || ''}
-                    onChange={(e) => setNewComments(prev => ({ ...prev, [selectedPost.id]: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows={3}
-                  />
-                  <div className="flex justify-end mt-2">
+                        onChange={(e) => {
+                          setNewComments(prev => ({ ...prev, [selectedPost.id]: e.target.value }));
+                          // Auto-resize textarea
+                          e.target.style.height = 'auto';
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                        }}
+                        className="flex-1 resize-none border-none outline-none text-sm py-1"
+                        rows={1}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            addComment(selectedPost.id)
+                          }
+                          // Shift+Enter allows new line (default behavior)
+                        }}
+                        style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                      />
                     <button
                       onClick={() => addComment(selectedPost.id)}
                       disabled={!newComments[selectedPost.id]?.trim()}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                        className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                        title="Post comment"
                     >
-                      Comment
+                        <Send className="w-4 h-4" />
                     </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -9870,9 +11434,19 @@ return (
                           e.stopPropagation();
                           viewUserProfile(comment.user_id || getUserId(comment.user));
                         }}
-                        className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                        className="flex-shrink-0 hover:opacity-80 transition-opacity"
                       >
+                        {comment.user?.avatar_url ? (
+                          <img
+                            src={comment.user.avatar_url}
+                            alt={getUserDisplayName(comment.user)}
+                            className="w-8 h-8 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
                         {getUserDisplayName(comment.user)?.charAt(0) || 'U'}
+                          </div>
+                        )}
                       </button>
                       
                       <div className="flex-1">
@@ -9897,6 +11471,9 @@ return (
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-gray-500">
                                 {formatTime(comment.created_at)}
+                                {comment.updated_at && comment.updated_at !== comment.created_at && (
+                                  <span className="ml-1 text-gray-400">(edited)</span>
+                                )}
                               </span>
                               
                               {/* Yorum Menüsü */}
@@ -9945,7 +11522,37 @@ return (
                             </div>
                           </div>
                           
+                          {editingCommentId === comment.id ? (
+                            <div className="mt-2 space-y-2">
+                              <textarea
+                                value={editCommentContent}
+                                onChange={(e) => setEditCommentContent(e.target.value)}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                rows={3}
+                                autoFocus
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => handleEditComment(comment.id, selectedPost.id)}
+                                  disabled={!editCommentContent.trim()}
+                                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingCommentId(null);
+                                    setEditCommentContent('');
+                                  }}
+                                  className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
                           <p className="text-gray-700 mt-2">{comment.content}</p>
+                          )}
 
                           {/* Yorum Etkileşim Butonları */}
                           <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200">
@@ -10008,26 +11615,33 @@ return (
                         {/* Reply Formu */}
                         {replyingTo[comment.id] && user && !postSettings[selectedPost.id]?.comments_disabled && (
                           <div className="ml-4 mt-3">
+                            <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                             <textarea
                               placeholder="Write a reply..."
                               value={replyContents[comment.id] || ''}
-                              onChange={(e) => setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }))}
-                              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              rows={2}
-                            />
-                            <div className="flex justify-end mt-2 gap-2">
-                              <button
-                                onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: false }))}
-                                className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                              >
-                                Cancel
-                              </button>
+                                onChange={(e) => {
+                                  setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }));
+                                  // Auto-resize textarea
+                                  e.target.style.height = 'auto';
+                                  e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                                }}
+                                className="flex-1 resize-none border-none outline-none text-sm py-1"
+                                rows={1}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault()
+                                    addComment(selectedPost.id, comment.id)
+                                  }
+                                }}
+                                style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                              />
                               <button
                                 onClick={() => addComment(selectedPost.id, comment.id)}
                                 disabled={!replyContents[comment.id]?.trim()}
-                                className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                                title="Send reply"
                               >
-                                Reply
+                                <Send className="w-4 h-4" />
                               </button>
                             </div>
                           </div>
@@ -10044,9 +11658,19 @@ return (
                                     e.stopPropagation();
                                     viewUserProfile(reply.user_id || getUserId(reply.user));
                                   }}
-                                  className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                                  className="flex-shrink-0 hover:opacity-80 transition-opacity"
                                 >
+                                  {reply.user?.avatar_url ? (
+                                    <img
+                                      src={reply.user.avatar_url}
+                                      alt={getUserDisplayName(reply.user)}
+                                      className="w-6 h-6 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
                                   {getUserDisplayName(reply.user)?.charAt(0) || 'U'}
+                                    </div>
+                                  )}
                                 </button>
                                 
                                 <div className="flex-1">
@@ -10070,6 +11694,9 @@ return (
                                       <div className="flex items-center gap-2">
                                         <span className="text-xs text-gray-500">
                                           {formatTime(reply.created_at)}
+                                          {reply.updated_at && reply.updated_at !== reply.created_at && (
+                                            <span className="ml-1 text-gray-400">(edited)</span>
+                                          )}
                                         </span>
                                         
                                         {/* Yanıt Menüsü */}
@@ -10118,7 +11745,46 @@ return (
                                       </div>
                                     </div>
                                     
+                                    {editingCommentId === reply.id ? (
+                                      <div className="mt-2 space-y-2">
+                                        <textarea
+                                          value={editCommentContent}
+                                          onChange={(e) => setEditCommentContent(e.target.value)}
+                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                          rows={2}
+                                          autoFocus
+                                        />
+                                        <div className="flex gap-2">
+                                          <button
+                                            onClick={() => {
+                                              // Find postId for this reply
+                                              for (const postId in comments) {
+                                                const found = comments[postId].flatMap(c => c.replies || []).find(r => r.id === reply.id);
+                                                if (found) {
+                                                  handleEditComment(reply.id, postId);
+                                                  return;
+                                                }
+                                              }
+                                            }}
+                                            disabled={!editCommentContent.trim()}
+                                            className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                          >
+                                            Save
+                                          </button>
+                                          <button
+                                            onClick={() => {
+                                              setEditingCommentId(null);
+                                              setEditCommentContent('');
+                                            }}
+                                            className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-300 transition-colors"
+                                          >
+                                            Cancel
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : (
                                     <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
+                                    )}
                                     
                                     {/* Yanıt Etkileşim Butonları */}
                                     <div className="flex items-center gap-3 mt-2 pt-2 border-t border-green-100">
@@ -10178,26 +11844,33 @@ return (
                                   {/* Yanıtlara Yanıt Formu */}
                                   {replyingTo[reply.id] && user && !postSettings[selectedPost.id]?.comments_disabled && (
                                     <div className="ml-4 mt-3">
+                                      <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                                       <textarea
                                         placeholder="Write a reply..."
                                         value={replyContents[reply.id] || ''}
-                                        onChange={(e) => setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        rows={2}
-                                      />
-                                      <div className="flex justify-end mt-2 gap-2">
-                                        <button
-                                          onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: false }))}
-                                          className="px-3 py-1 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                                        >
-                                          Cancel
-                                        </button>
+                                          onChange={(e) => {
+                                            setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }));
+                                            // Auto-resize textarea
+                                            e.target.style.height = 'auto';
+                                            e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                                          }}
+                                          className="flex-1 resize-none border-none outline-none text-sm py-1"
+                                          rows={1}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                              e.preventDefault()
+                                              addComment(selectedPost.id, reply.id)
+                                            }
+                                          }}
+                                          style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                                        />
                                         <button
                                           onClick={() => addComment(selectedPost.id, reply.id)}
                                           disabled={!replyContents[reply.id]?.trim()}
-                                          className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                          className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                                          title="Send reply"
                                         >
-                                          Reply
+                                          <Send className="w-4 h-4" />
                                         </button>
                                       </div>
                                     </div>
@@ -10213,9 +11886,19 @@ return (
                                               e.stopPropagation();
                                               viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
                                             }}
-                                            className="w-5 h-5 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 hover:opacity-80 transition-opacity"
+                                            className="flex-shrink-0 hover:opacity-80 transition-opacity"
                                           >
+                                            {nestedReply.user?.avatar_url ? (
+                                              <img
+                                                src={nestedReply.user.avatar_url}
+                                                alt={getUserDisplayName(nestedReply.user)}
+                                                className="w-5 h-5 rounded-full object-cover"
+                                              />
+                                            ) : (
+                                              <div className="w-5 h-5 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
                                             {getUserDisplayName(nestedReply.user)?.charAt(0) || 'U'}
+                                              </div>
+                                            )}
                                           </button>
                                           <div className="flex-1">
                                             <div className="bg-orange-50 rounded-lg p-2">
@@ -10236,9 +11919,63 @@ return (
                                                 </div>
                                                 <span className="text-xs text-gray-500">
                                                   {formatTime(nestedReply.created_at)}
+                                                  {nestedReply.updated_at && nestedReply.updated_at !== nestedReply.created_at && (
+                                                    <span className="ml-1 text-gray-400">(edited)</span>
+                                                  )}
                                                 </span>
                                               </div>
+                                              {editingCommentId === nestedReply.id ? (
+                                                <div className="mt-2 space-y-2">
+                                                  <textarea
+                                                    value={editCommentContent}
+                                                    onChange={(e) => setEditCommentContent(e.target.value)}
+                                                    className="w-full px-2 py-1 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                                                    rows={2}
+                                                    autoFocus
+                                                  />
+                                                  <div className="flex gap-2">
+                                                    <button
+                                                      onClick={() => {
+                                                        for (const postId in comments) {
+                                                          const findInNested = (comments: Comment[]): Comment | null => {
+                                                            for (const c of comments) {
+                                                              if (c.replies) {
+                                                                for (const r of c.replies) {
+                                                                  if (r.replies) {
+                                                                    const found = r.replies.find(nr => nr.id === nestedReply.id);
+                                                                    if (found) return found;
+                                                                  }
+                                                                }
+                                                              }
+                                                            }
+                                                            return null;
+                                                          };
+                                                          const found = findInNested(comments[postId] || []);
+                                                          if (found) {
+                                                            handleEditComment(nestedReply.id, postId);
+                                                            return;
+                                                          }
+                                                        }
+                                                      }}
+                                                      disabled={!editCommentContent.trim()}
+                                                      className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                    >
+                                                      Save
+                                                    </button>
+                                                    <button
+                                                      onClick={() => {
+                                                        setEditingCommentId(null);
+                                                        setEditCommentContent('');
+                                                      }}
+                                                      className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                                                    >
+                                                      Cancel
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              ) : (
                                               <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
+                                              )}
                                               
                                               {/* Nested Yanıt Etkileşim Butonları */}
                                               <div className="flex items-center gap-3 mt-2 pt-2 border-t border-orange-100">
@@ -10302,6 +12039,84 @@ return (
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Report Comment Modal */}
+    {reportModalOpen && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={() => setReportModalOpen(false)}>
+        <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Report Comment</h3>
+            <button
+              onClick={() => {
+                setReportModalOpen(false);
+                setReportingCommentId(null);
+                setReportReason('');
+              }}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <p className="text-sm text-gray-600 mb-4">
+            Please tell us why you're reporting this comment. This helps us keep the community safe.
+          </p>
+
+          <div className="space-y-3 mb-4">
+            {['Spam', 'Harassment', 'Inappropriate content', 'Misinformation', 'Other'].map((reason) => (
+              <label key={reason} className="flex items-center cursor-pointer">
+                <input
+                  type="radio"
+                  name="reportReason"
+                  value={reason}
+                  checked={reportReason === reason}
+                  onChange={(e) => {
+                    if (reason === 'Other') {
+                      setReportReason('');
+                    } else {
+                      setReportReason(e.target.value);
+                    }
+                  }}
+                  className="mr-2"
+                />
+                <span className="text-sm text-gray-700">{reason}</span>
+              </label>
+            ))}
+          </div>
+
+          {reportReason === 'Other' && (
+            <textarea
+              placeholder="Please provide details..."
+              value={reportDetails}
+              onChange={(e) => setReportDetails(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none mb-4 text-sm"
+              rows={3}
+            />
+          )}
+
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => {
+                setReportModalOpen(false);
+                setReportingCommentId(null);
+                setReportReason('');
+                setReportDetails('');
+              }}
+              className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleReportComment}
+              disabled={!(reportReason === 'Other' ? reportDetails.trim() : reportReason.trim())}
+              className="px-4 py-2 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300 transition-colors"
+            >
+              Submit Report
+            </button>
           </div>
         </div>
       </div>
@@ -13781,4 +15596,4 @@ function AuthModalComponent({
   )
 }
 
-export default App
+// wrapped export provided earlier
