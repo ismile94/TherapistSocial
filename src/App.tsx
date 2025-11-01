@@ -1374,8 +1374,24 @@ function AppInner() {
       if (feedFilters.content_types.length > 0) {
         query = query.in('post_metadata->content_type', feedFilters.content_types)
       }
+      if (feedFilters.tags.length > 0) {
+        query = query.contains('post_metadata->tags', feedFilters.tags)
+      }
+      if (feedFilters.audience_levels.length > 0) {
+        query = query.in('post_metadata->audience_level', feedFilters.audience_levels)
+      }
+      if (feedFilters.related_conditions.length > 0) {
+        query = query.contains('post_metadata->related_conditions', feedFilters.related_conditions)
+      }
+      if (feedFilters.languages.length > 0) {
+        query = query.in('post_metadata->language', feedFilters.languages)
+      }
       if (feedFilters.show_only_my_profession && userProfile?.profession) {
         query = query.contains('post_metadata->professions', [userProfile.profession])
+      }
+      if (feedFilters.show_only_my_network && connections && connections.length > 0) {
+        const connectedIds = connections.map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id))
+        query = query.in('user_id', connectedIds)
       }
 
       const { data, error } = await query
@@ -1556,7 +1572,7 @@ function AppInner() {
     if (activeView === 'community') {
       loadPosts()
     }
-  }, [activeView, feedFilters, userProfile])
+  }, [activeView, feedFilters, userProfile, connections])
 
   // Load user reactions when user logs in
   useEffect(() => {
@@ -1635,6 +1651,14 @@ function AppInner() {
 
     window.addEventListener('navigateToMessages', handleNavigateToMessages)
     return () => window.removeEventListener('navigateToMessages', handleNavigateToMessages)
+  }, [])
+
+  useEffect(() => {
+    const handleOpenAuthModal: EventListener = () => {
+      setIsAuthModalOpen(true)
+    }
+    window.addEventListener('openAuthModal', handleOpenAuthModal)
+    return () => window.removeEventListener('openAuthModal', handleOpenAuthModal)
   }, [])
 
   useEffect(() => {
@@ -2356,37 +2380,38 @@ profileCacheRef.current = {}
   return (
     <div className="h-screen flex flex-col">
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
-        <div className="flex items-center space-x-2">
+      <header className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="w-full max-w-7xl mx-auto flex items-center gap-4 px-4 py-3">
+          <div className="flex items-center pr-2">
           <h1 className="text-2xl font-bold text-gray-900">UK Therapist Network</h1>
-        </div>
-
-        <div className="flex-1 mx-6">
-          <div className="max-w-2xl mx-auto">
-            <GlobalSearch
-              onSelectPerson={(id) => {
-                setSelectedProfileId(id)
-                setActiveView('community')
-              }}
-              onSelectPost={(postId) => {
-                const target = postRefs.current[postId]
-                if (target?.scrollIntoView) {
-                  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                setSelectedPost(posts.find(p => p.id === postId) || null)
-                loadComments(postId)
-              }}
-              isConnected={(profileId) => {
-                try {
-                  const connSet = new Set((connections || []).map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id)))
-                  return connSet.has(profileId)
-                } catch { return false }
-              }}
-            />
           </div>
-        </div>
-        
-        <nav className="flex space-x-6 text-gray-600">
+
+          <div className="flex-1 px-2">
+            <div className="max-w-2xl">
+              <GlobalSearch
+                onSelectPerson={(id) => {
+                  setSelectedProfileId(id)
+                  setActiveView('community')
+                }}
+                onSelectPost={(postId) => {
+                  const target = postRefs.current[postId]
+                  if (target?.scrollIntoView) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                  setSelectedPost(posts.find(p => p.id === postId) || null)
+                  loadComments(postId)
+                }}
+                isConnected={(profileId) => {
+                  try {
+                    const connSet = new Set((connections || []).map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id)))
+                    return connSet.has(profileId)
+                  } catch { return false }
+                }}
+              />
+            </div>
+          </div>
+          
+          <nav className="flex items-center space-x-3 text-gray-600 pl-2">
           {/* Home Button */}
           <button
             onClick={() => {
@@ -2577,6 +2602,7 @@ profileCacheRef.current = {}
             onOpenConnections={() => setIsConnectionsOpen(true)}
           />
         </nav>
+        </div>
       </header>
         
       
@@ -6425,12 +6451,98 @@ function CommunityComponent() {
 
   const loadSuggestedConnections = async () => {
     if (!user?.id) return
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .neq('id', user.id)
-      .limit(5)
-    setSuggestedConnections(data || [])
+    try {
+      // 1) Fetch a pool of candidate profiles (exclude current user)
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id)
+        .limit(50)
+
+      const candidates: Profile[] = profiles || []
+
+      // 2) Build current user's accepted connection set
+      const currentConnectionIds = new Set(
+        (connections || [])
+          .filter((c: any) => c.status === 'accepted')
+          .map((c: any) => (c.sender_id === user.id ? c.receiver_id : c.sender_id))
+      )
+
+      // 3) Filter out already-connected candidates
+      const pool = candidates.filter(c => !currentConnectionIds.has(c.id))
+      if (pool.length === 0) {
+        setSuggestedConnections([])
+        return
+      }
+
+      // 4) Fetch accepted connections for these candidates (both directions)
+      const candidateIds = pool.map(c => c.id)
+      const { data: connsSender } = await supabase
+        .from('connections')
+        .select('sender_id,receiver_id,status')
+        .in('sender_id', candidateIds)
+        .eq('status', 'accepted')
+      const { data: connsReceiver } = await supabase
+        .from('connections')
+        .select('sender_id,receiver_id,status')
+        .in('receiver_id', candidateIds)
+        .eq('status', 'accepted')
+
+      const allCandConns = [...(connsSender || []), ...(connsReceiver || [])]
+      const candConnMap = new Map<string, Set<string>>()
+      allCandConns.forEach((row: any) => {
+        const a = row.sender_id
+        const b = row.receiver_id
+        if (!candConnMap.has(a)) candConnMap.set(a, new Set<string>())
+        if (!candConnMap.has(b)) candConnMap.set(b, new Set<string>())
+        candConnMap.get(a)!.add(b)
+        candConnMap.get(b)!.add(a)
+      })
+
+      // 5) Scoring helpers using available fields
+      const getGeoScore = (cand: any) => {
+        // Same city: 1, same county/region: 0.5, else 0
+        const cityMatch = userProfile?.city && cand.city && cand.city === userProfile.city
+        if (cityMatch) return 1
+        const regionMatch = userProfile?.county && cand.county && cand.county === userProfile.county
+        return regionMatch ? 0.5 : 0
+      }
+
+      const getProfileScore = (cand: any) => {
+        // Same profession -> 1 else 0 (extend with interests when available)
+        return userProfile?.profession && cand.profession && cand.profession === userProfile.profession ? 1 : 0
+      }
+
+      const scored = pool.map(cand => {
+        // Common connections score
+        const candSet = candConnMap.get(cand.id) || new Set<string>()
+        let common = 0
+        candSet.forEach(id => { if (currentConnectionIds.has(id)) common += 1 })
+        const scoreCommon = common / Math.max(currentConnectionIds.size, 1)
+
+        const scoreGroup = 0 // groups/schools/jobs not modeled yet in this app
+        const scoreGeo = getGeoScore(cand)
+        const scoreProfile = getProfileScore(cand)
+        const scoreActivity = 0 // recentInteractions not modeled yet
+
+        const totalScore = 0.4 * scoreCommon + 0.2 * scoreGroup + 0.1 * scoreGeo + 0.1 * scoreProfile + 0.2 * scoreActivity
+        return { cand, totalScore }
+      })
+
+      // 6) Sort and pick top N
+      scored.sort((a, b) => b.totalScore - a.totalScore)
+      const top = scored.slice(0, 10).map(s => s.cand)
+      setSuggestedConnections(top)
+    } catch (e) {
+      console.error('loadSuggestedConnections error:', e)
+      // Graceful fallback
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id)
+        .limit(5)
+      setSuggestedConnections(data || [])
+    }
   }
 
   const loadNetworkStats = async () => {
@@ -8169,6 +8281,8 @@ function CommunityComponent() {
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id);
+        
+
       } else {
         // Add like, remove old reaction if exists
         setPostLikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
@@ -8206,7 +8320,9 @@ function CommunityComponent() {
             post_id: postId,
             user_id: user.id,
             reaction_type: 'like'
-          });
+          }, { onConflict: 'post_id,user_id' });
+        
+
       }
     } catch (err) {
       console.error('Error updating post like:', err);
@@ -8230,6 +8346,8 @@ function CommunityComponent() {
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id);
+        
+
       } else {
         // Add dislike, remove old reaction if exists
         setPostDislikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
@@ -8267,14 +8385,15 @@ function CommunityComponent() {
             post_id: postId,
             user_id: user.id,
             reaction_type: 'dislike'
-          });
+          }, { onConflict: 'post_id,user_id' });
+        
+
       }
     } catch (err) {
       console.error('Error updating post dislike:', err);
     }
   };
 
-  // Handle emoji reaction
   const handleEmojiReaction = async (postId: string, emoji: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) return;
@@ -8299,7 +8418,9 @@ function CommunityComponent() {
           .from('post_reactions')
           .delete()
           .eq('post_id', postId)
-          .eq('user_id', user.id)
+          .eq('user_id', user.id);
+        
+
       } else {
         // Add emoji reaction, remove old if exists
         setPostReactions(prev => {
@@ -8343,7 +8464,8 @@ function CommunityComponent() {
             .from('post_reactions')
             .delete()
             .eq('post_id', postId)
-            .eq('user_id', user.id)
+            .eq('user_id', user.id);
+
         }
 
         setUserPostReactions(prev => ({ ...prev, [postId]: emoji }));
@@ -8351,7 +8473,9 @@ function CommunityComponent() {
         // Persist new emoji reaction
         await supabase
           .from('post_reactions')
-          .upsert({ post_id: postId, user_id: user.id, reaction_type: emoji })
+          .upsert({ post_id: postId, user_id: user.id, reaction_type: emoji }, { onConflict: 'post_id,user_id' });
+        
+
       }
       setShowEmojiPicker(null);
     } catch (err) {
@@ -8917,7 +9041,7 @@ return (
 
               {/* Action Buttons */}
               <div className="mt-4 space-y-2">
-                <button className="w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+                <button onClick={() => window.dispatchEvent(new Event('openAuthModal'))} className="w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
                   View My Profile
                 </button>
               </div>
@@ -8964,11 +9088,21 @@ return (
                   className="relative p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <Filter className="w-4 h-4" />
-                  {Object.values(feedFilters).flat().length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                      {Object.values(feedFilters).flat().length}
-                    </span>
-                  )}
+                  {(() => {
+                    const count = Object.values(feedFilters).reduce((acc, value) => {
+                      if (Array.isArray(value)) {
+                        return acc + value.length;
+                      } else if (typeof value === 'boolean' && value) {
+                        return acc + 1;
+                      }
+                      return acc;
+                    }, 0);
+                    return count > 0 ? (
+                      <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                        {count}
+                      </span>
+                    ) : null
+                  })()}
                 </button>
               </div>
             </div>
@@ -10140,33 +10274,49 @@ return (
                 <h3 className="font-semibold text-gray-900">People You May Know</h3>
               </div>
               <div className="p-4 space-y-4">
-                {suggestedConnections.length > 0 ? (
-                  suggestedConnections.slice(0, 3).map(profile => (
-                    <div key={profile.id} className="flex items-start gap-3">
-                      <Avatar src={profile.avatar_url} name={profile.full_name} className="w-10 h-10 flex-shrink-0" useInlineSize={false} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-gray-900 truncate">
-                          {profile.full_name}
-                        </p>
-                        <p className="text-xs text-gray-600 truncate">
-                          {profile.profession}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {profile.city && profile.county ? `${profile.city}, ${profile.county}` : 'UK'}
-                        </p>
+                {(() => {
+                  const connectedIds = new Set(
+                    (connections || []).map(c => (c.sender_id === user?.id ? c.receiver_id : c.sender_id))
+                  )
+                  const notConnected = suggestedConnections.filter(p => !connectedIds.has(p.id))
+                  return notConnected.length > 0 ? (
+                    notConnected.slice(0, 3).map(profile => (
+                      <div key={profile.id} className="flex items-start gap-3">
                         <button
-                          onClick={() => handleSuggestedConnect(profile.id)}
-                          disabled={!!connectingIds[profile.id]}
-                          className={`mt-2 px-3 py-1 text-xs font-medium rounded-full transition-colors ${connectingIds[profile.id] ? 'bg-gray-200 text-gray-500' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
+                          onClick={() => viewUserProfile(profile.id)}
+                          className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                          title="View profile"
                         >
-                          {connectingIds[profile.id] ? 'Sending…' : 'Connect'}
+                          <Avatar src={profile.avatar_url} name={profile.full_name} className="w-10 h-10" useInlineSize={false} />
                         </button>
+                        <div className="flex-1 min-w-0">
+                          <button
+                            onClick={() => viewUserProfile(profile.id)}
+                            className="font-medium text-sm text-gray-900 truncate text-left hover:text-blue-600 transition-colors"
+                            title="View profile"
+                          >
+                            {profile.full_name}
+                          </button>
+                          <p className="text-xs text-gray-600 truncate">
+                            {profile.profession}
+                          </p>
+                          <p className="text-xs text-gray-500 truncate">
+                            {profile.city && profile.county ? `${profile.city}, ${profile.county}` : 'UK'}
+                          </p>
+                          <button
+                            onClick={() => handleSuggestedConnect(profile.id)}
+                            disabled={!!connectingIds[profile.id]}
+                            className={`mt-2 px-3 py-1 text-xs font-medium rounded-full transition-colors ${connectingIds[profile.id] ? 'bg-gray-200 text-gray-500' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
+                          >
+                            {connectingIds[profile.id] ? 'Sending…' : 'Connect'}
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500">No suggestions available</p>
-                )}
+                    ))
+                  ) : (
+                    <p className="text-sm text-gray-500">No suggestions available</p>
+                  )
+                })()}
               </div>
             </div>
 
@@ -11163,24 +11313,29 @@ return (
     {selectedUserProfile && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
         <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900">User Profile</h3>
-            <button 
-              onClick={() => setSelectedUserProfile(null)} 
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
 
           <div className="p-6 space-y-6">
             {/* Profile Header */}
-            <div className="flex items-center gap-4">
-              <Avatar src={selectedUserProfile.avatar_url} name={selectedUserProfile.full_name} className="w-20 h-20" useInlineSize={false} />
-              <div>
-                <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
-                <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <Avatar 
+                  src={selectedUserProfile.avatar_url} 
+                  name={selectedUserProfile.full_name} 
+                  className="w-20 h-20" 
+                  useInlineSize={false} 
+                />
+                <div>
+                  <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
+                  <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+                </div>
               </div>
+
+              <button 
+                onClick={() => setSelectedUserProfile(null)} 
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
             {/* Profile Details */}
@@ -11220,7 +11375,10 @@ return (
               )}
             </div>
             <button 
-              onClick={() => console.log('View full profile')} 
+              onClick={() => { 
+                setSelectedUserProfile(null); 
+                window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: selectedUserProfile.id } })); 
+              }} 
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               View Full Profile
@@ -14091,9 +14249,13 @@ function AuthModalComponent({
                   View Full Profile
                 </button>
                 <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-                    {userProfile?.full_name?.charAt(0) || 'U'}
-                  </div>
+                  {userProfile?.avatar_url ? (
+                    <Avatar src={userProfile.avatar_url} name={userProfile.full_name} className="w-16 h-16" useInlineSize={false} />
+                  ) : (
+                    <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                      {userProfile?.full_name?.charAt(0) || 'U'}
+                    </div>
+                  )}
                   <div className="flex-1">
                     <h3 className="font-bold text-lg text-gray-900">{userProfile?.full_name || 'User'}</h3>
                     <div className="flex items-center gap-2 mt-1">
