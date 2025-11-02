@@ -5918,6 +5918,11 @@ function ProfileDetailPage({
   const [showConnectionOptions, setShowConnectionOptions] = useState(false)
   const [connectionId, setConnectionId] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [activeTab, setActiveTab] = useState<'about' | 'posts' | 'activities'>('about')
+  const [userPosts, setUserPosts] = useState<CommunityPost[]>([])
+  const [loadingPosts, setLoadingPosts] = useState(false)
+  const [activities, setActivities] = useState<any[]>([])
+  const [loadingActivities, setLoadingActivities] = useState(false)
 
   useEffect(() => {
     // Check if this profile is blocked
@@ -5933,6 +5938,14 @@ function ProfileDetailPage({
     loadProfile()
     loadAllProfessions()
   }, [profileId, allHiddenUserIds])
+
+  useEffect(() => {
+    if (profile && activeTab === 'posts') {
+      loadUserPosts()
+    } else if (profile && activeTab === 'activities') {
+      loadUserActivities()
+    }
+  }, [profileId, activeTab, profile])
 
   // Connection durumunu kontrol et
   useEffect(() => {
@@ -6254,6 +6267,268 @@ function ProfileDetailPage({
   }
 
   // Contact butonları için render fonksiyonu
+  const loadUserPosts = async () => {
+    if (!profileId) return
+    setLoadingPosts(true)
+    try {
+      // Fetch all posts by this user (including reposts and quotes)
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
+        `)
+        .eq('user_id', profileId)
+        .order('created_at', { ascending: false }) // Newest to oldest (reposts are sorted by repost time, not original post time)
+
+      if (error) {
+        console.error('Error loading user posts:', error)
+        return
+      }
+
+      // For reposts, fetch the original post details
+      const postsWithDetails = await Promise.all((data || []).map(async (post: any) => {
+        let originalPost = null
+        if (post.post_metadata?.is_repost && post.post_metadata?.reposted_post_id) {
+          // Fetch original post details
+          const { data: originalPostData } = await supabase
+            .from('posts')
+            .select(`
+              id,
+              title,
+              content,
+              created_at,
+              user_id,
+              user:profiles!user_id (id, full_name, profession, avatar_url)
+            `)
+            .eq('id', post.post_metadata.reposted_post_id)
+            .single()
+          
+          if (originalPostData) {
+            originalPost = originalPostData
+          }
+        }
+
+        return {
+          ...post,
+          user: post.user || {
+            full_name: 'Unknown User',
+            profession: '',
+            id: post.user_id
+          },
+          post_metadata: post.post_metadata || {},
+          original_post: originalPost
+        }
+      }))
+
+      setUserPosts(postsWithDetails)
+    } catch (err) {
+      console.error('Error loading user posts:', err)
+    } finally {
+      setLoadingPosts(false)
+    }
+  }
+
+  const loadUserActivities = async () => {
+    if (!profileId) return
+    setLoadingActivities(true)
+    try {
+      const activitiesList: any[] = []
+
+      // 1. Get liked posts (from post_reactions where reaction_type is 'like')
+      const { data: likedPosts } = await supabase
+        .from('post_reactions')
+        .select(`
+          post_id,
+          created_at,
+          post:posts!post_id (
+            id,
+            title,
+            content,
+            user_id,
+            user:profiles!user_id (full_name, avatar_url)
+          )
+        `)
+        .eq('user_id', profileId)
+        .eq('reaction_type', 'like')
+        .order('created_at', { ascending: false })
+
+      if (likedPosts) {
+        likedPosts.forEach((item: any) => {
+          activitiesList.push({
+            type: 'liked_post',
+            postId: item.post_id,
+            timestamp: item.created_at,
+            post: item.post,
+            message: `"${item.post?.title || item.post?.content?.slice(0, 50) || 'post'}" postunu beğendin`
+          })
+        })
+      }
+
+      // 2. Get liked comments (from comment_reactions where reaction_type is 'like')
+      const { data: likedComments } = await supabase
+        .from('comment_reactions')
+        .select(`
+          comment_id,
+          created_at,
+          comment:comments!comment_id (
+            id,
+            content,
+            post_id,
+            post:posts!post_id (
+              id,
+              title,
+              content,
+              user_id,
+              user:profiles!user_id (full_name, avatar_url)
+            )
+          )
+        `)
+        .eq('user_id', profileId)
+        .eq('reaction_type', 'like')
+        .order('created_at', { ascending: false })
+
+      if (likedComments) {
+        likedComments.forEach((item: any) => {
+          activitiesList.push({
+            type: 'liked_comment',
+            postId: item.comment?.post_id,
+            commentId: item.comment_id,
+            timestamp: item.created_at,
+            comment: item.comment,
+            post: item.comment?.post,
+            message: `"${item.comment?.post?.title || item.comment?.post?.content?.slice(0, 50) || 'post'}" gönderisindeki yorumu beğendin`
+          })
+        })
+      }
+
+      // 3. Get comments made by user
+      const { data: userComments } = await supabase
+        .from('comments')
+        .select(`
+          id,
+          content,
+          post_id,
+          created_at,
+          post:posts!post_id (
+            id,
+            title,
+            content,
+            user_id,
+            user:profiles!user_id (full_name, avatar_url)
+          )
+        `)
+        .eq('user_id', profileId)
+        .order('created_at', { ascending: false })
+
+      if (userComments) {
+        userComments.forEach((item: any) => {
+          activitiesList.push({
+            type: 'commented',
+            postId: item.post_id,
+            commentId: item.id,
+            timestamp: item.created_at,
+            comment: item,
+            post: item.post,
+            message: `"${item.post?.title || item.post?.content?.slice(0, 50) || 'post'}" gönderisine yorum yaptın`
+          })
+        })
+      }
+
+      // 4. Get replies to user's comments
+      const { data: userCommentsForReplies } = await supabase
+        .from('comments')
+        .select('id, post_id')
+        .eq('user_id', profileId)
+
+      if (userCommentsForReplies && userCommentsForReplies.length > 0) {
+        const userCommentIds = userCommentsForReplies.map(c => c.id)
+        const { data: replies } = await supabase
+          .from('comments')
+          .select(`
+            id,
+            content,
+            post_id,
+            parent_comment_id,
+            created_at,
+            post:posts!post_id (
+              id,
+              title,
+              content,
+              user_id,
+              user:profiles!user_id (full_name, avatar_url)
+            ),
+            user:profiles!user_id (full_name, avatar_url)
+          `)
+          .in('parent_comment_id', userCommentIds)
+          .neq('user_id', profileId) // Exclude replies made by the user themselves
+          .order('created_at', { ascending: false })
+
+        if (replies) {
+          replies.forEach((reply: any) => {
+            activitiesList.push({
+              type: 'reply_received',
+              postId: reply.post_id,
+              commentId: reply.parent_comment_id,
+              replyId: reply.id,
+              timestamp: reply.created_at,
+              reply: reply,
+              post: reply.post,
+              message: `"${reply.post?.title || reply.post?.content?.slice(0, 50) || 'post'}" gönderisindeki yorumuna cevap verildi`
+            })
+          })
+        }
+      }
+
+      // 5. Get replies made by user (to other comments)
+      const { data: userReplies } = await supabase
+        .from('comments')
+        .select(`
+          id,
+          content,
+          post_id,
+          parent_comment_id,
+          created_at,
+          post:posts!post_id (
+            id,
+            title,
+            content,
+            user_id,
+            user:profiles!user_id (full_name, avatar_url)
+          )
+        `)
+        .eq('user_id', profileId)
+        .not('parent_comment_id', 'is', null)
+        .order('created_at', { ascending: false })
+
+      if (userReplies) {
+        userReplies.forEach((item: any) => {
+          activitiesList.push({
+            type: 'replied',
+            postId: item.post_id,
+            commentId: item.parent_comment_id,
+            replyId: item.id,
+            timestamp: item.created_at,
+            comment: item,
+            post: item.post,
+            message: `"${item.post?.title || item.post?.content?.slice(0, 50) || 'post'}" gönderisindeki yoruma cevap verdin`
+          })
+        })
+      }
+
+      // Sort all activities by timestamp (newest first)
+      activitiesList.sort((a, b) => 
+        new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      )
+
+      setActivities(activitiesList)
+    } catch (err) {
+      console.error('Error loading user activities:', err)
+    } finally {
+      setLoadingActivities(false)
+    }
+  }
+
   const renderContactButtons = () => {
     if (!profile) return null
     const isOwnProfile = currentUserId === profileId
@@ -6609,8 +6884,54 @@ function ProfileDetailPage({
           </div>
         </div>
 
-        {/* Main Content Grid - TEK BİR KEZ RENDER EDİLİYOR */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+        {/* Tabs Navigation */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mb-6">
+          <div className="flex border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('about')}
+              className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
+                activeTab === 'about'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <User className="w-4 h-4" />
+                <span>About Me</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('posts')}
+              className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
+                activeTab === 'posts'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <FileText className="w-4 h-4" />
+                <span>Posts</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('activities')}
+              className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
+                activeTab === 'activities'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <ThumbsUp className="w-4 h-4" />
+                <span>Activities</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Tab Content */}
+        {activeTab === 'about' && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
           {/* Left Column - Main Info */}
           <div className="md:col-span-2 space-y-4 sm:space-y-6">
             {/* About Me */}
@@ -7296,6 +7617,177 @@ function ProfileDetailPage({
             </div>
           </div>
         </div>
+        )}
+
+        {/* Posts Tab */}
+        {activeTab === 'posts' && (
+          <div className="space-y-4">
+            {loadingPosts ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : userPosts.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No posts yet</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {userPosts.map((post: any) => {
+                  // For reposts, use original post data for display
+                  const displayPost = post.post_metadata?.is_repost && post.original_post 
+                    ? post.original_post 
+                    : post
+                  
+                  return (
+                    <div
+                      key={post.id}
+                      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
+                      onClick={() => {
+                        // For reposts, open the original post
+                        const targetPostId = post.post_metadata?.is_repost && post.original_post
+                          ? post.original_post.id
+                          : post.id
+                        window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                          detail: { postId: targetPostId }
+                        }))
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <Avatar
+                            src={displayPost.user?.avatar_url}
+                            name={displayPost.user?.full_name || 'User'}
+                            className="w-10 h-10"
+                            useInlineSize={false}
+                          />
+                          <div>
+                            <p className="font-semibold text-gray-900">{displayPost.user?.full_name}</p>
+                            <p className="text-sm text-gray-500">
+                              {post.post_metadata?.is_repost ? (
+                                <>
+                                  Reposted {new Date(post.created_at).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric',
+                                    year: 'numeric'
+                                  })}
+                                </>
+                              ) : (
+                                new Date(post.created_at).toLocaleDateString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric'
+                                })
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        {post.post_metadata?.is_repost && (
+                          <div className="flex items-center gap-1 text-blue-600 text-sm">
+                            <Repeat2 className="w-4 h-4" />
+                            <span>Reposted</span>
+                          </div>
+                        )}
+                        {post.post_metadata?.quoted_post_id && (
+                          <div className="flex items-center gap-1 text-blue-600 text-sm">
+                            <Quote className="w-4 h-4" />
+                            <span>Quoted</span>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {displayPost.title && (
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">{displayPost.title}</h3>
+                      )}
+                      
+                      {displayPost.content && (
+                        <p className="text-gray-700 mb-4 line-clamp-3">
+                          {displayPost.content.length > 200 ? `${displayPost.content.slice(0, 200)}...` : displayPost.content}
+                        </p>
+                      )}
+                      
+                      {post.post_metadata?.quoted_post_data && (
+                        <div className="border-l-4 border-blue-500 pl-4 py-2 mb-4 bg-gray-50 rounded-r">
+                          <p className="text-sm font-medium text-gray-900 mb-1">
+                            {post.post_metadata.quoted_post_data.user?.full_name || 'User'}
+                          </p>
+                          {post.post_metadata.quoted_post_data.title && (
+                            <p className="text-sm font-medium text-gray-900 mb-1">
+                              {post.post_metadata.quoted_post_data.title}
+                            </p>
+                          )}
+                          <p className="text-sm text-gray-700">
+                            {post.post_metadata.quoted_post_data.content?.slice(0, 150)}
+                            {post.post_metadata.quoted_post_data.content?.length > 150 && '...'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Activities Tab */}
+        {activeTab === 'activities' && (
+          <div className="space-y-4">
+            {loadingActivities ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : activities.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <ThumbsUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No activities yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activities.map((activity, index) => (
+                  <div
+                    key={`${activity.type}-${activity.postId || activity.commentId || activity.replyId}-${activity.timestamp}-${index}`}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow hover:border-blue-300"
+                    onClick={() => {
+                      if (activity.postId) {
+                        window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                          detail: {
+                            postId: activity.postId,
+                            commentId: activity.commentId || activity.replyId
+                          }
+                        }))
+                      }
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 mt-1">
+                        {activity.type === 'liked_post' && <ThumbsUp className="w-5 h-5 text-blue-600" />}
+                        {activity.type === 'liked_comment' && <ThumbsUp className="w-5 h-5 text-blue-600" />}
+                        {activity.type === 'commented' && <MessageCircle className="w-5 h-5 text-green-600" />}
+                        {activity.type === 'replied' && <MessageCircle className="w-5 h-5 text-green-600" />}
+                        {activity.type === 'reply_received' && <MessageCircle className="w-5 h-5 text-purple-600" />}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-gray-700 text-sm">
+                          {activity.message}
+                        </p>
+                        <p className="text-gray-400 text-xs mt-1">
+                          {new Date(activity.timestamp).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
