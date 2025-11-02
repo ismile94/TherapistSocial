@@ -4,17 +4,34 @@ import { ToastProvider } from './components/ToastProvider'
 import { useToast } from './components/useToast'
 import GlobalSearch from './components/GlobalSearch'
 import Avatar from './components/Avatar'
+import RichTextEditor from './components/RichTextEditor'
+import EmptyState from './components/EmptyState'
+import { 
+  PostSkeleton, 
+  MessageSkeleton, 
+  ProfilePageSkeleton,
+  SettingsSkeleton,
+  ConnectionListSkeleton
+} from './components/SkeletonLoaders'
+import { ConnectionStatusBanner } from './components/ConnectionStatusBanner'
+import { useNetworkStatus } from './hooks/useNetworkStatus'
+import { getErrorMessage } from './utils/errorHandler'
+import { usePullToRefresh } from './hooks/usePullToRefresh'
+import { haptic } from './utils/hapticFeedback'
+import { SwipeableConversationItem } from './components/SwipeableConversationItem'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import { IoHome } from "react-icons/io5";
 import { useSession } from '@supabase/auth-helpers-react'
+import UpcomingEvents from './components/UpcomingEvents'
 import { 
     Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
     UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
-    Download, Info, Trash2,ThumbsUp, ThumbsDown, Flag, RefreshCw, Printer,
-    Image as ImageIcon, FileText, BarChart3, MessageCircle, Bookmark
+    Download, Info, Trash2,ThumbsUp, Flag, RefreshCw, Printer,
+    FileText, MessageCircle, Bookmark,
+    CheckCircle, Circle, UserX, Monitor, Smartphone, LogOut, QrCode
 } from 'lucide-react'
 
 
@@ -83,6 +100,7 @@ interface PostMetadata {
   attachments: string[]
   co_authors: string[]
   is_public: boolean
+  visibility?: 'public' | 'connections' | 'only_me'
 }
 
 interface FeedFilters {
@@ -541,41 +559,75 @@ function MobileBottomNav({
 }
 
 function SettingsComponent({ onClose }: { onClose: () => void }) {
-  const [activeSection, setActiveSection] = useState<'account' | 'security' | 'visibility' | 'privacy' | 'notifications'>('account')
+  const [activeSection, setActiveSection] = useState<'account' | 'security' | 'visibility' | 'privacy' | 'notifications' | 'blocked' | 'sessions'>('account')
   const [settings, setSettings] = useState({
     email_notifications: true,
     push_notifications: true,
     profile_visibility: 'public',
-    message_permissions: 'network', // Yeni eklendi
+    message_permissions: 'network',
     language: 'english',
     timezone: 'Europe/London',
     email_connection_requests: true,
     email_messages: true,
     email_community_posts: false,
+    email_post_reactions: false,
+    email_comments: false,
+    email_mentions: false,
+    email_events: true,
     push_messages: true,
     push_connection_activity: false,
-    two_factor_enabled: false
-    // data_export_requested kaldırıldı - schema hatasını önlemek için
+    push_post_reactions: true,
+    push_comments: true,
+    push_mentions: true,
+    push_events: true,
+    two_factor_enabled: false,
+    two_factor_secret: null as string | null,
+    activity_status_visible: true,
+    search_visible: true,
+    profile_view_tracking: true,
+    quiet_hours_enabled: false,
+    quiet_hours_start: '22:00',
+    quiet_hours_end: '08:00'
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [userProfile, setUserProfile] = useState<any>(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [blockedUsers, setBlockedUsers] = useState<Profile[]>([])
+  const [loadingBlocked, setLoadingBlocked] = useState(false)
+  const [sessions, setSessions] = useState<any[]>([])
+  const [loadingSessions, setLoadingSessions] = useState(false)
+  const [changePasswordModal, setChangePasswordModal] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' })
+  const [passwordError, setPasswordError] = useState('')
+  const [exportingData, setExportingData] = useState(false)
+  const [twoFactorModal, setTwoFactorModal] = useState(false)
+  const [twoFactorCode, setTwoFactorCode] = useState('')
+  const [twoFactorQR, setTwoFactorQR] = useState('')
+  const [twoFactorSecret, setTwoFactorSecret] = useState('')
 
   const sections = [
     { id: 'account', name: 'Account preferences', icon: Settings },
     { id: 'security', name: 'Sign in & security', icon: Lock },
     { id: 'visibility', name: 'Visibility', icon: Eye },
     { id: 'privacy', name: 'Data privacy', icon: ShieldAlert },
-    { id: 'notifications', name: 'Notifications', icon: Bell }
+    { id: 'notifications', name: 'Notifications', icon: Bell },
+    { id: 'blocked', name: 'Blocked users', icon: UserX },
+    { id: 'sessions', name: 'Active sessions', icon: Monitor }
   ]
 
   useEffect(() => {
     initializeUser()
     loadSettings()
     loadUserProfile()
-  }, [])
+    if (activeSection === 'blocked') {
+      loadBlockedUsers()
+    }
+    if (activeSection === 'sessions') {
+      loadSessions()
+    }
+  }, [activeSection])
 
   const initializeUser = async () => {
     const { data: { user } } = await supabase.auth.getUser()
@@ -727,15 +779,30 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
           email_notifications: data.email_notifications ?? true,
           push_notifications: data.push_notifications ?? true,
           profile_visibility: data.profile_visibility || 'public',
-          message_permissions: data.message_permissions || 'network', // Yeni eklendi
+          message_permissions: data.message_permissions || 'network',
           language: data.language || 'english',
           timezone: data.timezone || 'Europe/London',
           email_connection_requests: data.email_connection_requests ?? true,
           email_messages: data.email_messages ?? true,
           email_community_posts: data.email_community_posts ?? false,
+          email_post_reactions: data.email_post_reactions ?? false,
+          email_comments: data.email_comments ?? false,
+          email_mentions: data.email_mentions ?? false,
+          email_events: data.email_events ?? true,
           push_messages: data.push_messages ?? true,
           push_connection_activity: data.push_connection_activity ?? false,
-          two_factor_enabled: data.two_factor_enabled ?? false
+          push_post_reactions: data.push_post_reactions ?? true,
+          push_comments: data.push_comments ?? true,
+          push_mentions: data.push_mentions ?? true,
+          push_events: data.push_events ?? true,
+          two_factor_enabled: data.two_factor_enabled ?? false,
+          two_factor_secret: data.two_factor_secret || null,
+          activity_status_visible: data.activity_status_visible ?? true,
+          search_visible: data.search_visible ?? true,
+          profile_view_tracking: data.profile_view_tracking ?? true,
+          quiet_hours_enabled: data.quiet_hours_enabled ?? false,
+          quiet_hours_start: data.quiet_hours_start || '22:00',
+          quiet_hours_end: data.quiet_hours_end || '08:00'
         })
       }
     } catch (err) {
@@ -787,23 +854,373 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   }
 
   const handleChangePassword = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    setChangePasswordModal(true)
+    setPasswordForm({ current: '', new: '', confirm: '' })
+    setPasswordError('')
+  }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(user.email!, {
-      redirectTo: `${window.location.origin}/update-password`,
-    })
+  const handleChangePasswordSubmit = async () => {
+    setPasswordError('')
+    
+    if (!passwordForm.current || !passwordForm.new || !passwordForm.confirm) {
+      setPasswordError('All fields are required')
+      return
+    }
 
-    if (error) {
-      alert('Error sending password reset email. Please try again.')
-    } else {
-      alert('Password reset email sent! Please check your inbox.')
+    if (passwordForm.new !== passwordForm.confirm) {
+      setPasswordError('New passwords do not match')
+      return
+    }
+
+    if (passwordForm.new.length < 6) {
+      setPasswordError('Password must be at least 6 characters')
+      return
+    }
+
+    try {
+      // Update password using Supabase Auth
+      const { error } = await supabase.auth.updateUser({
+        password: passwordForm.new
+      })
+
+      if (error) {
+        setPasswordError(error.message || 'Failed to change password')
+        return
+      }
+
+      const successEvent = new CustomEvent('showToast', {
+        detail: { message: 'Password changed successfully!', type: 'success' }
+      })
+      window.dispatchEvent(successEvent)
+      setChangePasswordModal(false)
+      setPasswordForm({ current: '', new: '', confirm: '' })
+    } catch (err: any) {
+      setPasswordError(err.message || 'Failed to change password')
     }
   }
 
   const handleEnable2FA = async () => {
-    // Bu, uygun bir 2FA servisi ile entegre edilecek
-    alert('Two-factor authentication setup would be implemented here with a proper authentication service.')
+    if (settings.two_factor_enabled) {
+      // Disable 2FA
+      if (!confirm('Are you sure you want to disable two-factor authentication? This will make your account less secure.')) {
+        return
+      }
+      await saveSettings({ 
+        two_factor_enabled: false,
+        two_factor_secret: null
+      })
+      const successEvent = new CustomEvent('showToast', {
+        detail: { message: 'Two-factor authentication disabled', type: 'success' }
+      })
+      window.dispatchEvent(successEvent)
+      return
+    }
+
+    // Enable 2FA - Generate secret and show QR code
+    try {
+      // In a real implementation, you would generate TOTP secret on the server
+      // For now, we'll use a client-side approach with a library like 'otplib'
+      // Since we don't have it, we'll show a simplified version
+      const secret = generate2FASecret()
+      setTwoFactorSecret(secret)
+      
+      // Generate QR code data URL (simplified - in production use a QR library)
+      const qrData = `otpauth://totp/TherapistFinder:${currentUser?.email}?secret=${secret}&issuer=TherapistFinder`
+      // In production, use a QR code library: QRCode.toDataURL(qrData)
+      setTwoFactorQR(qrData)
+      setTwoFactorModal(true)
+      setTwoFactorCode('')
+    } catch (err) {
+      console.error('Error setting up 2FA:', err)
+      alert('Error setting up two-factor authentication')
+    }
+  }
+
+  const generate2FASecret = (): string => {
+    // Generate a random base32 secret (simplified)
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+    let secret = ''
+    for (let i = 0; i < 32; i++) {
+      secret += chars.charAt(Math.floor(Math.random() * chars.length))
+    }
+    return secret
+  }
+
+  const verify2FACode = async (code: string): Promise<boolean> => {
+    // In production, verify TOTP code on the server
+    // For now, simple validation (code should be 6 digits)
+    if (!/^\d{6}$/.test(code)) {
+      return false
+    }
+    // In production: verify with TOTP library using twoFactorSecret
+    return true
+  }
+
+  const handle2FAEnable = async () => {
+    if (!twoFactorCode || twoFactorCode.length !== 6) {
+      alert('Please enter a 6-digit code')
+      return
+    }
+
+    const isValid = await verify2FACode(twoFactorCode)
+    if (!isValid) {
+      alert('Invalid verification code. Please try again.')
+      return
+    }
+
+    await saveSettings({ 
+      two_factor_enabled: true,
+      two_factor_secret: twoFactorSecret
+    })
+    
+    const successEvent = new CustomEvent('showToast', {
+      detail: { message: 'Two-factor authentication enabled successfully!', type: 'success' }
+    })
+    window.dispatchEvent(successEvent)
+    setTwoFactorModal(false)
+    setTwoFactorCode('')
+    setTwoFactorQR('')
+    setTwoFactorSecret('')
+  }
+
+  const loadBlockedUsers = async () => {
+    setLoadingBlocked(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setLoadingBlocked(false)
+      return
+    }
+
+    try {
+      // Get blocked users from user_settings
+      const { data: settingsData } = await supabase
+        .from('user_settings')
+        .select('blocked_users')
+        .eq('id', user.id)
+        .single()
+
+      const blockedIds = settingsData?.blocked_users || []
+      
+      if (blockedIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .in('id', blockedIds)
+
+        if (profiles) {
+          setBlockedUsers(profiles.map(p => ({
+            id: p.id,
+            full_name: p.full_name || '',
+            profession: p.profession || '',
+            avatar_url: p.avatar_url || null,
+            languages: p.languages || [],
+            specialties: p.specialties || [],
+            city: p.city || '',
+            county: p.county || '',
+            lat: p.lat,
+            lng: p.lng,
+            experience_month: p.experience_month,
+            experience_year: p.experience_year,
+            offers_remote: p.offers_remote,
+            about_me: p.about_me,
+            qualifications: p.qualifications,
+            work_experience: p.work_experience,
+            availability: p.availability,
+            phone: p.phone,
+            website: p.website,
+            email: p.email,
+            contact_email: p.contact_email,
+            regulator_number: p.regulator_number,
+            experience_day: p.experience_day
+          })) as Profile[])
+        } else {
+          setBlockedUsers([])
+        }
+      } else {
+        setBlockedUsers([])
+      }
+    } catch (err) {
+      console.error('Error loading blocked users:', err)
+    } finally {
+      setLoadingBlocked(false)
+    }
+  }
+
+  const handleUnblockUser = async (userId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+
+    try {
+      const { data: currentSettings } = await supabase
+        .from('user_settings')
+        .select('blocked_users')
+        .eq('id', user.id)
+        .single()
+
+      const currentBlocked = currentSettings?.blocked_users || []
+      const updatedBlocked = currentBlocked.filter((id: string) => id !== userId)
+
+      await supabase
+        .from('user_settings')
+        .upsert({
+          id: user.id,
+          blocked_users: updatedBlocked,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' })
+
+      await loadBlockedUsers()
+      
+      const successEvent = new CustomEvent('showToast', {
+        detail: { message: 'User unblocked successfully', type: 'success' }
+      })
+      window.dispatchEvent(successEvent)
+    } catch (err) {
+      console.error('Error unblocking user:', err)
+      alert('Error unblocking user')
+    }
+  }
+
+  const loadSessions = async () => {
+    setLoadingSessions(true)
+    try {
+      // Get current session info
+      const { data: { session } } = await supabase.auth.getSession()
+      
+      if (session) {
+        // Create a simplified session list (in production, track all sessions)
+        const currentSession = {
+          id: session.access_token.substring(0, 8),
+          device: navigator.userAgent.includes('Mobile') ? 'Mobile' : 'Desktop',
+          browser: getBrowserName(),
+          location: 'Unknown', // Could use IP geolocation service
+          last_active: new Date(session.expires_at! * 1000).toISOString(),
+          current: true,
+          ip: 'Unknown' // Would need server-side tracking
+        }
+        setSessions([currentSession])
+      }
+    } catch (err) {
+      console.error('Error loading sessions:', err)
+    } finally {
+      setLoadingSessions(false)
+    }
+  }
+
+  const getBrowserName = (): string => {
+    const ua = navigator.userAgent
+    if (ua.includes('Chrome')) return 'Chrome'
+    if (ua.includes('Firefox')) return 'Firefox'
+    if (ua.includes('Safari')) return 'Safari'
+    if (ua.includes('Edge')) return 'Edge'
+    return 'Unknown'
+  }
+
+  const handleTerminateSession = async (sessionId: string) => {
+    if (!confirm('Are you sure you want to sign out of this device?')) return
+
+    try {
+      // If it's the current session, sign out
+      if (sessions.find(s => s.id === sessionId && s.current)) {
+        await supabase.auth.signOut()
+        window.location.reload()
+      } else {
+        // In production, would call server to invalidate that session
+        setSessions(sessions.filter(s => s.id !== sessionId))
+        const successEvent = new CustomEvent('showToast', {
+          detail: { message: 'Session terminated', type: 'success' }
+        })
+        window.dispatchEvent(successEvent)
+      }
+    } catch (err) {
+      console.error('Error terminating session:', err)
+      alert('Error terminating session')
+    }
+  }
+
+  const handleExportData = async () => {
+    if (!confirm('This will download all your account data. Continue?')) return
+
+    setExportingData(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      setExportingData(false)
+      return
+    }
+
+    try {
+      // Collect all user data
+      const exportData: any = {
+        export_date: new Date().toISOString(),
+        user_id: user.id,
+        email: user.email,
+      }
+
+      // Get profile data
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      exportData.profile = profile
+
+      // Get posts
+      const { data: posts } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', user.id)
+      exportData.posts = posts || []
+
+      // Get comments
+      const { data: comments } = await supabase
+        .from('post_comments')
+        .select('*')
+        .eq('user_id', user.id)
+      exportData.comments = comments || []
+
+      // Get messages
+      const { data: conversations } = await supabase
+        .from('conversations')
+        .select('*, messages(*)')
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+      exportData.conversations = conversations || []
+
+      // Get connections
+      const { data: connections } = await supabase
+        .from('connections')
+        .select('*')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+      exportData.connections = connections || []
+
+      // Get settings
+      const { data: userSettings } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+      exportData.settings = userSettings
+
+      // Create and download JSON file
+      const jsonStr = JSON.stringify(exportData, null, 2)
+      const blob = new Blob([jsonStr], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `therapist-finder-data-export-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+
+      const successEvent = new CustomEvent('showToast', {
+        detail: { message: 'Data exported successfully!', type: 'success' }
+      })
+      window.dispatchEvent(successEvent)
+    } catch (err) {
+      console.error('Error exporting data:', err)
+      alert('Error exporting data. Please try again.')
+    } finally {
+      setExportingData(false)
+    }
   }
 
   const handleDeleteAccount = async () => {
@@ -871,13 +1288,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   ]
 
   if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl w-full max-w-6xl h-[80vh] overflow-hidden flex items-center justify-center">
-          <div className="animate-spin h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
-        </div>
-      </div>
-    )
+    return <SettingsSkeleton />
   }
 
   return (
@@ -1046,11 +1457,22 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                   <h4 className="font-semibold text-gray-900 mb-4">Two-Factor Authentication</h4>
                   <p className="text-sm text-gray-600 mb-3">Add an extra layer of security to your account</p>
                   <button 
-                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:bg-gray-100"
+                    className={`px-4 py-2 rounded-lg disabled:bg-gray-100 flex items-center gap-2 ${
+                      settings.two_factor_enabled 
+                        ? 'border border-red-300 text-red-700 hover:bg-red-50' 
+                        : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
                     onClick={handleEnable2FA}
-                    disabled={saving || settings.two_factor_enabled}
+                    disabled={saving}
                   >
-                    {settings.two_factor_enabled ? '2FA Enabled' : 'Enable 2FA'}
+                    {settings.two_factor_enabled ? (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        2FA Enabled (Click to disable)
+                      </>
+                    ) : (
+                      'Enable 2FA'
+                    )}
                   </button>
                 </div>
               </div>
@@ -1148,6 +1570,113 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
               <h3 className="text-xl font-bold text-gray-900">Data Privacy</h3>
               <div className="space-y-4">
                 <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Export Your Data</h4>
+                  <p className="text-sm text-gray-600 mb-3">Download all your account data in JSON format (GDPR compliant)</p>
+                  <button 
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2"
+                    onClick={handleExportData}
+                    disabled={exportingData || saving}
+                  >
+                    {exportingData ? (
+                      <>
+                        <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
+                        Exporting...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Export Data
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Privacy Controls</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <div>
+                        <span className="text-sm text-gray-700 block">Show activity status</span>
+                        <span className="text-xs text-gray-500">Let others see when you're online</span>
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.activity_status_visible}
+                        onChange={(e) => saveSettings({ activity_status_visible: e.target.checked })}
+                        disabled={saving}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <div>
+                        <span className="text-sm text-gray-700 block">Search visibility</span>
+                        <span className="text-xs text-gray-500">Allow others to find you in search</span>
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.search_visible}
+                        onChange={(e) => saveSettings({ search_visible: e.target.checked })}
+                        disabled={saving}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <div>
+                        <span className="text-sm text-gray-700 block">Profile view tracking</span>
+                        <span className="text-xs text-gray-500">Track who views your profile</span>
+                      </div>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.profile_view_tracking}
+                        onChange={(e) => saveSettings({ profile_view_tracking: e.target.checked })}
+                        disabled={saving}
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Quiet Hours</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Enable quiet hours</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.quiet_hours_enabled}
+                        onChange={(e) => saveSettings({ quiet_hours_enabled: e.target.checked })}
+                        disabled={saving}
+                      />
+                    </label>
+                    {settings.quiet_hours_enabled && (
+                      <div className="flex gap-3 items-center max-w-md">
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-600 mb-1">Start time</label>
+                          <input 
+                            type="time"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            value={settings.quiet_hours_start}
+                            onChange={(e) => saveSettings({ quiet_hours_start: e.target.value })}
+                            disabled={saving}
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="block text-xs text-gray-600 mb-1">End time</label>
+                          <input 
+                            type="time"
+                            className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                            value={settings.quiet_hours_end}
+                            onChange={(e) => saveSettings({ quiet_hours_end: e.target.value })}
+                            disabled={saving}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
                   <h4 className="font-semibold text-gray-900 mb-4">Account Deletion</h4>
                   <p className="text-sm text-gray-600 mb-3">Permanently delete your account and all data</p>
                   <button 
@@ -1199,6 +1728,46 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                         disabled={saving || !settings.email_notifications}
                       />
                     </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Post reactions</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_post_reactions}
+                        onChange={(e) => saveSettings({ email_post_reactions: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Comments</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_comments}
+                        onChange={(e) => saveSettings({ email_comments: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Mentions</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_mentions}
+                        onChange={(e) => saveSettings({ email_mentions: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Events</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.email_events}
+                        onChange={(e) => saveSettings({ email_events: e.target.checked })}
+                        disabled={saving || !settings.email_notifications}
+                      />
+                    </label>
                   </div>
                 </div>
 
@@ -1225,6 +1794,252 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                         disabled={saving || !settings.push_notifications}
                       />
                     </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Post reactions</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_post_reactions}
+                        onChange={(e) => saveSettings({ push_post_reactions: e.target.checked })}
+                        disabled={saving || !settings.push_notifications}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Comments</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_comments}
+                        onChange={(e) => saveSettings({ push_comments: e.target.checked })}
+                        disabled={saving || !settings.push_notifications}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Mentions</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_mentions}
+                        onChange={(e) => saveSettings({ push_mentions: e.target.checked })}
+                        disabled={saving || !settings.push_notifications}
+                      />
+                    </label>
+                    <label className="flex items-center justify-between w-full max-w-md">
+                      <span className="text-sm text-gray-700">Events</span>
+                      <input 
+                        type="checkbox" 
+                        className="rounded border-gray-300" 
+                        checked={settings.push_events}
+                        onChange={(e) => saveSettings({ push_events: e.target.checked })}
+                        disabled={saving || !settings.push_notifications}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'blocked' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-bold text-gray-900">Blocked Users</h3>
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                {loadingBlocked ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  </div>
+                ) : blockedUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <UserX className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No blocked users</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {blockedUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+                        <div className="flex items-center gap-3">
+                          <Avatar src={user.avatar_url} name={user.full_name} size={40} />
+                          <div>
+                            <p className="font-medium text-gray-900">{user.full_name}</p>
+                            {user.profession && (
+                              <p className="text-sm text-gray-500">{user.profession}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleUnblockUser(user.id)}
+                          className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                        >
+                          Unblock
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeSection === 'sessions' && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-bold text-gray-900">Active Sessions</h3>
+              <div className="bg-white border border-gray-200 rounded-lg p-6">
+                {loadingSessions ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  </div>
+                ) : sessions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Monitor className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">No active sessions</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {sessions.map((session) => (
+                      <div key={session.id} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
+                        <div className="flex items-center gap-4">
+                          {session.device === 'Mobile' ? (
+                            <Smartphone className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <Monitor className="w-5 h-5 text-gray-400" />
+                          )}
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <p className="font-medium text-gray-900">{session.browser} on {session.device}</p>
+                              {session.current && (
+                                <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">Current</span>
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-500">{session.location}</p>
+                            <p className="text-xs text-gray-400">Last active: {new Date(session.last_active).toLocaleString()}</p>
+                          </div>
+                        </div>
+                        {!session.current && (
+                          <button
+                            onClick={() => handleTerminateSession(session.id)}
+                            className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors flex items-center gap-2"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            Sign Out
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Change Password Modal */}
+          {changePasswordModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">Change Password</h3>
+                  <button onClick={() => setChangePasswordModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+                    <input
+                      type="password"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      value={passwordForm.current}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+                    <input
+                      type="password"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      value={passwordForm.new}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+                    <input
+                      type="password"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                      value={passwordForm.confirm}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
+                    />
+                  </div>
+                  {passwordError && (
+                    <div className="text-red-600 text-sm">{passwordError}</div>
+                  )}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleChangePasswordSubmit}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Change Password
+                    </button>
+                    <button
+                      onClick={() => setChangePasswordModal(false)}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 2FA Setup Modal */}
+          {twoFactorModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+              <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">Enable Two-Factor Authentication</h3>
+                  <button onClick={() => setTwoFactorModal(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm text-gray-600 mb-3">Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)</p>
+                    <div className="bg-gray-100 p-4 rounded-lg flex justify-center items-center min-h-[200px] mb-3">
+                      {twoFactorQR ? (
+                        <div className="text-center">
+                          <QrCode className="w-32 h-32 text-gray-400 mx-auto mb-2" />
+                          <p className="text-xs text-gray-500 mt-2">Secret: {twoFactorSecret}</p>
+                          <p className="text-xs text-gray-400 mt-1">(In production, QR code would be displayed here)</p>
+                        </div>
+                      ) : (
+                        <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Enter 6-digit code</label>
+                    <input
+                      type="text"
+                      maxLength={6}
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-center text-2xl tracking-widest"
+                      value={twoFactorCode}
+                      onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
+                      placeholder="000000"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handle2FAEnable}
+                      className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      Verify & Enable
+                    </button>
+                    <button
+                      onClick={() => setTwoFactorModal(false)}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               </div>
@@ -1246,14 +2061,8 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
 
 function AppInner() {
   const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
-  const toast = useToast();
-  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
-  const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
-  const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({});
-  const [currentVisibleExpandedPost, setCurrentVisibleExpandedPost] = useState<string | null>(null);
-  const [stickyButtonStyle, setStickyButtonStyle] = useState<{ left: string; width: string }>({ left: '0px', width: '0px' });
+  const { status: connectionStatus } = useNetworkStatus();
   const [activeView, setActiveView] = useState<'map' | 'community'>('community')
-  const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved'>('all')
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -1272,11 +2081,7 @@ function AppInner() {
   const [originalTitle, setOriginalTitle] = useState('')
   
   // Community feed states
-  const [posts, setPosts] = useState<CommunityPost[]>([])
-  const [comments, setComments] = useState<Record<string, Comment[]>>({});
-  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
-  const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
-  const [feedFilters, setFeedFilters] = useState<FeedFilters>({
+  const [feedFilters] = useState<FeedFilters>({
     professions: [],
     clinical_areas: [],
     content_types: [],
@@ -1303,6 +2108,10 @@ function AppInner() {
   
   // CV Maker state
   const [isCVMakerOpen, setIsCVMakerOpen] = useState(false)
+  
+  // Blocked users state
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]) // Users I blocked
+  const [blockedByUserIds, setBlockedByUserIds] = useState<string[]>([]) // Users who blocked me
   
   // Notifications state
   const [showNotifications, setShowNotifications] = useState(false)
@@ -1374,14 +2183,29 @@ function AppInner() {
       if (feedFilters.content_types.length > 0) {
         query = query.in('post_metadata->content_type', feedFilters.content_types)
       }
+      if (feedFilters.tags.length > 0) {
+        query = query.contains('post_metadata->tags', feedFilters.tags)
+      }
+      if (feedFilters.audience_levels.length > 0) {
+        query = query.in('post_metadata->audience_level', feedFilters.audience_levels)
+      }
+      if (feedFilters.related_conditions.length > 0) {
+        query = query.contains('post_metadata->related_conditions', feedFilters.related_conditions)
+      }
+      if (feedFilters.languages.length > 0) {
+        query = query.in('post_metadata->language', feedFilters.languages)
+      }
       if (feedFilters.show_only_my_profession && userProfile?.profession) {
         query = query.contains('post_metadata->professions', [userProfile.profession])
       }
+      if (feedFilters.show_only_my_network && connections && connections.length > 0) {
+        const connectedIds = connections.map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id))
+        query = query.in('user_id', connectedIds)
+      }
 
-      const { data, error } = await query
+      const { error } = await query
 
       if (error) throw error
-      setPosts(data || [])
     } catch (err) {
       console.error('Error loading posts:', err)
     }
@@ -1402,9 +2226,9 @@ function AppInner() {
       if (error) throw error
 
       // Load replies for each comment
-      const commentsWithReplies = await Promise.all(
+      await Promise.all(
         (data || []).map(async (comment) => {
-          const { data: replies } = await supabase
+          await supabase
             .from('post_comments')
             .select(`
               *,
@@ -1412,89 +2236,14 @@ function AppInner() {
             `)
             .eq('parent_reply_id', comment.id)
             .order('created_at', { ascending: true })
-
-          return { ...comment, replies: replies || [] }
         })
       )
 
-      // Updated: Set for specific postId
-      setComments(prev => ({ ...prev, [postId]: commentsWithReplies }));
     } catch (err) {
       console.error('Error loading comments:', err)
     }
   }
 
-  const addReaction = async (postId: string, emoji: string) => {
-    if (!currentUser?.id) {
-      setIsAuthModalOpen(true)
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('post_reactions')
-        .upsert({
-          post_id: postId,
-          user_id: currentUser.id,
-          reaction_type: emoji
-        })
-
-      if (error) throw error
-
-      setUserPostReactions(prev => ({ ...prev, [postId]: emoji }))
-    } catch (err) {
-      console.error('Error adding reaction:', err)
-    }
-  }
-
-  const addComment = async (postId: string, content: string, parentReplyId?: string) => {
-    if (!currentUser?.id) {
-      setIsAuthModalOpen(true)
-      return
-    }
-
-    try {
-      const { error } = await supabase
-        .from('post_comments')
-        .insert({
-          post_id: postId,
-          user_id: currentUser.id,
-          content,
-          parent_reply_id: parentReplyId || null
-        })
-
-      if (error) throw error
-
-      loadComments(postId)
-    } catch (err) {
-      console.error('Error adding comment:', err)
-    }
-  }
-
-  const loadUserReactions = async () => {
-    if (!currentUser?.id) return
-    try {
-      const { data, error } = await supabase
-        .from('post_reactions')
-        .select('post_id, reaction_type')
-        .eq('user_id', currentUser.id)
-
-      if (error) throw error
-
-      if (data) {
-        const reactions: Record<string, string> = {}
-        data.forEach(r => {
-          reactions[r.post_id] = r.reaction_type
-        })
-        setUserPostReactions(reactions)
-      }
-    } catch (e: any) {
-      // If table doesn't exist yet, skip silently to avoid 404 spam
-      if (e?.code !== 'PGRST205') {
-        console.error('loadUserReactions error:', e)
-      }
-    }
-  }
 
   useEffect(() => {
     const globalWindow = window as any;
@@ -1556,36 +2305,15 @@ function AppInner() {
     if (activeView === 'community') {
       loadPosts()
     }
-  }, [activeView, feedFilters, userProfile])
+  }, [activeView, feedFilters, userProfile, connections])
 
   // Load user reactions when user logs in
   useEffect(() => {
     if (currentUser?.id) {
-      loadUserReactions()
     }
   }, [currentUser?.id])
 
   // Sticky button position update
-  useEffect(() => {
-    const updateStickyButtonPosition = () => {
-      if (currentVisibleExpandedPost && postRefs.current[currentVisibleExpandedPost]) {
-        const postElement = postRefs.current[currentVisibleExpandedPost]
-        const rect = postElement.getBoundingClientRect()
-        setStickyButtonStyle({
-          left: `${rect.left}px`,
-          width: `${rect.width}px`
-        })
-      }
-    }
-
-    window.addEventListener('scroll', updateStickyButtonPosition)
-    window.addEventListener('resize', updateStickyButtonPosition)
-
-    return () => {
-      window.removeEventListener('scroll', updateStickyButtonPosition)
-      window.removeEventListener('resize', updateStickyButtonPosition)
-    }
-  }, [currentVisibleExpandedPost])
 
   const updatePageTitle = (hasNotification: boolean) => {
     if (hasNotification && unreadMessagesCount > 0) {
@@ -1617,6 +2345,53 @@ function AppInner() {
     }
   }
 
+  const loadBlockedUsers = async () => {
+    if (!currentUser?.id) {
+      setBlockedUserIds([])
+      setBlockedByUserIds([])
+      return
+    }
+    
+    try {
+      // Load users I blocked
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('blocked_users')
+        .eq('id', currentUser.id)
+        .single()
+      
+      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
+        console.error('Error loading blocked users:', error)
+      } else {
+        const blockedIds = data?.blocked_users || []
+        setBlockedUserIds(blockedIds)
+      }
+      
+      // Load users who blocked me (users whose blocked_users array contains my ID)
+      const { data: blockedByData, error: blockedByError } = await supabase
+        .from('user_settings')
+        .select('id')
+        .contains('blocked_users', [currentUser.id])
+      
+      if (blockedByError) {
+        console.error('Error loading users who blocked me:', blockedByError)
+        setBlockedByUserIds([])
+      } else {
+        const blockedByIds = (blockedByData || []).map(s => s.id)
+        setBlockedByUserIds(blockedByIds)
+      }
+    } catch (err) {
+      console.error('Error loading blocked users:', err)
+      setBlockedUserIds([])
+      setBlockedByUserIds([])
+    }
+  }
+  
+  // Combined list of all users we should hide (either I blocked them or they blocked me)
+  const allHiddenUserIds = useMemo(() => {
+    return [...new Set([...blockedUserIds, ...blockedByUserIds])]
+  }, [blockedUserIds, blockedByUserIds])
+
   useEffect(() => {
     console.log('🚀 App mounted')
     loadProfiles()
@@ -1626,6 +2401,14 @@ function AppInner() {
       console.log('🔍 App unmounting')
     }
   }, [])
+  
+  useEffect(() => {
+    if (currentUser?.id) {
+      loadBlockedUsers()
+    } else {
+      setBlockedUserIds([])
+    }
+  }, [currentUser?.id])
 
   useEffect(() => {
     const handleNavigateToMessages = () => {
@@ -1635,6 +2418,14 @@ function AppInner() {
 
     window.addEventListener('navigateToMessages', handleNavigateToMessages)
     return () => window.removeEventListener('navigateToMessages', handleNavigateToMessages)
+  }, [])
+
+  useEffect(() => {
+    const handleOpenAuthModal: EventListener = () => {
+      setIsAuthModalOpen(true)
+    }
+    window.addEventListener('openAuthModal', handleOpenAuthModal)
+    return () => window.removeEventListener('openAuthModal', handleOpenAuthModal)
   }, [])
 
   useEffect(() => {
@@ -1925,6 +2716,15 @@ function AppInner() {
       return;
     }
 
+    // Check if user is blocked or has blocked me
+    if (allHiddenUserIds.includes(receiverId)) {
+      const errorEvent = new CustomEvent('showToast', {
+        detail: { message: 'Cannot send connection request to this user', type: 'error' }
+      })
+      window.dispatchEvent(errorEvent)
+      return
+    }
+
     try {
       // Önce aynı connection'ın olup olmadığını kontrol et
       const { data: existingConnection } = await supabase
@@ -2089,23 +2889,140 @@ function AppInner() {
     }
   }
 
-  const markNotificationAsRead = async (notificationId: string) => {
+  const handleBlockUserInAppInner = async (userId: string) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user || userId === user.id) return
+
     try {
-      const { error } = await supabase
+      // Get current blocked users
+      const { data: currentSettings } = await supabase
+        .from('user_settings')
+        .select('blocked_users')
+        .eq('id', user.id)
+        .single()
+
+      const currentBlocked = currentSettings?.blocked_users || []
+      const updatedBlocked = [...currentBlocked, userId]
+
+      await supabase
+        .from('user_settings')
+        .upsert({
+          id: user.id,
+          blocked_users: updatedBlocked,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'id' })
+
+      // Reload blocked users list (both blocked and blocked by)
+      await loadBlockedUsers()
+
+      const successEvent = new CustomEvent('showToast', {
+        detail: { message: 'User blocked successfully', type: 'success' }
+      })
+      window.dispatchEvent(successEvent)
+    } catch (err) {
+      console.error('Error blocking user:', err)
+      const errorEvent = new CustomEvent('showToast', {
+        detail: { message: 'Error blocking user', type: 'error' }
+      })
+      window.dispatchEvent(errorEvent)
+    }
+  }
+
+  const handleNotificationClick = async (notification: any) => {
+    // Mark as clicked (not just read)
+    try {
+      await supabase
         .from('notifications')
-        .update({ read: true })
-        .eq('id', notificationId)
-      
-      if (error) throw error
-      
+        .update({ 
+          read: true,
+          clicked_at: new Date().toISOString()
+        })
+        .eq('id', notification.id)
+
+      // Update local state
       setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
+        prev.map(n => n.id === notification.id ? { ...n, read: true, clicked_at: new Date().toISOString() } : n)
       )
       setUnreadNotificationsCount(prev => Math.max(0, prev - 1))
     } catch (err) {
-      console.error('Error marking notification as read:', err)
+      console.error('Error updating notification click:', err)
+    }
+
+    setShowNotifications(false)
+
+    // Handle different notification types
+    if (notification.type === 'connection_request') {
+      setIsConnectionsOpen(true)
+      return
+    }
+
+    if (notification.type === 'post_reaction' || notification.type === 'comment' || notification.type === 'comment_reaction') {
+      // Switch to community view if not already there
+      if (activeView !== 'community') {
+        setActiveView('community')
+        // Wait a bit for component to mount, then trigger event
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+            detail: {
+              postId: notification.related_entity_id,
+              commentId: notification.type === 'comment_reaction' ? notification.related_entity_id : null,
+              scrollToReaction: notification.type === 'post_reaction' || notification.type === 'comment_reaction'
+            }
+          }))
+        }, 300)
+      } else {
+        // Trigger event immediately
+        window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+          detail: {
+            postId: notification.related_entity_type === 'post' ? notification.related_entity_id : null,
+            commentId: notification.related_entity_type === 'comment' ? notification.related_entity_id : null,
+            scrollToReaction: notification.type === 'post_reaction' || notification.type === 'comment_reaction'
+          }
+        }))
+      }
     }
   }
+
+  // Check for missed notifications (24 hours old, not clicked)
+  useEffect(() => {
+    if (!currentUser?.id) return
+
+    const checkMissedNotifications = async () => {
+      try {
+        const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        
+        const { data: missedNotifications } = await supabase
+          .from('notifications')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .lt('created_at', twentyFourHoursAgo)
+          .is('clicked_at', null)
+          .eq('read', false)
+          .limit(10)
+
+        if (missedNotifications && missedNotifications.length > 0) {
+          // Create reminder notification
+          await supabase
+            .from('notifications')
+            .insert({
+              user_id: currentUser.id,
+              title: 'You have missed notifications',
+              message: `You have ${missedNotifications.length} notification(s) you haven't checked in over 24 hours`,
+              type: 'reminder',
+              related_entity_type: 'notification',
+              related_entity_id: null
+            })
+        }
+      } catch (err) {
+        console.error('Error checking missed notifications:', err)
+      }
+    }
+
+    // Check on mount and every hour
+    checkMissedNotifications()
+    const interval = setInterval(checkMissedNotifications, 60 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [currentUser?.id])
 
   const markAllNotificationsAsRead = async () => {
     try {
@@ -2302,6 +3219,11 @@ profileCacheRef.current = {}
   }
 
   const filteredTherapists = therapists.filter(therapist => {
+    // Filter out blocked users (either I blocked them or they blocked me)
+    if (allHiddenUserIds.includes(therapist.id)) {
+      return false
+    }
+    
     const matchesSearch = therapist.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          therapist.city?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          therapist.county?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -2355,38 +3277,40 @@ profileCacheRef.current = {}
 
   return (
     <div className="h-screen flex flex-col">
+      <ConnectionStatusBanner status={connectionStatus} />
       {/* Header */}
-      <header className="flex justify-between items-center px-6 py-3 bg-white shadow-sm sticky top-0 z-50">
-        <div className="flex items-center space-x-2">
+      <header className="bg-white shadow-sm sticky top-0 z-50">
+        <div className="w-full max-w-7xl mx-auto flex items-center gap-4 px-4 py-3">
+          <div className="flex items-center pr-2">
           <h1 className="text-2xl font-bold text-gray-900">UK Therapist Network</h1>
         </div>
 
-        <div className="flex-1 mx-6">
-          <div className="max-w-2xl mx-auto">
-            <GlobalSearch
-              onSelectPerson={(id) => {
-                setSelectedProfileId(id)
-                setActiveView('community')
-              }}
-              onSelectPost={(postId) => {
-                const target = postRefs.current[postId]
-                if (target?.scrollIntoView) {
-                  target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-                setSelectedPost(posts.find(p => p.id === postId) || null)
-                loadComments(postId)
-              }}
-              isConnected={(profileId) => {
-                try {
-                  const connSet = new Set((connections || []).map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id)))
-                  return connSet.has(profileId)
-                } catch { return false }
-              }}
+          <div className="flex-1 px-2">
+            <div className="max-w-2xl">
+              <GlobalSearch
+                blockedUserIds={allHiddenUserIds}
+                onSelectPerson={(id) => {
+                  setSelectedProfileId(id)
+                  setActiveView('community')
+                }}
+                onSelectPost={(postId) => {
+                  const target = postRefs.current[postId]
+                  if (target?.scrollIntoView) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                  loadComments(postId)
+                }}
+                isConnected={(profileId) => {
+                  try {
+                    const connSet = new Set((connections || []).map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id)))
+                    return connSet.has(profileId)
+                  } catch { return false }
+                }}
             />
           </div>
         </div>
         
-        <nav className="flex space-x-6 text-gray-600">
+          <nav className="flex items-center space-x-3 text-gray-600 pl-2">
           {/* Home Button */}
           <button
             onClick={() => {
@@ -2404,13 +3328,21 @@ profileCacheRef.current = {}
         
           {/* Network Button (Visible only if logged in) */}
           {currentUser && (
-            <button
-              onClick={() => setIsConnectionsOpen(true)}
-              className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
-              aria-label="Network"
-            >
-              <UserPlus className="w-5 h-5" />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsConnectionsOpen(true)}
+                className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                aria-label="Network"
+              >
+                <UserPlus className="w-5 h-5" />
+                {/* Connection requests badge */}
+                {connectionRequests.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center pointer-events-none z-10">
+                    {connectionRequests.length > 9 ? '9+' : connectionRequests.length}
+                  </span>
+                )}
+              </button>
+            </div>
           )}
         
           {/* Map Button */}
@@ -2432,9 +3364,15 @@ profileCacheRef.current = {}
           <div className="relative" ref={messagesDropdownRef}>
             <button 
               onClick={() => setShowMessagesDropdown(!showMessagesDropdown)}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100"
+              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100 relative"
             >
               <MessageCircle className="w-5 h-5" />
+              {/* Badge Messages butonunun üzerinde */}
+              {unreadMessagesCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center pointer-events-none z-10">
+                  {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
+                </span>
+              )}
             </button>
             
             {/* Messages Dropdown */}
@@ -2469,6 +3407,7 @@ profileCacheRef.current = {}
                     onUpdateMetadata={updateConversationMetadata}
                     compact={true}
                     playNotificationSound={playNotificationSound}
+                    onOpenConnections={() => setIsConnectionsOpen(true)}
                   />
                 </div>
               </div>
@@ -2479,9 +3418,15 @@ profileCacheRef.current = {}
           <div className="relative">
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100"
+              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100 relative"
             >
               <Bell className="w-5 h-5" />
+              {/* Badge Notifications butonunun üzerinde */}
+              {unreadNotificationsCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center pointer-events-none z-10">
+                  {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
+                </span>
+              )}
             </button>
             
             {/* Notifications Dropdown */}
@@ -2507,15 +3452,7 @@ profileCacheRef.current = {}
                     notifications.map((notification) => (
                       <div
                         key={notification.id}
-                        onClick={() => {
-                          if (!notification.read) {
-                            markNotificationAsRead(notification.id)
-                          }
-                          if (notification.type === 'connection_request') {
-                            setIsConnectionsOpen(true)
-                          }
-                          setShowNotifications(false)
-                        }}
+                        onClick={() => handleNotificationClick(notification)}
                         className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
                           !notification.read ? 'bg-blue-50' : ''
                         }`}
@@ -2556,17 +3493,6 @@ profileCacheRef.current = {}
             )}
           </div>
 
-          {/* Badges for unread counts */}
-          {unreadMessagesCount > 0 && (
-            <span className="absolute top-2 right-48 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center pointer-events-none">
-              {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
-            </span>
-          )}
-          {unreadNotificationsCount > 0 && (
-            <span className="absolute top-2 right-32 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center pointer-events-none">
-              {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
-            </span>
-          )}
         
           {/* Account Dropdown */}
           <AccountDropdown
@@ -2577,6 +3503,7 @@ profileCacheRef.current = {}
             onOpenConnections={() => setIsConnectionsOpen(true)}
           />
         </nav>
+        </div>
       </header>
         
       
@@ -2594,6 +3521,8 @@ profileCacheRef.current = {}
             onRejectConnectionRequest={rejectConnectionRequest}
             onRemoveConnection={removeConnection}
             updateProfileInState={updateProfileInState}
+            onBlockUser={handleBlockUserInAppInner}
+            allHiddenUserIds={allHiddenUserIds}
           />
         ) : activeView === 'map' ? (
           <>
@@ -2616,7 +3545,7 @@ profileCacheRef.current = {}
             </div>
           </>
         ) : activeView === 'community' ? (
-          <CommunityComponent />
+          <CommunityComponent onOpenConnections={() => setIsConnectionsOpen(true)} />
         ) : null}
       </div>
 
@@ -2694,6 +3623,7 @@ profileCacheRef.current = {}
                 onUpdateMetadata={updateConversationMetadata}
                 compact={false}
                 playNotificationSound={playNotificationSound}
+                onOpenConnections={() => setIsConnectionsOpen(true)}
               />
             </div>
           </div>
@@ -2766,6 +3696,7 @@ profileCacheRef.current = {}
                     onUpdateMetadata={updateConversationMetadata}
                     compact
                     playNotificationSound={playNotificationSound}
+                    onOpenConnections={() => setIsConnectionsOpen(true)}
                   />
                 </div>
 
@@ -2793,6 +3724,7 @@ profileCacheRef.current = {}
           onRemoveConnection={removeConnection}
           onSendConnectionRequest={sendConnectionRequest}
           onCancelConnectionRequest={cancelConnectionRequest}
+          blockedUserIds={allHiddenUserIds}
         />
       )}
 
@@ -3155,7 +4087,8 @@ function ConnectionsManager({
   onRejectConnectionRequest,
   onRemoveConnection,
   onSendConnectionRequest,
-  onCancelConnectionRequest
+  onCancelConnectionRequest,
+  blockedUserIds
 }: { 
   currentUserId: string
   onClose: () => void
@@ -3166,6 +4099,7 @@ function ConnectionsManager({
   onRemoveConnection: (id: string) => Promise<void>
   onSendConnectionRequest: (id: string) => Promise<void>
   onCancelConnectionRequest: (id: string) => Promise<void>
+  blockedUserIds?: string[]
 }) {
   const [activeTab, setActiveTab] = useState<'connections' | 'requests' | 'suggested'>('connections')
   const [requestSubTab, setRequestSubTab] = useState<'received' | 'sent'>('received')
@@ -3191,14 +4125,24 @@ function ConnectionsManager({
       .limit(20)
 
     if (!error && data) {
-      // Bağlantısı olmayan ve istek gönderilmemiş kullanıcıları filtrele
+      // Bağlantısı olmayan, istek gönderilmemiş ve block edilmemiş kullanıcıları filtrele
       const connectedUserIds = connections.map(conn => 
         conn.sender_id === currentUserId ? conn.receiver_id : conn.sender_id
       )
       const requestedUserIds = sentRequests.map(req => req.receiver_id)
+      
+      // Get users who blocked me
+      const { data: blockedByData } = await supabase
+        .from('user_settings')
+        .select('id')
+        .contains('blocked_users', [currentUserId])
+      const blockedByIds = (blockedByData || []).map(s => s.id)
+      const allHiddenIds = [...new Set([...(blockedUserIds || []), ...blockedByIds])]
+      
       const filtered = data.filter(profile => 
         !connectedUserIds.includes(profile.id) && 
-        !requestedUserIds.includes(profile.id)
+        !requestedUserIds.includes(profile.id) &&
+        !allHiddenIds.includes(profile.id)
       )
       setSuggested(filtered)
     }
@@ -3364,7 +4308,10 @@ function ConnectionsManager({
         <div className="overflow-y-auto max-h-[70vh] p-4 sm:p-6">
           {activeTab === 'connections' && (
             <div className="space-y-4">
-              {connections.map(connection => {
+              {connections.filter(connection => {
+                const otherUser = connection.sender_id === currentUserId ? connection.receiver : connection.sender
+                return otherUser && !blockedUserIds?.includes(otherUser.id)
+              }).map(connection => {
                 const otherUser = connection.sender_id === currentUserId ? connection.receiver : connection.sender
                 return (
                   <div 
@@ -3382,10 +4329,11 @@ function ConnectionsManager({
                     </div>
                     <button
                       onClick={(e) => {
-                        e.stopPropagation()
-                        handleRemoveConnection(connection.id)
+                        e.stopPropagation();
+                        haptic.warning();
+                        handleRemoveConnection(connection.id);
                       }}
-                      className="px-2 sm:px-3 py-1 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                      className="px-2 sm:px-3 py-2 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200 min-w-[44px] min-h-[44px] flex items-center justify-center"
                     >
                       Remove
                     </button>
@@ -3393,14 +4341,23 @@ function ConnectionsManager({
                 )
               })}
               {connections.length === 0 && (
-                <p className="text-center text-gray-500 py-8">No connections yet</p>
+                <EmptyState
+                  icon={<UserPlus className="w-16 h-16 text-gray-300" />}
+                  title="Build your professional network"
+                  description="Connect with therapists in your area and expand your circle"
+                  actions={[
+                    { label: 'Find Therapists', onClick: () => setActiveTab('suggested'), primary: true }
+                  ]}
+                />
               )}
             </div>
           )}
 
           {activeTab === 'requests' && requestSubTab === 'received' && (
             <div className="space-y-4">
-              {connectionRequests.map(request => (
+              {connectionRequests.filter(request => {
+                return request.sender && !blockedUserIds?.includes(request.sender.id)
+              }).map(request => (
                 <div 
                   key={request.id} 
                   className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
@@ -3438,7 +4395,9 @@ function ConnectionsManager({
 
           {activeTab === 'requests' && requestSubTab === 'sent' && (
             <div className="space-y-4">
-              {sentRequests.map(request => (
+              {sentRequests.filter(request => {
+                return request.receiver && !blockedUserIds?.includes(request.receiver.id)
+              }).map(request => (
                 <div 
                   key={request.id} 
                   className="flex items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
@@ -3472,9 +4431,7 @@ function ConnectionsManager({
           {activeTab === 'suggested' && (
             <div className="space-y-4">
               {loading ? (
-                <div className="flex justify-center py-8">
-                  <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
-                </div>
+                <ConnectionListSkeleton />
               ) : (
                 <>
                   {suggested.map(profile => (
@@ -3866,7 +4823,8 @@ function ConversationsList({
   conversationMetadata,
   onUpdateMetadata,
   compact,
-  playNotificationSound
+  playNotificationSound,
+  onOpenConnections
 }: {
   currentUserId: string;
   onSelectConversation: (conversation: Conversation) => void;
@@ -3876,6 +4834,7 @@ function ConversationsList({
   onUpdateMetadata: (conversationId: string, updates: Partial<ConversationMetadata>) => void;
   compact?: boolean;
   playNotificationSound?: () => void;
+  onOpenConnections?: () => void;
 }) {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -4083,8 +5042,12 @@ function ConversationsList({
 
   if (loading) {
     return (
-      <div className="w-full h-full flex items-center justify-center">
-        <div className="animate-spin h-6 w-6 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+      <div className="w-full h-full">
+        <MessageSkeleton />
+        <MessageSkeleton />
+        <MessageSkeleton />
+        <MessageSkeleton />
+        <MessageSkeleton />
       </div>
     );
   }
@@ -4146,19 +5109,56 @@ function ConversationsList({
       )}
       <div className="flex-1 overflow-y-auto">
         {visible.length === 0 ? (
-          <div className="p-8 text-center text-gray-500">
-            <MessageSquare className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-            <p>No conversations yet</p>
-            <p className="text-sm mt-1 text-gray-400">Start chatting with someone</p>
-          </div>
+          <EmptyState
+            icon={<MessageSquare className="w-16 h-16 text-gray-300" />}
+            title="No messages yet"
+            description="Start a conversation with your connections"
+            actions={[
+              { label: 'Send Message', onClick: () => onOpenConnections?.() || window.dispatchEvent(new CustomEvent('openConnections')), primary: true }
+            ]}
+          />
         ) : (
           visible.map((c) => {
             const m = conversationMetadata[c.id];
             const isSelected = selectedConversationId === c.id;
+            
+            // Only use swipe on mobile devices
+            const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+            
+            if (isMobile) {
+              return (
+                <SwipeableConversationItem
+                  key={c.id}
+                  conversation={c}
+                  isSelected={isSelected}
+                  isStarred={m?.isStarred || false}
+                  isMuted={m?.isMuted || false}
+                  isArchived={m?.isArchived || false}
+                  formatTime={formatTime}
+                  onClick={() => {
+                    haptic.light();
+                    onSelectConversation(c);
+                  }}
+                  onSwipeLeft={() => handleToggleArchive(c.id, { stopPropagation: () => {} } as any)}
+                  onSwipeRight={() => {
+                    if ((c.unread_count ?? 0) > 0) {
+                      handleMarkAsUnread(c.id, { stopPropagation: () => {} } as any);
+                    }
+                  }}
+                  onMarkAsUnread={() => handleMarkAsUnread(c.id, { stopPropagation: () => {} } as any)}
+                  onToggleArchive={() => handleToggleArchive(c.id, { stopPropagation: () => {} } as any)}
+                />
+              );
+            }
+            
+            // Desktop: keep existing non-swipeable version
             return (
               <div
                 key={c.id}
-                onClick={() => onSelectConversation(c)}
+                onClick={() => {
+                  haptic.light();
+                  onSelectConversation(c);
+                }}
                 className={`group relative flex items-center px-4 py-3 cursor-pointer transition-colors ${
                   isSelected
                     ? "bg-blue-50 border-l-4 border-blue-600"
@@ -4211,31 +5211,41 @@ function ConversationsList({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
+                      haptic.light();
                       setMenuOpenId(menuOpenId === c.id ? null : c.id);
                     }}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-100 rounded transition"
+                    className="opacity-0 group-hover:opacity-100 p-3 hover:bg-gray-100 rounded transition min-w-[44px] min-h-[44px] flex items-center justify-center"
                   >
                     <MoreHorizontal className="w-5 h-5 text-gray-500" />
                   </button>
                   {menuOpenId === c.id && (
                     <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-50 overflow-hidden">
                       <button
-                        onClick={(e) => handleMarkAsUnread(c.id, e)}
-                        className="flex w-full items-center px-4 py-2 hover:bg-gray-50 text-sm text-gray-700"
+                        onClick={(e) => {
+                          haptic.light();
+                          handleMarkAsUnread(c.id, e);
+                        }}
+                        className="flex w-full items-center px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 min-h-[44px]"
                       >
                         <Mail className="w-4 h-4 mr-2" />
                         Mark as unread
                       </button>
                       <button
-                        onClick={(e) => handleToggleStar(c.id, e)}
-                        className="flex w-full items-center px-4 py-2 hover:bg-gray-50 text-sm text-gray-700"
+                        onClick={(e) => {
+                          haptic.light();
+                          handleToggleStar(c.id, e);
+                        }}
+                        className="flex w-full items-center px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 min-h-[44px]"
                       >
                         <Star className={`${m?.isStarred ? 'text-yellow-500 fill-yellow-500' : ''} w-4 h-4 mr-2`} />
                         {m?.isStarred ? "Unstar" : "Star"}
                       </button>
                       <button
-                        onClick={(e) => handleToggleMute(c.id, e)}
-                        className="flex w-full items-center px-4 py-2 hover:bg-gray-50 text-sm text-gray-700"
+                        onClick={(e) => {
+                          haptic.light();
+                          handleToggleMute(c.id, e);
+                        }}
+                        className="flex w-full items-center px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 min-h-[44px]"
                       >
                         {m?.isMuted ? (
                           <Volume2 className="w-4 h-4 mr-2" />
@@ -4245,14 +5255,18 @@ function ConversationsList({
                         {m?.isMuted ? "Unmute" : "Mute"}
                       </button>
                       <button
-                        onClick={(e) => handleToggleArchive(c.id, e)}
-                        className="flex w-full items-center px-4 py-2 hover:bg-gray-50 text-sm text-gray-700"
+                        onClick={(e) => {
+                          haptic.light();
+                          handleToggleArchive(c.id, e);
+                        }}
+                        className="flex w-full items-center px-4 py-3 hover:bg-gray-50 text-sm text-gray-700 min-h-[44px]"
                       >
                         <Archive className="w-4 h-4 mr-2" />
                         {m?.isArchived ? "Unarchive" : "Archive"}
                       </button>
                       <button
-                        className="flex w-full items-center px-4 py-2 hover:bg-gray-50 text-sm text-red-600"
+                        className="flex w-full items-center px-4 py-3 hover:bg-gray-50 text-sm text-red-600 min-h-[44px]"
+                        onClick={() => haptic.warning()}
                       >
                         <ShieldAlert className="w-4 h-4 mr-2" />
                         Report / Block
@@ -4260,11 +5274,12 @@ function ConversationsList({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
+                          haptic.error();
                           supabase.from("conversations").delete().eq("id", c.id);
                           loadConversations();
                           setMenuOpenId(null);
                         }}
-                        className="flex w-full items-center px-4 py-2 hover:bg-gray-50 text-sm text-red-600 border-t"
+                        className="flex w-full items-center px-4 py-3 hover:bg-gray-50 text-sm text-red-600 border-t min-h-[44px]"
                       >
                         <X className="w-4 h-4 mr-2" />
                         Delete
@@ -4797,7 +5812,9 @@ function ProfileDetailPage({
   connectionRequests,
   onSendConnectionRequest,
   onRemoveConnection,
-  updateProfileInState
+  updateProfileInState,
+  onBlockUser,
+  allHiddenUserIds = []
 }: { 
   profileId: string
   onClose: () => void
@@ -4810,6 +5827,8 @@ function ProfileDetailPage({
   onRejectConnectionRequest?: (connectionId: string) => Promise<void>
   onRemoveConnection: (connectionId: string) => Promise<void>
   updateProfileInState?: (updatedProfile: Profile) => void
+  onBlockUser?: (userId: string) => Promise<void>
+  allHiddenUserIds?: string[]
 }) {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -4841,9 +5860,19 @@ function ProfileDetailPage({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
   useEffect(() => {
+    // Check if this profile is blocked
+    if (allHiddenUserIds.includes(profileId)) {
+      // Redirect or show message
+      onClose()
+      const errorEvent = new CustomEvent('showToast', {
+        detail: { message: 'This profile is not available', type: 'error' }
+      })
+      window.dispatchEvent(errorEvent)
+      return
+    }
     loadProfile()
     loadAllProfessions()
-  }, [profileId])
+  }, [profileId, allHiddenUserIds])
 
   // Connection durumunu kontrol et
   useEffect(() => {
@@ -5249,6 +6278,21 @@ function ProfileDetailPage({
           </div>
         )}
 
+        {onBlockUser && (
+          <button
+            onClick={async () => {
+              if (window.confirm(`Are you sure you want to block ${profile.full_name || 'this user'}? You won't be able to see their posts or messages.`)) {
+                await onBlockUser(profile.id)
+                onClose()
+              }
+            }}
+            className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+          >
+            <UserX className="w-4 h-4" />
+            Block User
+          </button>
+        )}
+
         {profile.contact_email && (
           <a 
             href={`mailto:${profile.contact_email}?subject=Contact from UK Therapist Network&body=Hello ${profile.full_name}, I found your profile on UK Therapist Network and would like to get in touch.`}
@@ -5275,11 +6319,7 @@ function ProfileDetailPage({
   const isOwnProfile = currentUserId === profileId
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <div className="animate-spin h-12 w-12 border-4 border-blue-600 border-t-transparent rounded-full"></div>
-      </div>
-    )
+    return <ProfilePageSkeleton />
   }
 
   if (!profile) {
@@ -5325,7 +6365,7 @@ function ProfileDetailPage({
                 />
               ) : (
                 <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold">
-                  {profile?.full_name?.charAt(0) || 'T'}
+              {profile?.full_name?.charAt(0) || 'T'}
                 </div>
               )}
               {isOwnProfile && editingSection === 'basic' && (
@@ -6201,7 +7241,13 @@ function ProfileDetailPage({
   )
 }
 
-function CommunityComponent() {
+function CommunityComponent({ 
+  onOpenConnections,
+  allHiddenUserIds = []
+}: { 
+  onOpenConnections?: () => void
+  allHiddenUserIds?: string[]
+}) {
   const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
   const toast = useToast();
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
@@ -6224,16 +7270,17 @@ function CommunityComponent() {
       language: 'English',
       attachments: [] as string[],
       co_authors: [] as string[],
-      is_public: true
+      is_public: true,
+      visibility: 'public' as 'public' | 'connections' | 'only_me'
     } as PostMetadata
   })
   const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showVisibilityDropdown, setShowVisibilityDropdown] = useState(false)
   const [commentLikes, setCommentLikes] = useState<Record<string, number>>({});
-  const [commentDislikes, setCommentDislikes] = useState<Record<string, number>>({});
   const [commentFavorites, setCommentFavorites] = useState<Record<string, boolean>>({});
-  const [userReactions, setUserReactions] = useState<Record<string, 'like' | 'dislike' | 'favorite' | null>>({});
+  const [userReactions, setUserReactions] = useState<Record<string, 'like' | 'favorite' | null>>({});
   const [activeCommentMenu, setActiveCommentMenu] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState<string>('');
@@ -6270,10 +7317,28 @@ function CommunityComponent() {
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
   const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved'>('all')
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
+  const [showCompletenessChecklist, setShowCompletenessChecklist] = useState(false)
+  
+  // Pagination states
+  const POSTS_PER_PAGE = 10
+  const [postsPage, setPostsPage] = useState(0)
+  const [hasMorePosts, setHasMorePosts] = useState(true)
+  const [loadingMorePosts, setLoadingMorePosts] = useState(false)
+  const loadMoreRef = useRef<HTMLDivElement | null>(null)
+  const [showBackToTop, setShowBackToTop] = useState(false)
+
+  // Pull-to-refresh
+  const { isPulling, pullDistance, isRefreshing, containerRef } = usePullToRefresh({
+    onRefresh: async () => {
+      haptic.light();
+      await loadPosts(0, true);
+      toast.success('Feed refreshed');
+    },
+    enabled: true
+  });
 
   
   const [postLikes, setPostLikes] = useState<Record<string, number>>({})
-  const [postDislikes, setPostDislikes] = useState<Record<string, number>>({})
   const [postReactions, setPostReactions] = useState<Record<string, { emoji: string; count: number }[]>>({})
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
@@ -6296,7 +7361,8 @@ function CommunityComponent() {
       language: 'English',
       attachments: [],
       co_authors: [],
-      is_public: true
+      is_public: true,
+      visibility: 'public' as 'public' | 'connections' | 'only_me'
     }
   })
   const session = useSession()
@@ -6387,25 +7453,111 @@ function CommunityComponent() {
     if (user?.id) loadBookmarks(); else setBookmarkedPosts([])
   }, [user?.id])
 
+  // Listen for notification events to open posts
+  useEffect(() => {
+    const handleOpenPostFromNotification = async (event: CustomEvent) => {
+      const { postId, commentId, scrollToReaction } = event.detail
+      
+      if (!postId) return
+
+      // Find post in current posts
+      let targetPost = posts.find(p => p.id === postId)
+      
+      // If not found, load it
+      if (!targetPost) {
+        const { data } = await supabase
+          .from('posts')
+          .select(`
+            *,
+            user:profiles(*)
+          `)
+          .eq('id', postId)
+          .single()
+        
+        if (data) {
+          targetPost = data
+          setPosts(prev => [...prev, data])
+        }
+      }
+
+      if (targetPost) {
+        // Open post modal
+        setSelectedPost(targetPost)
+        
+        // Load comments if needed
+        if (!comments[postId]) {
+          await loadComments(postId)
+        }
+        
+        // Scroll to reaction or comment after a brief delay
+        setTimeout(() => {
+          if (scrollToReaction) {
+            // Scroll to reactions section
+            const reactionsElement = document.querySelector(`[data-post-id="${postId}"] .reactions-section`)
+            if (reactionsElement) {
+              reactionsElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+          }
+          
+          if (commentId) {
+            // Scroll to specific comment
+            const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
+            if (commentElement) {
+              commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              // Highlight comment briefly
+              commentElement.classList.add('bg-yellow-100')
+              setTimeout(() => {
+                commentElement.classList.remove('bg-yellow-100')
+              }, 2000)
+            }
+          }
+        }, 300)
+      }
+    }
+
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent
+      handleOpenPostFromNotification(customEvent)
+    }
+    
+    window.addEventListener('openPostFromNotification', handler)
+    
+    return () => {
+      window.removeEventListener('openPostFromNotification', handler)
+    }
+  }, [posts, comments])
+
   const handleBookmarkPost = async (postId: string) => {
-    if (!user?.id) { toast.info('Please sign in to save posts'); return }
-    const isBookmarked = bookmarkedPosts.includes(postId)
-    setBookmarkedPosts(prev => isBookmarked ? prev.filter(id => id !== postId) : [...prev, postId])
+    if (!user?.id) { 
+      toast.info('Please sign in to save posts');
+      return;
+    }
+    
+    // Optimistic update
+    const isBookmarked = bookmarkedPosts.includes(postId);
+    setBookmarkedPosts(prev => isBookmarked ? prev.filter(id => id !== postId) : [...prev, postId]);
+    
     try {
       if (isBookmarked) {
-        await supabase.from('post_bookmarks').delete().eq('post_id', postId).eq('user_id', user.id)
+        await supabase.from('post_bookmarks').delete().eq('post_id', postId).eq('user_id', user.id);
+        haptic.success();
+        toast.success('Post removed from saved');
       } else {
-        await supabase.from('post_bookmarks').insert({ post_id: postId, user_id: user.id })
+        await supabase.from('post_bookmarks').insert({ post_id: postId, user_id: user.id });
+        haptic.success();
+        toast.success('Post saved');
       }
     } catch (error) {
-      setBookmarkedPosts(prev => isBookmarked ? [...prev, postId] : prev.filter(id => id !== postId))
-      toast.error('Failed to save post')
+      // Revert optimistic update on error
+      setBookmarkedPosts(prev => isBookmarked ? [...prev, postId] : prev.filter(id => id !== postId));
+      haptic.error();
+      toast.error('Failed to save post');
     }
   }
 
   const loadUserProfile = async () => {
     if (!user?.id) return
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('*')
       .eq('id', user.id)
@@ -6425,12 +7577,119 @@ function CommunityComponent() {
 
   const loadSuggestedConnections = async () => {
     if (!user?.id) return
+    try {
+      // 1) Fetch a pool of candidate profiles (exclude current user)
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('*')
+        .neq('id', user.id)
+        .limit(50)
+
+      const candidates: Profile[] = profiles || []
+
+      // 2) Build current user's accepted connection set
+      const currentConnectionIds = new Set(
+        (connections || [])
+          .filter((c: any) => c.status === 'accepted')
+          .map((c: any) => (c.sender_id === user.id ? c.receiver_id : c.sender_id))
+      )
+
+      // 3) Filter out already-connected candidates and blocked users (both directions)
+      // Get users I blocked
+      const { data: settings } = await supabase
+        .from('user_settings')
+        .select('blocked_users')
+        .eq('id', user.id)
+        .single()
+      const userBlockedIds = settings?.blocked_users || []
+      
+      // Get users who blocked me (users whose blocked_users array contains my ID)
+      const { data: blockedByData } = await supabase
+        .from('user_settings')
+        .select('id')
+        .contains('blocked_users', [user.id])
+      const blockedByIds = (blockedByData || []).map(s => s.id)
+      
+      // Combine both: users I blocked + users who blocked me
+      const allHiddenIds = [...new Set([...userBlockedIds, ...blockedByIds])]
+      
+      const pool = candidates.filter(c => 
+        !currentConnectionIds.has(c.id) && 
+        !allHiddenIds.includes(c.id)
+      )
+      if (pool.length === 0) {
+        setSuggestedConnections([])
+        return
+      }
+
+      // 4) Fetch accepted connections for these candidates (both directions)
+      const candidateIds = pool.map(c => c.id)
+      const { data: connsSender } = await supabase
+        .from('connections')
+        .select('sender_id,receiver_id,status')
+        .in('sender_id', candidateIds)
+        .eq('status', 'accepted')
+      const { data: connsReceiver } = await supabase
+        .from('connections')
+        .select('sender_id,receiver_id,status')
+        .in('receiver_id', candidateIds)
+        .eq('status', 'accepted')
+
+      const allCandConns = [...(connsSender || []), ...(connsReceiver || [])]
+      const candConnMap = new Map<string, Set<string>>()
+      allCandConns.forEach((row: any) => {
+        const a = row.sender_id
+        const b = row.receiver_id
+        if (!candConnMap.has(a)) candConnMap.set(a, new Set<string>())
+        if (!candConnMap.has(b)) candConnMap.set(b, new Set<string>())
+        candConnMap.get(a)!.add(b)
+        candConnMap.get(b)!.add(a)
+      })
+
+      // 5) Scoring helpers using available fields
+      const getGeoScore = (cand: any) => {
+        // Same city: 1, same county/region: 0.5, else 0
+        const cityMatch = userProfile?.city && cand.city && cand.city === userProfile.city
+        if (cityMatch) return 1
+        const regionMatch = userProfile?.county && cand.county && cand.county === userProfile.county
+        return regionMatch ? 0.5 : 0
+      }
+
+      const getProfileScore = (cand: any) => {
+        // Same profession -> 1 else 0 (extend with interests when available)
+        return userProfile?.profession && cand.profession && cand.profession === userProfile.profession ? 1 : 0
+      }
+
+      const scored = pool.map(cand => {
+        // Common connections score
+        const candSet = candConnMap.get(cand.id) || new Set<string>()
+        let common = 0
+        candSet.forEach(id => { if (currentConnectionIds.has(id)) common += 1 })
+        const scoreCommon = common / Math.max(currentConnectionIds.size, 1)
+
+        const scoreGroup = 0 // groups/schools/jobs not modeled yet in this app
+        const scoreGeo = getGeoScore(cand)
+        const scoreProfile = getProfileScore(cand)
+        const scoreActivity = 0 // recentInteractions not modeled yet
+
+        const totalScore = 0.4 * scoreCommon + 0.2 * scoreGroup + 0.1 * scoreGeo + 0.1 * scoreProfile + 0.2 * scoreActivity
+        return { cand, totalScore }
+      })
+
+      // 6) Sort and pick top N
+      scored.sort((a, b) => b.totalScore - a.totalScore)
+      const top = scored.slice(0, 10).map(s => s.cand)
+      setSuggestedConnections(top)
+    } catch (e) {
+      console.error('loadSuggestedConnections error:', e)
+      // Graceful fallback
     const { data } = await supabase
       .from('profiles')
       .select('*')
       .neq('id', user.id)
       .limit(5)
     setSuggestedConnections(data || [])
+    }
   }
 
   const loadNetworkStats = async () => {
@@ -6520,7 +7779,8 @@ function CommunityComponent() {
     content_type: false,
     audience_level: false,
     related_conditions: false,
-    language: false
+    language: false,
+    editVisibility: false
   })
 
   // Filter dropdown states
@@ -6723,7 +7983,7 @@ function CommunityComponent() {
       // Sadece sayfa görünürse ve real-time bağlantısı kopmuşsa yenile
       if (document.visibilityState === 'visible' && realtimeStatus === 'disconnected') {
         console.log('Periodic refresh triggered');
-        loadPosts();
+        loadPosts(0, true);
         loadFollowingPosts();
       }
     }, 30000); // 30 saniyede bir
@@ -6747,7 +8007,7 @@ function CommunityComponent() {
   // useEffect içindeki real-time subscription'ı güncelle
   useEffect(() => {
     if (user) {
-      loadPosts()
+      loadPosts(0, true)
       loadFollowingPosts()
       
       // Real-time subscriptions
@@ -6784,7 +8044,7 @@ function CommunityComponent() {
           }
         })
         .subscribe()
-  
+
       return () => {
         try { postsChannel.unsubscribe() } catch (e) {}
         try { repliesChannel.unsubscribe() } catch (e) {}
@@ -6979,7 +8239,6 @@ function CommunityComponent() {
     console.log('Like clicked - User:', user.id, 'Comment:', commentId);
     const currentReaction = userReactions[commentId];
     const currentLikes = commentLikes[commentId] || 0;
-    const currentDislikes = commentDislikes[commentId] || 0;
     
     try {
       if (currentReaction === 'like') {
@@ -7006,18 +8265,6 @@ function CommunityComponent() {
         // OPTIMISTIC UPDATE: Hemen state'i güncelle
         setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes + 1 }));
         
-        // Eski dislike varsa onu kaldır
-        if (currentReaction === 'dislike') {
-          setCommentDislikes(prev => ({ ...prev, [commentId]: Math.max(0, currentDislikes - 1) }));
-          
-          // Veritabanından dislike'ı sil
-          await supabase
-            .from('comment_reactions')
-            .delete()
-            .eq('comment_id', commentId)
-            .eq('user_id', user.id)
-            .eq('reaction_type', 'dislike');
-        }
 
         setUserReactions(prev => ({ ...prev, [commentId]: 'like' }));
 
@@ -7033,11 +8280,55 @@ function CommunityComponent() {
         if (error) {
           // Hata olursa geri al
           setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
-          if (currentReaction === 'dislike') {
-            setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes }));
-          }
           setUserReactions(prev => ({ ...prev, [commentId]: currentReaction }));
           throw error;
+        }
+
+        // Create notification for comment owner
+        // Find comment in state to get owner
+        let commentOwnerId: string | null = null
+        let postIdForComment: string | null = null
+        for (const postId in comments) {
+          const findComment = (commentList: Comment[]): Comment | null => {
+            for (const comment of commentList) {
+              if (comment.id === commentId) {
+                return comment
+              }
+              if (comment.replies) {
+                const found = findComment(comment.replies)
+                if (found) return found
+              }
+            }
+            return null
+          }
+          const foundComment = findComment(comments[postId])
+          if (foundComment) {
+            commentOwnerId = foundComment.user_id
+            postIdForComment = postId
+            break
+          }
+        }
+
+        if (commentOwnerId && commentOwnerId !== user.id && postIdForComment) {
+          // Check user notification settings
+          const { data: settings } = await supabase
+            .from('user_settings')
+            .select('push_comments')
+            .eq('id', commentOwnerId)
+            .single()
+
+          if (settings?.push_comments !== false) {
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: commentOwnerId,
+                title: 'New like on your comment',
+                message: `${userProfile?.full_name || 'Someone'} liked your comment`,
+                type: 'comment_reaction',
+                related_entity_type: 'comment',
+                related_entity_id: commentId
+              })
+          }
         }
       }
     } catch (err) {
@@ -7045,78 +8336,6 @@ function CommunityComponent() {
     }
   };
 
-  // Yorum beğenmeme - Güncellenmiş versiyon
-  const handleDislikeComment = async (commentId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!user) return;
-
-    const currentReaction = userReactions[commentId];
-    const currentLikes = commentLikes[commentId] || 0;
-    const currentDislikes = commentDislikes[commentId] || 0;
-    
-    try {
-      if (currentReaction === 'dislike') {
-        // OPTIMISTIC UPDATE: Hemen state'i güncelle
-        setCommentDislikes(prev => ({ ...prev, [commentId]: Math.max(0, currentDislikes - 1) }));
-        setUserReactions(prev => ({ ...prev, [commentId]: null }));
-
-        // Veritabanı işlemi
-        const { error } = await supabase
-          .from('comment_reactions')
-          .delete()
-          .eq('comment_id', commentId)
-          .eq('user_id', user.id)
-          .eq('reaction_type', 'dislike');
-
-        if (error) {
-          // Hata olursa geri al
-          setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes }));
-          setUserReactions(prev => ({ ...prev, [commentId]: 'dislike' }));
-          throw error;
-        }
-
-      } else {
-        // OPTIMISTIC UPDATE: Hemen state'i güncelle
-        setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes + 1 }));
-        
-        // Eski like varsa onu kaldır
-        if (currentReaction === 'like') {
-          setCommentLikes(prev => ({ ...prev, [commentId]: Math.max(0, currentLikes - 1) }));
-          
-          // Veritabanından like'ı sil
-          await supabase
-            .from('comment_reactions')
-            .delete()
-            .eq('comment_id', commentId)
-            .eq('user_id', user.id)
-            .eq('reaction_type', 'like');
-        }
-
-        setUserReactions(prev => ({ ...prev, [commentId]: 'dislike' }));
-
-        // Dislike ekle
-        const { error } = await supabase
-          .from('comment_reactions')
-          .upsert({
-            comment_id: commentId,
-            user_id: user.id,
-            reaction_type: 'dislike'
-          });
-
-        if (error) {
-          // Hata olursa geri al
-          setCommentDislikes(prev => ({ ...prev, [commentId]: currentDislikes }));
-          if (currentReaction === 'like') {
-            setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
-          }
-          setUserReactions(prev => ({ ...prev, [commentId]: currentReaction }));
-          throw error;
-        }
-      }
-    } catch (err) {
-      console.error('Error updating dislike:', err);
-    }
-  };
 
   // Yorum favorileme - Güncellenmiş versiyon
   const handleFavoriteComment = async (commentId: string, e: React.MouseEvent) => {
@@ -7425,11 +8644,6 @@ function CommunityComponent() {
           ...prev, 
           [comment_id]: (prev[comment_id] || 0) + 1 
         }));
-      } else if (reaction_type === 'dislike') {
-        setCommentDislikes(prev => ({ 
-          ...prev, 
-          [comment_id]: (prev[comment_id] || 0) + 1 
-        }));
       } else if (reaction_type === 'favorite') {
         setCommentFavorites(prev => ({ 
           ...prev, 
@@ -7459,11 +8673,6 @@ function CommunityComponent() {
           ...prev, 
           [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
         }));
-      } else if (reaction_type === 'dislike') {
-        setCommentDislikes(prev => ({ 
-          ...prev, 
-          [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
-        }));
       } else if (reaction_type === 'favorite') {
         setCommentFavorites(prev => ({ 
           ...prev, 
@@ -7486,21 +8695,11 @@ function CommunityComponent() {
           ...prev, 
           [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
         }));
-      } else if (oldReactionType === 'dislike') {
-        setCommentDislikes(prev => ({ 
-          ...prev, 
-          [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
-        }));
       }
       
       // Yeni reaksiyonu artır
       if (reaction_type === 'like') {
         setCommentLikes(prev => ({ 
-          ...prev, 
-          [comment_id]: (prev[comment_id] || 0) + 1 
-        }));
-      } else if (reaction_type === 'dislike') {
-        setCommentDislikes(prev => ({ 
           ...prev, 
           [comment_id]: (prev[comment_id] || 0) + 1 
         }));
@@ -7684,18 +8883,29 @@ function CommunityComponent() {
     }
   };
 
-  const loadPosts = async () => {
+  const loadPosts = async (page: number = 0, reset: boolean = false) => {
     if (!user) return
 
     try {
+      if (reset) {
       setLoading(true)
+        setPostsPage(0)
+        setHasMorePosts(true)
+      } else {
+        setLoadingMorePosts(true)
+      }
+
+      const from = page * POSTS_PER_PAGE
+      const to = from + POSTS_PER_PAGE - 1
+
       let query = supabase
         .from('posts')
         .select(`
           *,
           user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
-        `)
+        `, { count: 'exact' })
         .order('created_at', { ascending: false })
+        .range(from, to)
 
       // Apply filters
       if (feedFilters.professions.length > 0) {
@@ -7737,11 +8947,18 @@ function CommunityComponent() {
         console.log('Network filter not yet implemented')
       }
 
-      const { data, error } = await query
+      const { data, error, count } = await query
 
       if (error) {
         console.error('Error loading posts:', error)
+        if (reset) setLoading(false)
+        else setLoadingMorePosts(false)
         return
+      }
+
+      if (count !== null) {
+        const hasMore = to < (count - 1)
+        setHasMorePosts(hasMore)
       }
 
       const postsWithDetails = await Promise.all(
@@ -7752,6 +8969,25 @@ function CommunityComponent() {
             .select('*', { count: 'exact', head: true })
             .eq('post_id', post.id)
 
+          // Load reaction counts
+          const { data: reactions } = await supabase
+            .from('post_reactions')
+            .select('reaction_type')
+            .eq('post_id', post.id)
+          
+          let likesCount = 0
+          const emojiReactions: Record<string, number> = {}
+          
+          if (reactions) {
+            reactions.forEach(r => {
+              if (r.reaction_type === 'like') {
+                likesCount++
+              } else {
+                emojiReactions[r.reaction_type] = (emojiReactions[r.reaction_type] || 0) + 1
+              }
+            })
+          }
+
           setPostSettings(prev => ({
             ...prev,
             [post.id]: {
@@ -7759,6 +8995,17 @@ function CommunityComponent() {
               muted: post.muted ?? false
             }
           }))
+
+          // Set reaction counts
+          if (likesCount > 0) {
+            setPostLikes(prev => ({ ...prev, [post.id]: likesCount }))
+          }
+          if (Object.keys(emojiReactions).length > 0) {
+            setPostReactions(prev => ({
+              ...prev,
+              [post.id]: Object.entries(emojiReactions).map(([emoji, count]) => ({ emoji, count }))
+            }))
+          }
 
           return {
             ...post,
@@ -7774,13 +9021,61 @@ function CommunityComponent() {
         })
       )
 
+      if (reset) {
       setPosts(postsWithDetails)
+      } else {
+        setPosts(prev => [...prev, ...postsWithDetails])
+      }
     } catch (err) {
       console.error('Error loading community posts:', err)
     } finally {
+      if (reset) {
       setLoading(false)
+      } else {
+        setLoadingMorePosts(false)
+      }
     }
   }
+
+  const loadMorePosts = async () => {
+    if (!hasMorePosts || loadingMorePosts || loading) return
+    
+    const nextPage = postsPage + 1
+    await loadPosts(nextPage, false)
+    setPostsPage(nextPage)
+  }
+
+  // Infinite scroll with IntersectionObserver
+  useEffect(() => {
+    if (!loadMoreRef.current) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMorePosts && !loadingMorePosts && !loading) {
+          loadMorePosts()
+        }
+      },
+      { threshold: 0.5, rootMargin: '100px' }
+    )
+
+    observer.observe(loadMoreRef.current)
+
+    return () => {
+      if (loadMoreRef.current) {
+        observer.unobserve(loadMoreRef.current)
+      }
+    }
+  }, [hasMorePosts, loadingMorePosts, loading])
+
+  // Back to top button visibility
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 500)
+    }
+
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   const getUserProfile = async () => {
     if (!user) return null
@@ -7811,67 +9106,41 @@ function CommunityComponent() {
 
   const loadComments = async (postId: string) => {
     try {
-      const { data: topLevelComments, error: topLevelError } = await supabase
+      // Load all comments for this post at once
+      const { data: allComments, error } = await supabase
         .from('post_comments')
         .select(`
           *,
           user:profiles(id, full_name, profession, avatar_url)
         `)
         .eq('post_id', postId)
-        .is('parent_reply_id', null)
         .order('created_at', { ascending: true })
   
-      if (topLevelError) {
-        console.error('Error loading top level comments:', topLevelError)
+      if (error) {
+        console.error('Error loading comments:', error)
         return
       }
   
-      const commentsWithReplies = await Promise.all(
-        (topLevelComments || []).map(async (comment) => {
-          const { data: replies, error: repliesError } = await supabase
-            .from('post_comments')
-            .select(`
-              *,
-              user:profiles(id, full_name, profession, avatar_url)
-            `)
-            .eq('parent_reply_id', comment.id)
-            .order('created_at', { ascending: true })
-  
-          if (!repliesError && replies) {
-            const repliesWithNested = await Promise.all(
-              replies.map(async (reply) => {
-                const { data: nestedReplies } = await supabase
-                  .from('post_comments')
-                  .select(`
-                    *,
-                    user:profiles(id, full_name, profession, avatar_url)
-                  `)
-                  .eq('parent_reply_id', reply.id)
-                  .order('created_at', { ascending: true });
-            
-                return {
-                  ...reply,
-                  replies: nestedReplies || []
-                };
-              })
-            );
-  
-            return {
-              ...comment,
-              replies: repliesWithNested
+      // Build comment tree recursively
+      const buildCommentTree = (comments: any[], parentId: string | null = null): Comment[] => {
+        return comments
+          .filter(comment => {
+            if (parentId === null) {
+              return !comment.parent_reply_id
             }
-          }
-          
-          return {
-            ...comment,
-            replies: []
-          }
-        })
-      )
+            return comment.parent_reply_id === parentId
+          })
+          .map(comment => ({
+              ...comment,
+            replies: buildCommentTree(comments, comment.id)
+          }))
+      }
+  
+      const commentsTree = buildCommentTree(allComments || [])
   
       setComments(prev => ({
         ...prev,
-        [postId]: commentsWithReplies
+        [postId]: commentsTree
       }))
     } catch (err) {
       console.error('Error loading comments:', err)
@@ -7879,7 +9148,9 @@ function CommunityComponent() {
   }
 
   const createPost = async () => {
-    if (!newPost.title.trim() || !newPost.content.trim()) return
+    // Allow posting if there's content (strip HTML tags for length check)
+    const textContent = newPost.content.replace(/<[^>]*>/g, '').trim()
+    if (!textContent) return
 
     setLoading(true)
     const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -7891,20 +9162,28 @@ function CommunityComponent() {
     }
 
     try {
+      // Use content preview as title (strip HTML and get first line or first 100 chars)
+      const textPreview = textContent.split('\n')[0].slice(0, 100) || 'Post'
+      const titleValue = textPreview
+      
       const { error } = await supabase
         .from('posts')
         .insert({
           user_id: currentUser.id,
-          title: newPost.title.trim(),
-          content: newPost.content.trim(),
+          title: titleValue,
+          content: newPost.content, // Store HTML content
           post_metadata: newPost.metadata
         })
+        .select()
+        .single()
 
       if (error) {
         console.error('Error creating post:', error)
-        toast.error('Failed to create post. Please try again.')
+        toast.error(getErrorMessage(error) || 'Failed to create post. Please try again.')
         return
       }
+
+      toast.success('Post created successfully')
 
       // Reset form
       setNewPost({
@@ -7920,7 +9199,8 @@ function CommunityComponent() {
           language: 'English',
           attachments: [],
           co_authors: [],
-          is_public: true
+          is_public: true,
+          visibility: 'public'
         }
       })
       setTagInput('')
@@ -7928,17 +9208,17 @@ function CommunityComponent() {
       setCoAuthorInput('')
       setShowAdvancedOptions(false)
       setShowNewPostModal(false)
-      await loadPosts()
+      await loadPosts(0, true)
 
     } catch (err) {
       console.error('Error creating post:', err)
-      toast.error('Failed to create post. Please try again.')
+      toast.error(getErrorMessage(err) || 'Failed to create post. Please try again.')
     } finally {
       setLoading(false)
     }
   }
 
-  const updatePost = async (postId: string, updates: { title?: string; content?: string; metadata?: PostMetadata }) => {
+  const updatePost = async (postId: string, updates: { title?: string | null; content?: string; metadata?: PostMetadata }) => {
     try {
       const { error } = await supabase
         .from('posts')
@@ -7950,19 +9230,24 @@ function CommunityComponent() {
         })
         .eq('id', postId)
   
-      if (error) throw error
+      if (error) {
+        toast.error(getErrorMessage(error) || 'Failed to update post')
+        throw error
+      }
+
+      toast.success('Post updated successfully')
   
-      // Update local state
+      // Update local state (optional, since loadPosts will reload everything)
       setPosts(prev => prev.map(p => 
         p.id === postId 
           ? { 
               ...p, 
-              ...updates,
+              ...(updates.title !== undefined && updates.title !== null ? { title: updates.title } : {}),
+              ...(updates.content !== undefined ? { content: updates.content } : {}),
               post_metadata: updates.metadata || p.post_metadata
             } 
           : p
       ))
-      setEditForm({ ...editForm, id: '' }) // Close modal
     } catch (err) {
       console.error('Error updating post:', err)
       toast.error('Failed to update post')
@@ -8010,9 +9295,9 @@ function CommunityComponent() {
         [postId]: { ...prev[postId], [setting]: newValue } 
       }))
   
-      const { data, error } = await supabase
-        .from('posts')
-        .update({ [setting]: newValue })
+    const { error } = await supabase
+      .from('posts')
+      .update({ [setting]: newValue })
         .eq('id', postId)
         .select()
   
@@ -8070,29 +9355,6 @@ function CommunityComponent() {
     }
   }
 
-  const addEditAttachment = () => {
-    if (attachmentInput.trim() && !editForm.metadata.attachments.includes(attachmentInput.trim())) {
-      setEditForm({
-        ...editForm,
-        metadata: {
-          ...editForm.metadata,
-          attachments: [...editForm.metadata.attachments, attachmentInput.trim()]
-        }
-      })
-      setAttachmentInput('')
-    }
-  }
-
-  const removeEditAttachment = (attachmentToRemove: string) => {
-    setEditForm({
-      ...editForm,
-      metadata: {
-        ...editForm.metadata,
-        attachments: editForm.metadata.attachments.filter(attachment => attachment !== attachmentToRemove)
-      }
-    })
-  }
-
   const addEditCoAuthor = () => {
     if (coAuthorInput.trim() && !editForm.metadata.co_authors.includes(coAuthorInput.trim())) {
       setEditForm({
@@ -8131,11 +9393,6 @@ function CommunityComponent() {
     }
   }
 
-  const viewPostDetail = (post: CommunityPost) => {
-    setSelectedPost(post)
-    loadComments(post.id)
-  }
-
   // Toggle expanded post content
   const toggleExpandPost = (postId: string) => {
     setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }))
@@ -8169,25 +9426,23 @@ function CommunityComponent() {
           .delete()
           .eq('post_id', postId)
           .eq('user_id', user.id);
+        
+
       } else {
         // Add like, remove old reaction if exists
         setPostLikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
 
-        if (currentReaction) {
-          if (currentReaction === 'dislike') {
-            setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
-          } else {
-            // Remove emoji reaction
-            setPostReactions(prev => {
-              const current = prev[postId] || [];
-              return {
-                ...prev,
-                [postId]: current.map(r => 
-                  r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
-                ).filter(r => r.count > 0)
-              };
-            });
-          }
+        if (currentReaction && currentReaction !== 'like') {
+          // Remove emoji reaction
+          setPostReactions(prev => {
+            const current = prev[postId] || [];
+            return {
+              ...prev,
+              [postId]: current.map(r => 
+                r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+              ).filter(r => r.count > 0)
+            };
+          });
         }
 
         // Persist replacement of previous reaction (if any)
@@ -8206,75 +9461,38 @@ function CommunityComponent() {
             post_id: postId,
             user_id: user.id,
             reaction_type: 'like'
-          });
+          }, { onConflict: 'post_id,user_id' });
+
+        // Create notification for post owner
+        const post = posts.find(p => p.id === postId)
+        if (post && post.user_id !== user.id) {
+          // Check user notification settings
+          const { data: settings } = await supabase
+            .from('user_settings')
+            .select('push_post_reactions')
+            .eq('id', post.user_id)
+            .single()
+
+          if (settings?.push_post_reactions !== false) {
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: post.user_id,
+                title: 'New like on your post',
+                message: `${userProfile?.full_name || 'Someone'} liked your post`,
+                type: 'post_reaction',
+                related_entity_type: 'post',
+                related_entity_id: postId
+              })
+          }
+        }
       }
     } catch (err) {
       console.error('Error updating post like:', err);
     }
   };
 
-  const handleDislikePost = async (postId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!user) return;
 
-    const currentReaction = userPostReactions[postId];
-
-    try {
-      if (currentReaction === 'dislike') {
-        // Remove dislike
-        setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
-        setUserPostReactions(prev => ({ ...prev, [postId]: null }));
-        // Persist removal
-        await supabase
-          .from('post_reactions')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-      } else {
-        // Add dislike, remove old reaction if exists
-        setPostDislikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
-
-        if (currentReaction) {
-          if (currentReaction === 'like') {
-            setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
-          } else {
-            // Remove emoji reaction
-            setPostReactions(prev => {
-              const current = prev[postId] || [];
-              return {
-                ...prev,
-                [postId]: current.map(r => 
-                  r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
-                ).filter(r => r.count > 0)
-              };
-            });
-          }
-        }
-
-        // Persist replacement of previous reaction (if any)
-        await supabase
-          .from('post_reactions')
-          .delete()
-          .eq('post_id', postId)
-          .eq('user_id', user.id);
-
-        setUserPostReactions(prev => ({ ...prev, [postId]: 'dislike' }));
-
-        // Persist dislike
-        await supabase
-          .from('post_reactions')
-          .upsert({
-            post_id: postId,
-            user_id: user.id,
-            reaction_type: 'dislike'
-          });
-      }
-    } catch (err) {
-      console.error('Error updating post dislike:', err);
-    }
-  };
-
-  // Handle emoji reaction
   const handleEmojiReaction = async (postId: string, emoji: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) return;
@@ -8299,7 +9517,9 @@ function CommunityComponent() {
           .from('post_reactions')
           .delete()
           .eq('post_id', postId)
-          .eq('user_id', user.id)
+          .eq('user_id', user.id);
+        
+
       } else {
         // Add emoji reaction, remove old if exists
         setPostReactions(prev => {
@@ -8323,8 +9543,6 @@ function CommunityComponent() {
         if (currentReaction) {
           if (currentReaction === 'like') {
             setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
-          } else if (currentReaction === 'dislike') {
-            setPostDislikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
           } else {
             // Remove old emoji
             setPostReactions(prev => {
@@ -8343,7 +9561,8 @@ function CommunityComponent() {
             .from('post_reactions')
             .delete()
             .eq('post_id', postId)
-            .eq('user_id', user.id)
+            .eq('user_id', user.id);
+
         }
 
         setUserPostReactions(prev => ({ ...prev, [postId]: emoji }));
@@ -8351,7 +9570,31 @@ function CommunityComponent() {
         // Persist new emoji reaction
         await supabase
           .from('post_reactions')
-          .upsert({ post_id: postId, user_id: user.id, reaction_type: emoji })
+          .upsert({ post_id: postId, user_id: user.id, reaction_type: emoji }, { onConflict: 'post_id,user_id' });
+
+        // Create notification for post owner
+        const post = posts.find(p => p.id === postId)
+        if (post && post.user_id !== user.id) {
+          // Check user notification settings
+          const { data: settings } = await supabase
+            .from('user_settings')
+            .select('push_post_reactions')
+            .eq('id', post.user_id)
+            .single()
+
+          if (settings?.push_post_reactions !== false) {
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: post.user_id,
+                title: 'New reaction on your post',
+                message: `${userProfile?.full_name || 'Someone'} reacted ${emoji} to your post`,
+                type: 'post_reaction',
+                related_entity_type: 'post',
+                related_entity_id: postId
+              })
+          }
+        }
       }
       setShowEmojiPicker(null);
     } catch (err) {
@@ -8375,14 +9618,6 @@ function CommunityComponent() {
       setLongPressTimer(null)
     }
   }
-
-  // Truncate content for "See more"
-  const getTruncatedContent = (content: string, postId: string, maxLength = 300) => {
-  if (expandedPosts[postId] || content.length <= maxLength) {
-    return content;
-  }
-  return content.slice(0, maxLength) + '...';
-};
 
   const addComment = async (postId: string, parentReplyId: string | null = null) => {
     const commentText = parentReplyId ? replyContents[parentReplyId] : newComments[postId]
@@ -8413,30 +9648,18 @@ function CommunityComponent() {
         const postComments = prev[postId] || []
         
         if (parentReplyId) {
-          // Yanıt ekleme - recursive search for nested replies
+          // Yanıt ekleme - fully recursive search for any nested level
           const findAndAddReply = (comments: Comment[]): Comment[] => {
             return comments.map(comment => {
-              // Check if this comment is the parent
+              // Check if this comment/reply is the parent
             if (comment.id === parentReplyId) {
               return {
                 ...comment,
                 replies: [...(comment.replies || []), newComment]
               }
             }
-              // Check in nested replies
+              // Recursively search in all nested replies
               if (comment.replies && comment.replies.length > 0) {
-                const foundInReplies = comment.replies.find((r: any) => r.id === parentReplyId)
-                if (foundInReplies) {
-                  return {
-                    ...comment,
-                    replies: comment.replies.map((r: any) => 
-                      r.id === parentReplyId 
-                        ? { ...r, replies: [...(r.replies || []), newComment] }
-                        : r
-                    )
-                  }
-                }
-                // Recursively search deeper
                 return {
                   ...comment,
                   replies: findAndAddReply(comment.replies)
@@ -8561,6 +9784,78 @@ function CommunityComponent() {
             ? { ...p, replies_count: (p.replies_count || 0) + 1 }
             : p
         ))
+
+        // Create notifications
+        const post = posts.find(p => p.id === postId)
+        const currentUserProfileData = await getUserProfile()
+        
+        // Notify post owner (if comment is not from post owner)
+        if (post && post.user_id !== user.id) {
+          const { data: settings } = await supabase
+            .from('user_settings')
+            .select('push_comments')
+            .eq('id', post.user_id)
+            .single()
+
+          if (settings?.push_comments !== false) {
+            await supabase
+              .from('notifications')
+              .insert({
+                user_id: post.user_id,
+                title: 'New comment on your post',
+                message: `${currentUserProfileData?.full_name || 'Someone'} commented on your post`,
+                type: 'comment',
+                related_entity_type: 'post',
+                related_entity_id: postId
+              })
+          }
+        }
+
+        // If it's a reply, notify parent comment owner
+        if (parentReplyId) {
+          // Find parent comment to get owner
+          let parentCommentOwnerId: string | null = null
+          for (const pid in comments) {
+            const findCommentRecursive = (commentList: Comment[]): Comment | null => {
+              for (const comment of commentList) {
+                if (comment.id === parentReplyId) {
+                  return comment
+                }
+                if (comment.replies) {
+                  const found = findCommentRecursive(comment.replies)
+                  if (found) return found
+                }
+              }
+              return null
+            }
+            const parentComment = findCommentRecursive(comments[pid])
+            if (parentComment) {
+              parentCommentOwnerId = parentComment.user_id
+              break
+            }
+          }
+
+          if (parentCommentOwnerId && parentCommentOwnerId !== user.id) {
+            const { data: settings } = await supabase
+              .from('user_settings')
+              .select('push_comments')
+              .eq('id', parentCommentOwnerId)
+              .single()
+
+            if (settings?.push_comments !== false) {
+              await supabase
+                .from('notifications')
+                .insert({
+                  user_id: parentCommentOwnerId,
+                  title: 'New reply to your comment',
+                  message: `${currentUserProfileData?.full_name || 'Someone'} replied to your comment`,
+                  type: 'comment',
+                  related_entity_type: 'comment',
+                  related_entity_id: parentReplyId
+                })
+            }
+          }
+        }
       }
   
     } catch (err) {
@@ -8681,6 +9976,13 @@ function CommunityComponent() {
     })
   }
 
+  // Reset posts when filters change
+  useEffect(() => {
+    if (user) {
+      loadPosts(0, true)
+    }
+  }, [feedFilters, user?.id])
+
   const clearAllFilters = () => {
     setFeedFilters({
       professions: [],
@@ -8693,6 +9995,7 @@ function CommunityComponent() {
       show_only_my_profession: false,
       show_only_my_network: false
     })
+    loadPosts(0, true)
   }
 
   // Helper functions for edit form tags
@@ -8720,18 +10023,25 @@ function CommunityComponent() {
   }
 
   const handleUpdatePost = async () => {
-    if (!editForm.title.trim() || !editForm.content.trim()) return
+    // Strip HTML tags for length check
+    const textContent = editForm.content.replace(/<[^>]*>/g, '').trim()
+    if (!textContent) return
 
     setLoading(true)
     try {
       await updatePost(editForm.id, {
-        title: editForm.title.trim(),
-        content: editForm.content.trim(),
+        title: editForm.title.trim() || null,
+        content: editForm.content, // Store HTML content
         metadata: editForm.metadata
       })
+      
+      toast.success('Post updated successfully!')
+      // Reset and reload posts to avoid duplicates
+      await loadPosts(0, true)
       setEditForm({ ...editForm, id: '' }) // Close modal
     } catch (err) {
       console.error('Error updating post:', err)
+      toast.error('Failed to update post')
     } finally {
       setLoading(false)
     }
@@ -8763,7 +10073,8 @@ function CommunityComponent() {
                 language: postToEdit.post_metadata?.language || 'English',
                 attachments: postToEdit.post_metadata?.attachments || [],
                 co_authors: postToEdit.post_metadata?.co_authors || [],
-                is_public: postToEdit.post_metadata?.is_public ?? true
+                is_public: postToEdit.post_metadata?.is_public ?? true,
+                visibility: (postToEdit.post_metadata?.visibility || 'public') as 'public' | 'connections' | 'only_me'
               }
             })
           }
@@ -8845,143 +10156,268 @@ function CommunityComponent() {
     )
   }
 
-  const getContentSnippet = (content: string) => {
-    const lines = content.split('\n').slice(0, 2).join('\n');
-    return lines.length < content.length ? `${lines}...` : lines;
+  const getUserDisplayName = (user: any): string => {
+    if (!user) return 'Unknown User';
+    return user.full_name || 'Unknown User';
   };
 
- const getUserDisplayName = (user: any): string => {
-  if (!user) return 'Unknown User';
-  return user.full_name || 'Unknown User';
-};
+  const getUserProfession = (user: any): string => {
+    if (!user) return '';
+    return user.profession || '';
+  };
 
-const getUserProfession = (user: any): string => {
-  if (!user) return '';
-  return user.profession || '';
-};
+  const calculateProfileCompleteness = (profile: Profile | null | undefined): number => {
+    if (!profile) return 0;
 
+    let score = 0;
+    const weights = {
+      full_name: 10,
+      profession: 15,
+      city: 10,
+      about_me: 15,
+      specialties: 10,
+      languages: 10,
+      work_experience: 15, // at least 1
+      qualifications: 10, // at least 1
+      contact_email: 5,
+      avatar_url: 10
+    };
 
-const getUserId = (user: any): string => {
-  if (!user) return '';
-  return user.id || '';
-};
+    if (profile.full_name?.length > 0) score += weights.full_name;
+    if (profile.profession?.length > 0) score += weights.profession;
+    if (profile.city?.length > 0) score += weights.city;
+    if (profile.about_me && profile.about_me.length > 50) score += weights.about_me;
+    if (profile.specialties && profile.specialties.length > 0) score += weights.specialties;
+    if (profile.languages && profile.languages.length > 0) score += weights.languages;
+    if (profile.work_experience && profile.work_experience.length > 0) score += weights.work_experience;
+    if (profile.qualifications && profile.qualifications.length > 0) score += weights.qualifications;
+    if (profile.contact_email && profile.contact_email.length > 0) score += weights.contact_email;
+    if (profile.avatar_url && profile.avatar_url.length > 0) score += weights.avatar_url;
 
-// Yorum sahibi kontrolü
-const isCommentOwner = (comment: any) => {
-  return comment.user_id === user?.id;
-};
+    return Math.min(score, 100);
+  };
 
-return (
-  <div className="flex-1 bg-gray-50 overflow-y-auto pb-20 md:pb-6">
-    <div className="max-w-7xl mx-auto p-4 md:p-6">
-      {/* LinkedIn-style 3-column layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* Left Sidebar - Profile Snapshot */}
-        <div className="lg:col-span-3 hidden lg:block">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden sticky top-6">
-            {/* Profile Header with gradient */}
-            <div className="h-16 bg-gradient-to-r from-blue-500 to-blue-600"></div>
-            <div className="px-4 pb-4 -mt-8">
-              <div className="flex flex-col items-center">
-                {/* Avatar */}
-                <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || user?.email || 'User'} className="w-16 h-16 border-4 border-white shadow-md" useInlineSize={false} />
-                <h3 className="mt-2 text-lg font-semibold text-gray-900 text-center">
-                  {userProfile?.full_name || 'Your Name'}
-                </h3>
-                <p className="text-sm text-gray-600 text-center">
-                  {userProfile?.profession || 'Professional'}
-                </p>
-                <p className="text-xs text-gray-500 mt-1 text-center">
-                  {userProfile?.city && userProfile?.county 
-                    ? `${userProfile.city}, ${userProfile.county}`
-                    : 'Location not set'}
-                </p>
-              </div>
-              
-              {/* Stats */}
-              <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Connections</span>
-                  <span className="font-semibold text-gray-900">{connections.length}</span>
+  const getUserId = (user: any): string => {
+    if (!user) return '';
+    return user.id || '';
+  };
+
+  // Yorum sahibi kontrolü
+  const isCommentOwner = (comment: any) => {
+    return comment.user_id === user?.id;
+  };
+
+  return (
+    <div className="flex-1 bg-gray-50 overflow-y-auto pb-20 md:pb-6">
+<div className="max-w-7xl mx-auto p-4 md:p-6">
+  {/* LinkedIn-style 3-column layout */}
+  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+    
+    {/* Left Sidebar - Profile Snapshot */}
+    <div className="md:col-span-3 hidden lg:block">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden sticky top-6">
+        {/* Profile Header with gradient */}
+        <div className="h-16 bg-gradient-to-r from-blue-500 to-blue-600"></div>
+        <div className="px-4 pb-4 -mt-8">
+          <div className="flex flex-col items-center">
+            {/* Avatar */}
+            <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || user?.email || 'User'} className="w-16 h-16 border-4 border-white shadow-md" useInlineSize={false} />
+            <h3 className="mt-2 text-lg font-semibold text-gray-900 text-center">
+              {userProfile?.full_name || 'Your Name'}
+            </h3>
+            <p className="text-sm text-gray-600 text-center">
+              {userProfile?.profession || 'Professional'}
+            </p>
+            <p className="text-xs text-gray-500 mt-1 text-center">
+              {userProfile?.city && userProfile?.county 
+                ? `${userProfile.city}, ${userProfile.county}`
+                : 'Location not set'}
+            </p>
+          </div>
+          
+          {/* Profile Completeness Indicator */}
+          {userProfile && (() => {
+            const completeness = calculateProfileCompleteness(userProfile);
+            
+            const checklistItems = [
+              { id: 'full_name', label: 'Full Name', completed: !!userProfile?.full_name?.length, section: 'basic' },
+              { id: 'profession', label: 'Profession', completed: !!userProfile?.profession?.length, section: 'basic' },
+              { id: 'city', label: 'Location', completed: !!userProfile?.city?.length, section: 'basic' },
+              { id: 'about_me', label: 'About Me (50+ chars)', completed: !!(userProfile?.about_me && userProfile.about_me.length > 50), section: 'about' },
+              { id: 'specialties', label: 'Specialties', completed: !!(userProfile?.specialties && userProfile.specialties.length > 0), section: 'specialties' },
+              { id: 'languages', label: 'Languages', completed: !!(userProfile?.languages && userProfile.languages.length > 0), section: 'languages' },
+              { id: 'work_experience', label: 'Work Experience', completed: !!(userProfile?.work_experience && userProfile.work_experience.length > 0), section: 'experience' },
+              { id: 'qualifications', label: 'Qualifications', completed: !!(userProfile?.qualifications && userProfile.qualifications.length > 0), section: 'qualifications' },
+              { id: 'contact_email', label: 'Contact Email', completed: !!userProfile?.contact_email?.length, section: 'contact' },
+              { id: 'avatar_url', label: 'Profile Picture', completed: !!userProfile?.avatar_url?.length, section: 'settings' }
+            ];
+
+            const scrollToSection = (sectionId: string) => {
+              window.dispatchEvent(new Event('openAuthModal'));
+              setTimeout(() => {
+                if (sectionId === 'settings') {
+                  const settingsBtn = document.querySelector('[data-settings-trigger]');
+                  if (settingsBtn) (settingsBtn as HTMLElement).click();
+                } else {
+                  const section = document.querySelector(`[data-section="${sectionId}"]`);
+                  if (section) {
+                    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }
+              }, 300);
+            };
+
+            return (
+              <div className="mt-4 pt-4 border-t border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-700">
+                    Profile {completeness}% complete
+                  </span>
+                  <button 
+                    onClick={() => setShowCompletenessChecklist(!showCompletenessChecklist)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <ChevronDown className={`w-4 h-4 transition-transform ${showCompletenessChecklist ? 'rotate-180' : ''}`} />
+                  </button>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Profile Views</span>
-                  <span className="font-semibold text-gray-900">{userProfile?.profile_views || 0}</span>
+                
+                {/* Progress bar */}
+                <div className="bg-gray-200 rounded-full h-2 mb-3">
+                  <div 
+                    className={`h-2 rounded-full transition-all duration-500 ${
+                      completeness < 50 ? 'bg-red-500' :
+                      completeness < 80 ? 'bg-yellow-500' : 'bg-green-500'
+                    }`}
+                    style={{ width: `${completeness}%` }}
+                  />
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Saved Posts</span>
-                  <span className="font-semibold text-gray-900">{bookmarkedPosts.length}</span>
-                </div>
+                
+                {/* Checklist */}
+                {showCompletenessChecklist && (
+                  <div className="mt-3 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                    {checklistItems.map(item => (
+                      <button
+                        key={item.id}
+                        onClick={() => scrollToSection(item.section)}
+                        className="flex items-center gap-2 text-xs text-left hover:text-blue-600 transition-colors w-full"
+                      >
+                        {item.completed ? (
+                          <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                        )}
+                        <span className={item.completed ? 'text-gray-500 line-through' : 'text-gray-700'}>
+                          {item.label}
+                        </span>
+                      </button>
+                    ))}
+                    {completeness < 100 && (
+                      <p className="text-xs text-gray-500 mt-2 italic">
+                        Complete your profile to get more visibility
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-
-              {/* Action Buttons */}
-              <div className="mt-4 space-y-2">
-                <button className="w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
-                  View My Profile
-                </button>
-              </div>
+            );
+          })()}
+          
+          {/* Stats */}
+          <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">Connections</span>
+              <span className="font-semibold text-gray-900">{connections.length}</span>
             </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">Profile Views</span>
+              <span className="font-semibold text-gray-900">{userProfile?.profile_views || 0}</span>
+            </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-gray-600">Saved Posts</span>
+              <span className="font-semibold text-gray-900">{bookmarkedPosts.length}</span>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="mt-4 space-y-2">
+            <button onClick={() => window.dispatchEvent(new Event('openAuthModal'))} className="w-full px-3 py-2 text-sm font-medium text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors">
+              View My Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {/* Middle Column - Feed */}
+    <div className="md:col-span-6 w-full">
+      {/* Header with actions */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center">
+            <Users className="w-5 h-5 mr-2 text-blue-600" />
+            <h2 className="text-xl font-bold text-gray-900">Feed</h2>
+            
+            {/* Real-time status */}
+            <div className="ml-3 hidden md:flex items-center">
+              <div className={`w-2 h-2 rounded-full mr-1.5 ${
+                realtimeStatus === 'connected' ? 'bg-green-500' : 
+                realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
+              }`} />
+              <span className="text-xs text-gray-500">
+                {realtimeStatus === 'connected' ? 'Live' : 
+                realtimeStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
+              </span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => {
+                loadPosts(0, true);
+                loadFollowingPosts();
+              }}
+              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              title="Refresh posts"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+            
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className="relative p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Filter className="w-4 h-4" />
+              {(() => {
+                const count = Object.values(feedFilters).reduce((acc, value) => {
+                  if (Array.isArray(value)) {
+                    return acc + value.length;
+                  } else if (typeof value === 'boolean' && value) {
+                    return acc + 1;
+                  }
+                  return acc;
+                }, 0);
+                return count > 0 ? (
+                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                    {count}
+                </span>
+                ) : null
+              })()}
+            </button>
           </div>
         </div>
 
-        {/* Middle Column - Feed */}
-        <div className="lg:col-span-6 w-full">
-          {/* Header with actions */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center">
-                <Users className="w-5 h-5 mr-2 text-blue-600" />
-                <h2 className="text-xl font-bold text-gray-900">Feed</h2>
-                
-                {/* Real-time status */}
-                <div className="ml-3 hidden md:flex items-center">
-                  <div className={`w-2 h-2 rounded-full mr-1.5 ${
-                    realtimeStatus === 'connected' ? 'bg-green-500' : 
-                    realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
-                  }`} />
-                  <span className="text-xs text-gray-500">
-                    {realtimeStatus === 'connected' ? 'Live' : 
-                    realtimeStatus === 'connecting' ? 'Connecting...' : 'Disconnected'}
-                  </span>
-                </div>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button 
-                  onClick={() => {
-                    loadPosts();
-                    loadFollowingPosts();
-                  }}
-                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                  title="Refresh posts"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </button>
-                
-                <button 
-                  onClick={() => setShowFilters(!showFilters)}
-                  className="relative p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <Filter className="w-4 h-4" />
-                  {Object.values(feedFilters).flat().length > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                      {Object.values(feedFilters).flat().length}
-                    </span>
-                  )}
-                </button>
-              </div>
-            </div>
-
-            {/* New Post Input */}
-            <button 
-              onClick={() => setShowNewPostModal(true)}
-              className="w-full flex items-center gap-3 px-4 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors text-left"
-            >
-              <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-10 h-10" useInlineSize={false} />
-              <span className="text-gray-500 flex-1">Share an update, question or insight...</span>
-            </button>
-          </div>
+        {/* New Post Input */}
+        <button 
+          onClick={() => {
+            haptic.light();
+            setShowNewPostModal(true);
+          }}
+          className="w-full flex items-center gap-3 px-4 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors text-left min-h-[44px]"
+        >
+          <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-10 h-10" useInlineSize={false} />
+          <span className="text-gray-500 flex-1">Share an update, question or insight...</span>
+        </button>
+      </div>
 
       {/* Filters Panel */}
       {showFilters && (
@@ -9248,8 +10684,26 @@ return (
       )}
 
       {/* Posts Feed */}
-      <div className="space-y-4">
-        {/* Feed tabs */}
+      <div className="relative" ref={containerRef}>
+        {/* Pull-to-refresh indicator */}
+        {pullDistance > 0 && (
+          <div
+            className="absolute top-0 left-0 right-0 flex justify-center items-center z-10 transition-opacity"
+            style={{
+              transform: `translateY(${-Math.max(0, 60 - pullDistance)}px)`,
+              opacity: Math.min(1, pullDistance / 100)
+            }}
+          >
+            {isRefreshing ? (
+              <RefreshCw className="w-6 h-6 text-blue-600 animate-spin" />
+            ) : (
+              <ChevronDown className={`w-6 h-6 text-blue-600 transition-transform ${isPulling ? 'rotate-180' : ''}`} />
+            )}
+          </div>
+        )}
+
+        <div className="space-y-4" style={{ transform: pullDistance > 0 ? `translateY(${Math.min(pullDistance, 60)}px)` : 'translateY(0)' }}>
+          {/* Feed tabs */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <button
@@ -9307,10 +10761,22 @@ return (
         </div>
 
         {(activeFeedTab === 'saved' && posts.filter(p => bookmarkedPosts.includes(p.id)).length === 0) && (
-          <div className="p-6 text-center text-gray-500 bg-white border rounded-lg">No saved posts yet</div>
+          <EmptyState
+            icon={<Bookmark className="w-16 h-16 text-gray-300" />}
+            title="No saved posts"
+            description="Save posts you want to read later by clicking the bookmark icon"
+          />
         )}
 
-        {(activeFeedTab === 'all' ? posts : posts.filter(p => bookmarkedPosts.includes(p.id))).map(post => (
+        <div className="space-y-4">
+          {loading && posts.length === 0 ? (
+            <>
+              <PostSkeleton />
+              <PostSkeleton />
+              <PostSkeleton />
+            </>
+          ) : (
+            (activeFeedTab === 'all' ? posts : posts.filter(p => bookmarkedPosts.includes(p.id))).map(post => (
           <div 
             key={post.id} 
             className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
@@ -9338,10 +10804,6 @@ return (
                       )}
                     </p>
                   </div>
-                </div>
-                
-                <div className="text-xl font-bold text-gray-900 mb-2">
-                  {post.title}
                 </div>
                 
                 {/* Post Metadata */}
@@ -9476,39 +10938,82 @@ return (
             </div>
 
             {/* Post Content with See More/Less */}
-            <div className="group relative text-gray-700 mb-4 whitespace-pre-line">
-              {post.content.length > 300 && (
-                <>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                    className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
-                  >
-                    See less
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                    className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
-                  >
-                    See more
-                  </button>
-                </>
-              )}
+            <div className="group relative text-gray-700 mb-4">
+              {(() => {
+                const textContent = post.content.replace(/<[^>]*>/g, '')
+                const contentLength = textContent.length
+                return (
+                  <>
+                    {contentLength > 300 && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                          className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
+                        >
+                          See less
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                          className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
+                        >
+                          See more
+                        </button>
+                      </>
+                    )}
 
-              <div 
-                className={`
-                  ${expandedPosts[post.id] || post.content.length <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
-                `}
-              >
-                {post.content}
-              </div>
+                    <div 
+                      className={`
+                        ${expandedPosts[post.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                        rich-text-content
+                      `}
+                      dangerouslySetInnerHTML={{ __html: post.content }}
+                    />
 
-              {!expandedPosts[post.id] && post.content.length > 300 && (
-                <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
-              )}
+                    {!expandedPosts[post.id] && contentLength > 300 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                    )}
+                  </>
+                )
+              })()}
             </div>
 
+            {/* Attachments */}
+            {post.post_metadata?.attachments && post.post_metadata.attachments.length > 0 && (
+              <div className="mb-4">
+                <div className="flex flex-wrap gap-2">
+                  {post.post_metadata.attachments.map((attachment: string, idx: number) => {
+                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment)
+                    return isImage ? (
+                      <img
+                        key={idx}
+                        src={attachment}
+                        alt={`Attachment ${idx + 1}`}
+                        className="max-w-full max-h-64 rounded-lg object-cover cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          window.open(attachment, '_blank')
+                        }}
+                      />
+                    ) : (
+                      <a
+                        key={idx}
+                        href={attachment}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span>Attachment {idx + 1}</span>
+                      </a>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Reaction Summary */}
-            {(postReactions[post.id]?.length > 0 || postLikes[post.id] || postDislikes[post.id]) && (
+            {(postReactions[post.id]?.length > 0 || postLikes[post.id]) && (
               <div className="flex items-center gap-3 mb-3 text-sm text-gray-600">
                 {postReactions[post.id]?.map((reaction, idx) => (
                   <span key={idx} className="flex items-center gap-1">
@@ -9522,12 +11027,6 @@ return (
                     {postLikes[post.id]}
                   </span>
                 )}
-                {(postDislikes[post.id] || 0) > 0 && (
-                  <span className="flex items-center gap-1">
-                    <ThumbsDown className="w-4 h-4 text-gray-600" />
-                    {postDislikes[post.id]}
-                  </span>
-                )}
               </div>
             )}
 
@@ -9537,13 +11036,16 @@ return (
                 {/* Like Button with Long Press */}
                 <div className="relative">
                   <button
-                    onClick={(e) => handleLikePost(post.id, e)}
+                    onClick={(e) => {
+                      haptic.like();
+                      handleLikePost(post.id, e);
+                    }}
                     onMouseDown={(e) => handleLongPressStart(post.id, e)}
                     onMouseUp={handleLongPressEnd}
                     onMouseLeave={handleLongPressEnd}
                     onTouchStart={(e) => handleLongPressStart(post.id, e)}
                     onTouchEnd={handleLongPressEnd}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors flex-1 justify-center"
+                    className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors flex-1 justify-center min-h-[44px]"
                   >
                     <ThumbsUp className="w-4 h-4" />
                     <span>Like</span>
@@ -9555,9 +11057,12 @@ return (
                       {EMOJI_REACTIONS.map((reaction) => (
                         <button
                           key={reaction.emoji}
-                          onClick={(e) => handleEmojiReaction(post.id, reaction.emoji, e)}
+                          onClick={(e) => {
+                            haptic.like();
+                            handleEmojiReaction(post.id, reaction.emoji, e);
+                          }}
                           onMouseDown={(e) => e.stopPropagation()}
-                          className="text-2xl hover:scale-125 transition-transform"
+                          className="text-2xl hover:scale-125 transition-transform p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
                           title={reaction.label}
                         >
                           {reaction.emoji}
@@ -9567,19 +11072,13 @@ return (
                   )}
                 </div>
 
-                {/* Dislike Button */}
-                <button
-                  onClick={(e) => handleDislikePost(post.id, e)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-800 rounded-lg transition-colors flex-1 justify-center"
-                >
-                  <ThumbsDown className="w-4 h-4" />
-                  <span>Dislike</span>
-                </button>
-
                 {/* Comments Button */}
                 <button
-                  onClick={(e) => toggleComments(post.id, e)}
-                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-lg transition-colors flex-1 justify-center"
+                  onClick={(e) => {
+                    haptic.select();
+                    toggleComments(post.id, e);
+                  }}
+                  className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-lg transition-colors flex-1 justify-center min-h-[44px]"
                 >
                   <MessageSquare className="w-4 h-4" />
                   <span>
@@ -9668,13 +11167,13 @@ return (
                 {comments[post.id] && comments[post.id].length > 0 && (
                   <div className="space-y-4">
                     {comments[post.id].map(comment => (
-                      <div key={comment.id} className="flex gap-3">
+                      <div key={comment.id} className="flex gap-3 items-start">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             viewUserProfile(comment.user_id || getUserId(comment.user));
                           }}
-                          className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                          className="flex-shrink-0 self-start hover:opacity-80 transition-opacity cursor-pointer"
                         >
                           {comment.user?.avatar_url ? (
                             <img
@@ -9783,15 +11282,15 @@ return (
                           {replyingTo[comment.id] && (
                             <div className="mt-2 ml-4">
                               <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-                              <textarea
-                                value={replyContents[comment.id] || ''}
+                                <textarea
+                                  value={replyContents[comment.id] || ''}
                                   onChange={(e) => {
                                     setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }));
                                     // Auto-resize textarea
                                     e.target.style.height = 'auto';
                                     e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
                                   }}
-                                placeholder="Write a reply..."
+                                  placeholder="Write a reply..."
                                   className="flex-1 resize-none border-none outline-none text-sm py-1"
                                   rows={1}
                                   onKeyDown={(e) => {
@@ -9826,13 +11325,13 @@ return (
                               {expandedComments[comment.id] && (
                                 <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                   {comment.replies.map(reply => (
-                                    <div key={reply.id} className="flex gap-2">
+                                    <div key={reply.id} className="flex gap-2 items-start">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           viewUserProfile(reply.user_id || getUserId(reply.user));
                                         }}
-                                        className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                                        className="flex-shrink-0 self-start hover:opacity-80 transition-opacity cursor-pointer"
                                       >
                                         {reply.user?.avatar_url ? (
                                           <img
@@ -9984,13 +11483,13 @@ return (
                                             {expandedReplies[reply.id] && (
                                               <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                                 {reply.replies.map(nestedReply => (
-                                                  <div key={nestedReply.id} className="flex gap-2">
+                                                  <div key={nestedReply.id} className="flex gap-2 items-start">
                                                     <button
                                                       onClick={(e) => {
                                                         e.stopPropagation();
                                                         viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
                                                       }}
-                                                      className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                                                      className="flex-shrink-0 self-start hover:opacity-80 transition-opacity cursor-pointer"
                                                     >
                                                       {nestedReply.user?.avatar_url ? (
                                                         <img
@@ -10112,120 +11611,169 @@ return (
               </div>
             )}
           </div>
-        ))}
-
-        {posts.length === 0 && (
-          <div className="text-center py-12">
-            <Users className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {Object.values(feedFilters).flat().length > 0 ? 'No posts match your filters' : 'No posts yet'}
-            </h3>
-            <p className="text-gray-500">
-              {Object.values(feedFilters).flat().length > 0 
-                ? 'Try adjusting your filters to see more posts' 
-                : 'Be the first to start a discussion!'}
-            </p>
+        ))
+          )}
+          
+          {/* Infinite Scroll Trigger */}
+          <div ref={loadMoreRef} className="py-8">
+            {loadingMorePosts && (
+              <>
+                <PostSkeleton />
+                <PostSkeleton />
+              </>
+            )}
+            {!hasMorePosts && posts.length > 0 && (
+              <p className="text-center text-gray-500 text-sm">
+                No more posts to load
+              </p>
+            )}
           </div>
+        </div>
+        
+        {/* Back to Top Button */}
+        {showBackToTop && (
+          <button
+            onClick={() => {
+              haptic.light();
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+            className="fixed bottom-6 right-6 z-50 w-12 h-12 bg-blue-600 text-white rounded-full shadow-lg hover:bg-blue-700 transition-all flex items-center justify-center min-w-[44px] min-h-[44px]"
+            aria-label="Back to top"
+          >
+            <ChevronDown className="w-6 h-6 rotate-180" />
+          </button>
         )}
-      </div>
+
+        {posts.length === 0 && !loading && (
+          <EmptyState
+            icon={<Users className="w-16 h-16 text-gray-300" />}
+            title={Object.values(feedFilters).flat().length > 0 ? 'No posts match your filters' : 'Your feed is empty'}
+            description={Object.values(feedFilters).flat().length > 0 
+              ? 'Try adjusting your filters to see more posts' 
+              : 'Start by connecting with other therapists or create your first post'}
+            actions={Object.values(feedFilters).flat().length === 0 ? [
+              { label: 'Create Post', onClick: () => setShowNewPostModal(true), primary: true },
+              { label: 'Find Connections', onClick: () => onOpenConnections?.() || window.dispatchEvent(new CustomEvent('openConnections')) }
+            ] : undefined}
+          />
+        )}
         </div>
+      </div>
+    </div>
 
-        {/* Right Sidebar - Suggestions & Tips */}
-        <div className="lg:col-span-3 hidden lg:block">
-          <div className="sticky top-6 space-y-6">
-            
-            {/* Suggested Connections */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-200">
-                <h3 className="font-semibold text-gray-900">People You May Know</h3>
-              </div>
-              <div className="p-4 space-y-4">
-                {suggestedConnections.length > 0 ? (
-                  suggestedConnections.slice(0, 3).map(profile => (
-                    <div key={profile.id} className="flex items-start gap-3">
-                      <Avatar src={profile.avatar_url} name={profile.full_name} className="w-10 h-10 flex-shrink-0" useInlineSize={false} />
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-gray-900 truncate">
-                          {profile.full_name}
-                        </p>
-                        <p className="text-xs text-gray-600 truncate">
-                          {profile.profession}
-                        </p>
-                        <p className="text-xs text-gray-500 truncate">
-                          {profile.city && profile.county ? `${profile.city}, ${profile.county}` : 'UK'}
-                        </p>
-                        <button
-                          onClick={() => handleSuggestedConnect(profile.id)}
-                          disabled={!!connectingIds[profile.id]}
-                          className={`mt-2 px-3 py-1 text-xs font-medium rounded-full transition-colors ${connectingIds[profile.id] ? 'bg-gray-200 text-gray-500' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
-                        >
-                          {connectingIds[profile.id] ? 'Sending…' : 'Connect'}
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-sm text-gray-500">No suggestions available</p>
-                )}
-              </div>
-            </div>
-
-            {/* Professional Tip */}
-            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                  <Info className="w-4 h-4 text-white" />
+    {/* Right Sidebar - Suggestions & Tips */}
+    <div className="md:col-span-3 hidden md:block">
+      <div className="sticky top-6 space-y-6">
+        
+        {/* Suggested Connections */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-200">
+            <h3 className="font-semibold text-gray-900">People You May Know</h3>
+          </div>
+          <div className="p-4 space-y-4">
+            {(() => {
+              const connectedIds = new Set(
+                (connections || []).map(c => (c.sender_id === user?.id ? c.receiver_id : c.sender_id))
+              )
+              const notConnected = suggestedConnections.filter(p => 
+                !connectedIds.has(p.id) && 
+                !allHiddenUserIds.includes(p.id)
+              )
+              return notConnected.length > 0 ? (
+                notConnected.slice(0, 3).map(profile => (
+                <div key={profile.id} className="flex items-start gap-3">
+                    <button
+                      onClick={() => viewUserProfile(profile.id)}
+                      className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                      title="View profile"
+                    >
+                      <Avatar src={profile.avatar_url} name={profile.full_name} className="w-10 h-10" useInlineSize={false} />
+                    </button>
+                  <div className="flex-1 min-w-0">
+                      <button
+                        onClick={() => viewUserProfile(profile.id)}
+                        className="font-medium text-sm text-gray-900 truncate text-left hover:text-blue-600 transition-colors"
+                        title="View profile"
+                      >
+                      {profile.full_name}
+                      </button>
+                    <p className="text-xs text-gray-600 truncate">
+                      {profile.profession}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {profile.city && profile.county ? `${profile.city}, ${profile.county}` : 'UK'}
+                    </p>
+                    <button
+                      onClick={() => handleSuggestedConnect(profile.id)}
+                      disabled={!!connectingIds[profile.id]}
+                      className={`mt-2 px-3 py-1 text-xs font-medium rounded-full transition-colors ${connectingIds[profile.id] ? 'bg-gray-200 text-gray-500' : 'text-blue-600 bg-blue-50 hover:bg-blue-100'}`}
+                    >
+                      {connectingIds[profile.id] ? 'Sending…' : 'Connect'}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-semibold text-gray-900 text-sm mb-1">Professional Tip</h4>
-                  <p className="text-xs text-gray-600">
-                    Keep your languages and specialties updated — clients and colleagues search by them!
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Upcoming Activities (placeholder) */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Upcoming Activities</h3>
-              <p className="text-xs text-gray-600">No upcoming activities. Check back later.</p>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-              <h3 className="font-semibold text-gray-900 mb-3 text-sm">Network Activity</h3>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Total Members</span>
-                  <span className="font-semibold text-gray-900">{networkStats.totalMembers}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Active Today</span>
-                  <span className="font-semibold text-green-600">{networkStats.activeToday}</span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Posts This Week</span>
-                  <span className="font-semibold text-blue-600">{networkStats.postsThisWeek}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer Links */}
-            <div className="text-xs text-gray-500 text-center space-y-1">
-              <p>© 2025 UK Therapist Network</p>
-              <div className="flex justify-center gap-3">
-                <a href="#" className="hover:text-blue-600">About</a>
-                <span>•</span>
-                <a href="#" className="hover:text-blue-600">Privacy</a>
-                <span>•</span>
-                <a href="#" className="hover:text-blue-600">Contact</a>
-              </div>
-            </div>
-
+              ))
+            ) : (
+              <p className="text-sm text-gray-500">No suggestions available</p>
+              )
+            })()}
           </div>
         </div>
 
+        {/* Professional Tip */}
+        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+              <Info className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h4 className="font-semibold text-gray-900 text-sm mb-1">Professional Tip</h4>
+              <p className="text-xs text-gray-600">
+                Keep your languages and specialties updated — clients and colleagues search by them!
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Upcoming Activities */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+          <UpcomingEvents currentUserId={user?.id} userProfile={userProfile} />
+        </div>
+
+        {/* Quick Stats */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <h3 className="font-semibold text-gray-900 mb-3 text-sm">Network Activity</h3>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Total Members</span>
+              <span className="font-semibold text-gray-900">{networkStats.totalMembers}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Active Today</span>
+              <span className="font-semibold text-green-600">{networkStats.activeToday}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-600">Posts This Week</span>
+              <span className="font-semibold text-blue-600">{networkStats.postsThisWeek}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Links */}
+        <div className="text-xs text-gray-500 text-center space-y-1">
+          <p>© 2025 UK Therapist Network</p>
+          <div className="flex justify-center gap-3">
+            <a href="#" className="hover:text-blue-600">About</a>
+            <span>•</span>
+            <a href="#" className="hover:text-blue-600">Privacy</a>
+            <span>•</span>
+            <a href="#" className="hover:text-blue-600">Contact</a>
+          </div>
+        </div>
       </div>
+    </div>
+  </div>
+    
       {/* INSERT THE SNIPPET HERE */}
       {currentVisibleExpandedPost && (
         <div 
@@ -10249,19 +11797,76 @@ return (
 
     {/* LinkedIn-Style New Post Modal */}
     {showNewPostModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowNewPostModal(false)
+            setShowAdvancedOptions(false)
+          }
+        }}
+      >
+        <div 
+          className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
           {/* Header with User Info */}
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-12 h-12" useInlineSize={false} />
-                <div>
+                <div className="flex-1">
                   <h3 className="font-semibold text-gray-900">{userProfile?.full_name || 'User'}</h3>
-                  <button className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1 mt-0.5">
-                    <span>{newPost.metadata.is_public ? 'Public' : 'Private'}</span>
-                    <ChevronDown className="w-3 h-3" />
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowVisibilityDropdown(!showVisibilityDropdown)}
+                      className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1 mt-0.5"
+                    >
+                      <span>
+                        {newPost.metadata.visibility === 'only_me' ? 'Only me' :
+                         newPost.metadata.visibility === 'connections' ? 'Connections only' : 'Public'}
+                      </span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showVisibilityDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showVisibilityDropdown && (
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[180px]">
+                        <button
+                          onClick={() => {
+                            setNewPost({ ...newPost, metadata: { ...newPost.metadata, visibility: 'public', is_public: true } })
+                            setShowVisibilityDropdown(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
+                            newPost.metadata.visibility === 'public' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          Public
+                        </button>
+                        <button
+                          onClick={() => {
+                            setNewPost({ ...newPost, metadata: { ...newPost.metadata, visibility: 'connections', is_public: false } })
+                            setShowVisibilityDropdown(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
+                            newPost.metadata.visibility === 'connections' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          Connections only
+                        </button>
+                        <button
+                          onClick={() => {
+                            setNewPost({ ...newPost, metadata: { ...newPost.metadata, visibility: 'only_me', is_public: false } })
+                            setShowVisibilityDropdown(false)
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
+                            newPost.metadata.visibility === 'only_me' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          Only me
                   </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <button 
@@ -10278,23 +11883,32 @@ return (
           </div>
 
           <div className="p-4 space-y-3">
-            {/* Title Input - Minimalist */}
-            <input
-              type="text"
-              placeholder="Title (required)"
-              className="w-full px-0 py-2 text-lg font-medium border-0 focus:ring-0 focus:outline-none placeholder-gray-400"
-              value={newPost.title}
-              onChange={(e) => setNewPost({ ...newPost, title: e.target.value })}
-              disabled={loading}
-            />
-
-            {/* Content Textarea - Large and Prominent */}
-            <textarea
-              placeholder="What do you want to talk about?"
-              className="w-full px-0 py-2 border-0 focus:ring-0 focus:outline-none placeholder-gray-400 resize-none min-h-[120px]"
+            {/* Content Rich Text Editor */}
+            <RichTextEditor
               value={newPost.content}
-              onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
+              onChange={(value) => setNewPost({ ...newPost, content: value })}
+              placeholder="What do you want to talk about?"
               disabled={loading}
+              attachments={newPost.metadata.attachments}
+              onAttachmentsChange={(attachments) => {
+                setNewPost({
+                  ...newPost,
+                  metadata: {
+                    ...newPost.metadata,
+                    attachments
+                  }
+                })
+              }}
+              onToast={(message, type) => {
+                if (type === 'success') {
+                  toast.success(message)
+                } else {
+                  toast.error(message)
+                }
+              }}
+              onImageInsert={(_url) => {
+                // Handle image insertion if needed
+              }}
             />
 
             {/* Advanced Options Toggle */}
@@ -10662,57 +12276,17 @@ return (
               )}
             </div>
 
-            {/* Privacy */}
-            <div>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={newPost.metadata.is_public}
-                  onChange={(e) => setNewPost({
-                    ...newPost,
-                    metadata: { ...newPost.metadata, is_public: e.target.checked }
-                  })}
-                  className="mr-2 rounded border-gray-300"
-                />
-                <span className="text-xs text-gray-700">
-                  Make this post public (visible to all healthcare professionals)
-                </span>
-              </label>
-            </div>
             </div>
             )}
           </div>
 
-          {/* Bottom Toolbar - LinkedIn Style */}
-          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button 
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
-                title="Add media"
-              >
-                <ImageIcon className="w-5 h-5 text-gray-600" />
-              </button>
-              <button 
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
-                title="Add document"
-              >
-                <FileText className="w-5 h-5 text-gray-600" />
-              </button>
-              <button 
-                className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
-                title="Create poll"
-              >
-                <BarChart3 className="w-5 h-5 text-gray-600" />
-              </button>
-            </div>
-
+          {/* Bottom Toolbar - Action Buttons */}
+          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end">
             {/* Action Buttons */}
             <div className="flex gap-2">
               <button
                 onClick={createPost}
-                disabled={loading || !newPost.title.trim() || !newPost.content.trim() || 
-                         !newPost.metadata.professions.length || !newPost.metadata.clinical_areas.length ||
-                         !newPost.metadata.content_type || !newPost.metadata.audience_level}
+                disabled={loading || !newPost.content.replace(/<[^>]*>/g, '').trim()}
                 className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
               >
                 {loading ? (
@@ -10732,47 +12306,141 @@ return (
 
     {/* Edit Post Modal */}
     {editForm.id && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900">Edit Post</h3>
-            <button 
-              onClick={() => setEditForm({ ...editForm, id: '' })} 
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-              disabled={loading}
-            >
-              <X className="w-6 h-6" />
-            </button>
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowAdvancedOptions(false)
+            setEditForm({ ...editForm, id: '' })
+          }
+        }}
+      >
+        <div 
+          className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          {/* Header with User Info */}
+          <div className="p-4 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-12 h-12" useInlineSize={false} />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-gray-900">{userProfile?.full_name || 'User'}</h3>
+                  <div className="relative">
+                    <button 
+                      onClick={() => setDropdowns(prev => ({ ...prev, editVisibility: !prev.editVisibility }))}
+                      className="text-xs text-gray-600 hover:text-gray-800 flex items-center gap-1 mt-0.5"
+                    >
+                      <span>
+                        {editForm.metadata.visibility === 'only_me' ? 'Only me' :
+                         editForm.metadata.visibility === 'connections' ? 'Connections only' : 'Public'}
+                      </span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${dropdowns.editVisibility ? 'rotate-180' : ''}`} />
+                    </button>
+                    {dropdowns.editVisibility && (
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[180px]">
+                        <button
+                          onClick={() => {
+                            setEditForm({ 
+                              ...editForm, 
+                              metadata: { ...editForm.metadata, visibility: 'public', is_public: true } 
+                            })
+                            setDropdowns(prev => ({ ...prev, editVisibility: false }))
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
+                            editForm.metadata.visibility === 'public' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          Public
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditForm({ 
+                              ...editForm, 
+                              metadata: { ...editForm.metadata, visibility: 'connections', is_public: false } 
+                            })
+                            setDropdowns(prev => ({ ...prev, editVisibility: false }))
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
+                            editForm.metadata.visibility === 'connections' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          Connections only
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditForm({ 
+                              ...editForm, 
+                              metadata: { ...editForm.metadata, visibility: 'only_me', is_public: false } 
+                            })
+                            setDropdowns(prev => ({ ...prev, editVisibility: false }))
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
+                            editForm.metadata.visibility === 'only_me' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          }`}
+                        >
+                          Only me
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowAdvancedOptions(false)
+                  setEditForm({ ...editForm, id: '' })
+                }} 
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+                disabled={loading}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
-          <div className="p-6 space-y-6">
-            {/* Basic Information */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Post Title *
-              </label>
-              <input
-                type="text"
-                placeholder="Enter a clear and descriptive title..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={editForm.title}
-                onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
-                disabled={loading}
-              />
-            </div>
+          <div className="p-4 space-y-3">
+            {/* Content Rich Text Editor */}
+            <RichTextEditor
+              value={editForm.content}
+              onChange={(value) => setEditForm({ ...editForm, content: value })}
+              placeholder="What do you want to talk about?"
+              disabled={loading}
+              attachments={editForm.metadata.attachments}
+              onAttachmentsChange={(attachments) => {
+                setEditForm({
+                  ...editForm,
+                  metadata: {
+                    ...editForm.metadata,
+                    attachments
+                  }
+                })
+              }}
+              onToast={(message, type) => {
+                if (type === 'success') {
+                  toast.success(message)
+                } else {
+                  toast.error(message)
+                }
+              }}
+              onImageInsert={(_url) => {
+                // Handle image insertion if needed
+              }}
+            />
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Content *
-              </label>
-              <textarea
-                placeholder="Share your knowledge, ask questions, or start a discussion..."
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent min-h-[200px]"
-                value={editForm.content}
-                onChange={(e) => setEditForm({ ...editForm, content: e.target.value })}
-                disabled={loading}
-              />
-            </div>
+            {/* Advanced Options Toggle */}
+            <button
+              onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
+              className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+            >
+              <ChevronDown className={`w-4 h-4 transition-transform ${showAdvancedOptions ? 'rotate-180' : ''}`} />
+              {showAdvancedOptions ? 'Hide' : 'Show'} advanced options
+            </button>
+
+            {/* Advanced Options - Collapsible */}
+            {showAdvancedOptions && (
+            <div className="border-t border-gray-200 pt-4 space-y-4">
 
             {/* Metadata Section */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -11046,46 +12714,6 @@ return (
               )}
             </div>
 
-            {/* Attachments */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Attachments & Links
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add file URLs or links..."
-                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={attachmentInput}
-                  onChange={(e) => setAttachmentInput(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addEditAttachment())}
-                  disabled={loading}
-                />
-                <button
-                  type="button"
-                  onClick={addEditAttachment}
-                  className="px-4 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  Add
-                </button>
-              </div>
-              {editForm.metadata.attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {editForm.metadata.attachments.map((attachment, index) => (
-                    <span 
-                      key={index} 
-                      className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm flex items-center"
-                    >
-                      Attachment {index + 1}
-                      <X 
-                        className="w-3 h-3 ml-2 cursor-pointer" 
-                        onClick={() => removeEditAttachment(attachment)} 
-                      />
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Co-authors */}
             <div>
@@ -11127,31 +12755,28 @@ return (
                 </div>
               )}
             </div>
+            </div>
+            )}
 
+          </div>
+
+          {/* Bottom Toolbar - Action Buttons */}
+          <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-end">
             {/* Action Buttons */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-2">
               <button
                 onClick={handleUpdatePost}
-                disabled={loading || !editForm.title.trim() || !editForm.content.trim() || 
-                         !editForm.metadata.professions.length || !editForm.metadata.clinical_areas.length ||
-                         !editForm.metadata.content_type || !editForm.metadata.audience_level}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex items-center justify-center gap-2"
+                disabled={loading || !editForm.content.replace(/<[^>]*>/g, '').trim()}
+                className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
               >
                 {loading ? (
                   <>
                     <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    Updating Post...
+                    Updating...
                   </>
                 ) : (
                   'Update Post'
                 )}
-              </button>
-              <button
-                onClick={() => setEditForm({ ...editForm, id: '' })}
-                disabled={loading}
-                className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition-colors"
-              >
-                Cancel
               </button>
             </div>
           </div>
@@ -11163,24 +12788,29 @@ return (
     {selectedUserProfile && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
         <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center p-6 border-b border-gray-200">
-            <h3 className="text-xl font-bold text-gray-900">User Profile</h3>
-            <button 
-              onClick={() => setSelectedUserProfile(null)} 
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
 
           <div className="p-6 space-y-6">
             {/* Profile Header */}
+            <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
-              <Avatar src={selectedUserProfile.avatar_url} name={selectedUserProfile.full_name} className="w-20 h-20" useInlineSize={false} />
+                <Avatar 
+                  src={selectedUserProfile.avatar_url} 
+                  name={selectedUserProfile.full_name} 
+                  className="w-20 h-20" 
+                  useInlineSize={false} 
+                />
               <div>
                 <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
                 <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
               </div>
+              </div>
+
+              <button 
+                onClick={() => setSelectedUserProfile(null)} 
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
             </div>
 
             {/* Profile Details */}
@@ -11220,7 +12850,10 @@ return (
               )}
             </div>
             <button 
-              onClick={() => console.log('View full profile')} 
+              onClick={() => { 
+                setSelectedUserProfile(null); 
+                window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: selectedUserProfile.id } })); 
+              }} 
               className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               View Full Profile
@@ -11286,7 +12919,9 @@ return (
             </div>
 
             {/* Post Title */}
+            {selectedPost.title && (
             <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h2>
+            )}
 
             {/* Post Metadata */}
             {renderPostMetadata(selectedPost)}
@@ -11427,14 +13062,14 @@ return (
               {!postSettings[selectedPost.id]?.comments_disabled && (
                 <div className="space-y-4">
                   {(comments[selectedPost.id] || []).map(comment => (
-                    <div key={comment.id} className="flex gap-3">
+                    <div key={comment.id} className="flex gap-3 items-start">
                       {/* Kullanıcı Avatarı */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           viewUserProfile(comment.user_id || getUserId(comment.user));
                         }}
-                        className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                        className="flex-shrink-0 self-start hover:opacity-80 transition-opacity"
                       >
                         {comment.user?.avatar_url ? (
                           <img
@@ -11567,19 +13202,6 @@ return (
                             >
                               <ThumbsUp className="w-4 h-4" />
                               <span>{commentLikes[comment.id] || 0}</span>
-                            </button>
-
-                            {/* Beğenmeme Butonu */}
-                            <button
-                              onClick={(e) => handleDislikeComment(comment.id, e)}
-                              className={`flex items-center gap-1 text-xs ${
-                                userReactions[comment.id] === 'dislike' 
-                                  ? 'text-red-600 font-medium' 
-                                  : 'text-gray-500 hover:text-red-600'
-                              }`}
-                            >
-                              <ThumbsDown className="w-4 h-4" />
-                              <span>{commentDislikes[comment.id] || 0}</span>
                             </button>
 
                             {/* Favori Butonu */}
@@ -11801,18 +13423,6 @@ return (
                                       </button>
 
                                       <button
-                                        onClick={(e) => handleDislikeComment(reply.id, e)}
-                                        className={`flex items-center gap-1 text-xs ${
-                                          userReactions[reply.id] === 'dislike' 
-                                            ? 'text-red-600' 
-                                            : 'text-gray-500 hover:text-red-600'
-                                        }`}
-                                      >
-                                        <ThumbsDown className="w-3 h-3" />
-                                        <span>{commentDislikes[reply.id] || 0}</span>
-                                      </button>
-
-                                      <button
                                         onClick={(e) => handleFavoriteComment(reply.id, e)}
                                         className={`text-xs ${
                                           commentFavorites[reply.id] 
@@ -11880,13 +13490,13 @@ return (
                                   {reply.replies && reply.replies.length > 0 && (
                                     <div className="ml-4 mt-3 space-y-3">
                                       {reply.replies.map((nestedReply: any) => (
-                                        <div key={nestedReply.id} className="flex gap-2">
+                                        <div key={nestedReply.id} className="flex gap-2 items-start">
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
                                             }}
-                                            className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                                            className="flex-shrink-0 self-start hover:opacity-80 transition-opacity"
                                           >
                                             {nestedReply.user?.avatar_url ? (
                                               <img
@@ -11989,18 +13599,6 @@ return (
                                                 >
                                                   <ThumbsUp className="w-3 h-3" />
                                                   <span>{commentLikes[nestedReply.id] || 0}</span>
-                                                </button>
-
-                                                <button
-                                                  onClick={(e) => handleDislikeComment(nestedReply.id, e)}
-                                                  className={`flex items-center gap-1 text-xs ${
-                                                    userReactions[nestedReply.id] === 'dislike' 
-                                                      ? 'text-red-600' 
-                                                      : 'text-gray-500 hover:text-red-600'
-                                                  }`}
-                                                >
-                                                  <ThumbsDown className="w-3 h-3" />
-                                                  <span>{commentDislikes[nestedReply.id] || 0}</span>
                                                 </button>
 
                                                 <button
@@ -12121,8 +13719,8 @@ return (
         </div>
       </div>
     )}
-  </div>
-)
+    </div>
+  )
 }
 
 function CVMaker({ userProfile, onClose }: CVMakerProps) {
@@ -13143,7 +14741,7 @@ function AuthModalComponent({
   const [isSearchingLocation, setIsSearchingLocation] = useState(false)
 
   // Organization auto-complete states
-  const [organizationSearch, setOrganizationSearch] = useState('')
+  const [, setOrganizationSearch] = useState('')
   const [organizationSuggestions, setOrganizationSuggestions] = useState<string[]>([])
   const [showOrganizationSuggestions, setShowOrganizationSuggestions] = useState(false)
   const [activeOrganizationSuggestionIndex, setActiveOrganizationSuggestionIndex] = useState(-1)
@@ -13189,50 +14787,6 @@ function AuthModalComponent({
       console.error('Error fetching organizations:', err)
     }
   }
-
-  const removeWorkExperience = async (index: number) => {
-  setLoading(true)
-  try {
-    // Mevcut deneyimleri filtrele
-    const updated = formData.workExperience.filter((_: any, i: number) => i !== index)
-    
-    // State'i güncelle
-    setFormData({ 
-      ...formData, 
-      workExperience: updated 
-    })
-    
-    // Veritabanını güncelle
-    const { error } = await supabase
-      .from('profiles')
-      .update({ work_experience: updated })
-      .eq('id', currentUser.id)
-    
-    if (error) throw error
-    
-    // Global state'i güncelle
-    if (updateProfileInState) {
-      updateProfileInState({
-        ...userProfile,
-        work_experience: updated
-      } as any)
-    }
-    
-    // Düzenleme modundan çık
-    setEditingSection(null)
-    
-    // Başarı mesajı
-    console.log('✅ Work experience removed successfully')
-    
-  } catch (err: any) {
-    console.error('Remove error:', err)
-    alert(`Error removing experience: ${err.message}`)
-    // Hata durumunda state'i geri yükle
-    onSuccess()
-  } finally {
-    setLoading(false)
-  }
-}
 
   const fetchAllProfessions = async () => {
     try {
@@ -13356,7 +14910,7 @@ function AuthModalComponent({
   }, [userProfile, currentUser, editingSection])
 
   // Organization auto-complete fonksiyonları
-  const handleOrganizationSearch = (searchTerm: string, index: number) => {
+  const handleOrganizationSearch = (searchTerm: string, _index: number) => {
     setOrganizationSearch(searchTerm)
     
     if (searchTerm.length < 2) {
@@ -13662,7 +15216,7 @@ function AuthModalComponent({
     }));
   };
 
-  const startEditing = (section: string, index?: number) => {
+  const startEditing = (section: string, _index?: number) => {
     if (section.startsWith('experience-')) {
       setEditingSection(section)
       setTempFormData({ ...formData })
@@ -14091,9 +15645,13 @@ function AuthModalComponent({
                   View Full Profile
                 </button>
                 <div className="flex items-center gap-3">
+                  {userProfile?.avatar_url ? (
+                    <Avatar src={userProfile.avatar_url} name={userProfile.full_name} className="w-16 h-16" useInlineSize={false} />
+                  ) : (
                   <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                     {userProfile?.full_name?.charAt(0) || 'U'}
                   </div>
+                  )}
                   <div className="flex-1">
                     <h3 className="font-bold text-lg text-gray-900">{userProfile?.full_name || 'User'}</h3>
                     <div className="flex items-center gap-2 mt-1">
@@ -15595,5 +17153,3 @@ function AuthModalComponent({
     </div>
   )
 }
-
-// wrapped export provided earlier

@@ -1,4 +1,7 @@
-import  { MessageSquare, Users, Plus } from 'lucide-react';
+import { MessageSquare, Users, Plus } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { containerVariants, itemVariants } from '../utils/animations'
+import AnimatedButton from './AnimatedButton'
 
 function Community() {
   const posts = [
@@ -20,7 +23,7 @@ function Community() {
       replies: 8,
       time: '5 hours ago'
     }
-  ];
+  ]
 
   return (
     <div className="h-full bg-gray-50 p-6">
@@ -30,15 +33,28 @@ function Community() {
             <Users className="w-6 h-6 mr-2 text-blue-600" />
             <h2 className="text-2xl font-bold text-gray-900">Feed</h2>
           </div>
-          <button className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          <AnimatedButton
+            variant="primary"
+            className="flex items-center px-4 py-2 rounded-lg"
+            aria-label="Create new post"
+          >
             <Plus className="w-4 h-4 mr-2" />
             New Post
-          </button>
+          </AnimatedButton>
         </div>
 
-        <div className="space-y-4">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="space-y-4"
+        >
           {posts.map(post => (
-            <div key={post.id} className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <motion.div
+              key={post.id}
+              variants={itemVariants}
+              className="bg-white rounded-lg p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow"
+            >
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-1">{post.title}</h3>
@@ -54,13 +70,24 @@ function Community() {
                 <MessageSquare className="w-4 h-4 mr-1" />
                 {post.replies} replies
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
+
+        {posts.length === 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="text-center py-12"
+          >
+            <MessageSquare className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+            <p className="text-gray-500 text-lg">No posts yet</p>
+            <p className="text-gray-400 text-sm mt-2">Be the first to share something with the community!</p>
+          </motion.div>
+        )}
       </div>
     </div>
-  );
+  )
 }
 
-export default Community;
- 
+export default Community

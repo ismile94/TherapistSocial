@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import Avatar from './Avatar'
+import EmptyState from './EmptyState'
+import { SearchResultsSkeleton } from './SkeletonLoaders'
+import { Search } from 'lucide-react'
 
 export type SearchResultType = 'person' | 'post'
 
@@ -40,11 +43,13 @@ export function GlobalSearch({
   onSelectPerson,
   onSelectPost,
   isConnected,
+  blockedUserIds = [],
   className = '',
 }: {
   onSelectPerson: (profileId: string) => void
   onSelectPost: (postId: string) => void
   isConnected?: (profileId: string) => boolean
+  blockedUserIds?: string[]
   className?: string
 }) {
   const [query, setQuery] = useState('')
@@ -85,11 +90,16 @@ export function GlobalSearch({
       const q = debounced.trim()
       try {
         // People
-        const { data: peopleData } = await supabase
+        let { data: peopleData } = await supabase
           .from('profiles')
           .select('id, full_name, profession, avatar_url, city, county, specialties')
           .or(`full_name.ilike.%${q}%,profession.ilike.%${q}%`)
           .limit(10)
+
+        // Filter out blocked users
+        if (blockedUserIds.length > 0 && peopleData) {
+          peopleData = peopleData.filter(p => !blockedUserIds.includes(p.id))
+        }
 
         const peopleResults: SearchResult[] = (peopleData || []).map((p: any) => ({
           type: 'person',
@@ -112,7 +122,7 @@ export function GlobalSearch({
         const postsResults: SearchResult[] = (postsData || []).map((p: any) => ({
           type: 'post',
           id: p.id,
-          title: p.title || '(Untitled post)',
+          title: (p.content || '').slice(0, 80) || 'Post',
           subtitle: (p.content || '').slice(0, 80),
           highlighted: isConnected ? !!isConnected(p.user_id) : false,
           user_id: p.user_id,
@@ -171,11 +181,7 @@ export function GlobalSearch({
       {open && (
         <div className="absolute mt-2 w-full max-w-xl bg-white border rounded-lg shadow-lg z-50">
           {loading ? (
-            <div className="p-4 space-y-2">
-              <div className="h-4 bg-gray-100 rounded animate-pulse" />
-              <div className="h-4 bg-gray-100 rounded animate-pulse" />
-              <div className="h-4 bg-gray-100 rounded animate-pulse" />
-            </div>
+            <SearchResultsSkeleton />
           ) : (
             <>
               {(people.length + posts.length === 0 && !query) && (
@@ -189,7 +195,14 @@ export function GlobalSearch({
                 </div>
               )}
               {(people.length + posts.length === 0 && query) && (
-                <div className="p-4 text-sm text-gray-500">No results found</div>
+                <EmptyState
+                  icon={<Search className="w-16 h-16 text-gray-300" />}
+                  title="No results found"
+                  description="Try different keywords or check your spelling"
+                  actions={[
+                    { label: 'Clear Search', onClick: () => setQuery('') }
+                  ]}
+                />
               )}
 
               {people.length > 0 && (

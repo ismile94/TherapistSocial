@@ -24,4 +24,36 @@ export interface CommunityPost {
   likes: number;
   replies: number;
 }
+
+export interface Event {
+  id: string;
+  title: string;
+  description: string;
+  start_time: string;
+  end_time?: string;
+  location: string;
+  organizer_id: string;
+  max_participants?: number;
+  registration_type: 'rsvp' | 'automatic';
+  category: string;
+  thumbnail_url?: string;
+  created_at: string;
+  updated_at: string;
+  organizer?: {
+    id: string;
+    full_name: string;
+    profession?: string;
+    avatar_url?: string;
+  };
+  participant_count?: number;
+  is_participant?: boolean;
+}
+
+export interface EventParticipant {
+  id: string;
+  event_id: string;
+  user_id: string;
+  rsvp_status: boolean;
+  created_at: string;
+}
  
