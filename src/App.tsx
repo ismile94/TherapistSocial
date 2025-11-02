@@ -2964,8 +2964,9 @@ function AppInner() {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('openPostFromNotification', {
             detail: {
-              postId: notification.related_entity_id,
-              commentId: notification.type === 'comment_reaction' ? notification.related_entity_id : null,
+              postId: notification.related_entity_type === 'post' ? notification.related_entity_id : 
+                     (notification.metadata?.post_id || notification.related_entity_id),
+              commentId: notification.metadata?.comment_id || (notification.type === 'comment_reaction' ? notification.related_entity_id : null),
               scrollToReaction: notification.type === 'post_reaction' || notification.type === 'comment_reaction'
             }
           }))
@@ -2974,8 +2975,9 @@ function AppInner() {
         // Trigger event immediately
         window.dispatchEvent(new CustomEvent('openPostFromNotification', {
           detail: {
-            postId: notification.related_entity_type === 'post' ? notification.related_entity_id : null,
-            commentId: notification.related_entity_type === 'comment' ? notification.related_entity_id : null,
+            postId: notification.related_entity_type === 'post' ? notification.related_entity_id : 
+                   (notification.metadata?.post_id || notification.related_entity_id),
+            commentId: notification.metadata?.comment_id || (notification.related_entity_type === 'comment' ? notification.related_entity_id : null),
             scrollToReaction: notification.type === 'post_reaction' || notification.type === 'comment_reaction'
           }
         }))
@@ -7489,8 +7491,41 @@ function CommunityComponent({
           await loadComments(postId)
         }
         
-        // Scroll to reaction or comment after a brief delay
+        // If commentId exists, expand all comments to find nested replies
+        if (commentId) {
+          // Expand all comments to ensure nested replies are visible
+          setExpandedComments(prev => ({ ...prev, [postId]: true }))
+          
+          // Recursively expand replies to find the target comment
+          const expandToComment = (commentList: Comment[], targetId: string): boolean => {
+            for (const comment of commentList) {
+              if (comment.id === targetId) {
+                return true
+              }
+              if (comment.replies && comment.replies.length > 0) {
+                if (expandToComment(comment.replies, targetId)) {
+                  setExpandedReplies(prev => ({ ...prev, [comment.id]: true }))
+                  return true
+                }
+              }
+            }
+            return false
+          }
+          
+          // Wait for comments to load and expand
+          setTimeout(() => {
+            const postComments = comments[postId] || []
+            expandToComment(postComments, commentId)
+          }, 100)
+        }
+        
+        // Scroll to reaction or comment after a longer delay to ensure everything is rendered
         setTimeout(() => {
+          // Get the modal container for scrolling
+          const modalContainer = document.querySelector('.modal-scroll-container') || 
+                                 document.querySelector('[data-post-id="' + postId + '"]')?.closest('.overflow-y-auto') ||
+                                 document.querySelector('.max-h-\\[90vh\\]')
+          
           if (scrollToReaction) {
             // Scroll to reactions section
             const reactionsElement = document.querySelector(`[data-post-id="${postId}"] .reactions-section`)
@@ -7500,18 +7535,33 @@ function CommunityComponent({
           }
           
           if (commentId) {
-            // Scroll to specific comment
-            const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
-            if (commentElement) {
-              commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-              // Highlight comment briefly
-              commentElement.classList.add('bg-yellow-100')
-              setTimeout(() => {
-                commentElement.classList.remove('bg-yellow-100')
-              }, 2000)
+            // Scroll to specific comment - try multiple times as comments may load async
+            const scrollToComment = (attempts = 0) => {
+              const commentElement = document.querySelector(`[data-comment-id="${commentId}"]`)
+              if (commentElement) {
+                // Scroll within modal container if available
+                if (modalContainer) {
+                  const containerRect = modalContainer.getBoundingClientRect()
+                  const elementRect = commentElement.getBoundingClientRect()
+                  const scrollTop = modalContainer.scrollTop + elementRect.top - containerRect.top - (containerRect.height / 2) + (elementRect.height / 2)
+                  modalContainer.scrollTo({ top: scrollTop, behavior: 'smooth' })
+                } else {
+                  commentElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+                
+                // Highlight comment briefly
+                commentElement.classList.add('bg-yellow-100', 'transition-colors', 'duration-300')
+                setTimeout(() => {
+                  commentElement.classList.remove('bg-yellow-100')
+                }, 2000)
+              } else if (attempts < 10) {
+                // Retry if element not found yet
+                setTimeout(() => scrollToComment(attempts + 1), 200)
+              }
             }
+            scrollToComment()
           }
-        }, 300)
+        }, 500) // Increased delay for comments to fully load and render
       }
     }
 
@@ -7525,7 +7575,7 @@ function CommunityComponent({
     return () => {
       window.removeEventListener('openPostFromNotification', handler)
     }
-  }, [posts, comments])
+  }, [posts, comments, expandedComments, expandedReplies])
 
   const handleBookmarkPost = async (postId: string) => {
     if (!user?.id) { 
@@ -9465,25 +9515,41 @@ function CommunityComponent({
 
         // Create notification for post owner
         const post = posts.find(p => p.id === postId)
-        if (post && post.user_id !== user.id) {
+        const postOwnerId = String(post?.user_id || '')
+        const currentUserId = String(user?.id || '')
+        
+        if (post && postOwnerId !== '' && currentUserId !== '' && postOwnerId !== currentUserId) {
+          // Get current user profile for notification
+          const currentUserProfileData = await getUserProfile()
+          
           // Check user notification settings
-          const { data: settings } = await supabase
+          const { data: settings, error: settingsError } = await supabase
             .from('user_settings')
             .select('push_post_reactions')
             .eq('id', post.user_id)
             .single()
 
-          if (settings?.push_post_reactions !== false) {
-            await supabase
+          if (settingsError) {
+            console.error('Error fetching user settings:', settingsError)
+          }
+
+          if (!settingsError && settings?.push_post_reactions !== false) {
+            const { error: notifError } = await supabase
               .from('notifications')
               .insert({
                 user_id: post.user_id,
                 title: 'New like on your post',
-                message: `${userProfile?.full_name || 'Someone'} liked your post`,
+                message: `${currentUserProfileData?.full_name || 'Someone'} liked your post`,
                 type: 'post_reaction',
                 related_entity_type: 'post',
                 related_entity_id: postId
               })
+            
+            if (notifError) {
+              console.error('Error creating like notification:', notifError)
+            } else {
+              console.log('Like notification created successfully for user:', post.user_id)
+            }
           }
         }
       }
@@ -9574,25 +9640,41 @@ function CommunityComponent({
 
         // Create notification for post owner
         const post = posts.find(p => p.id === postId)
-        if (post && post.user_id !== user.id) {
+        const postOwnerId = String(post?.user_id || '')
+        const currentUserId = String(user?.id || '')
+        
+        if (post && postOwnerId !== '' && currentUserId !== '' && postOwnerId !== currentUserId) {
+          // Get current user profile for notification
+          const currentUserProfileData = await getUserProfile()
+          
           // Check user notification settings
-          const { data: settings } = await supabase
+          const { data: settings, error: settingsError } = await supabase
             .from('user_settings')
             .select('push_post_reactions')
             .eq('id', post.user_id)
             .single()
 
-          if (settings?.push_post_reactions !== false) {
-            await supabase
+          if (settingsError) {
+            console.error('Error fetching user settings for emoji reaction:', settingsError)
+          }
+
+          if (!settingsError && settings?.push_post_reactions !== false) {
+            const { error: notifError } = await supabase
               .from('notifications')
               .insert({
                 user_id: post.user_id,
                 title: 'New reaction on your post',
-                message: `${userProfile?.full_name || 'Someone'} reacted ${emoji} to your post`,
+                message: `${currentUserProfileData?.full_name || 'Someone'} reacted ${emoji} to your post`,
                 type: 'post_reaction',
                 related_entity_type: 'post',
                 related_entity_id: postId
               })
+            
+            if (notifError) {
+              console.error('Error creating emoji reaction notification:', notifError)
+            } else {
+              console.log('Emoji reaction notification created successfully for user:', post.user_id)
+            }
           }
         }
       }
@@ -9788,17 +9870,23 @@ function CommunityComponent({
         // Create notifications
         const post = posts.find(p => p.id === postId)
         const currentUserProfileData = await getUserProfile()
+        const postOwnerId = String(post?.user_id || '')
+        const currentUserId = String(user?.id || '')
         
         // Notify post owner (if comment is not from post owner)
-        if (post && post.user_id !== user.id) {
-          const { data: settings } = await supabase
+        if (post && postOwnerId !== '' && currentUserId !== '' && postOwnerId !== currentUserId) {
+          const { data: settings, error: settingsError } = await supabase
             .from('user_settings')
             .select('push_comments')
             .eq('id', post.user_id)
             .single()
 
-          if (settings?.push_comments !== false) {
-            await supabase
+          if (settingsError) {
+            console.error('Error fetching user settings for comment notification:', settingsError)
+          }
+
+          if (!settingsError && settings?.push_comments !== false) {
+            const { error: notifError } = await supabase
               .from('notifications')
               .insert({
                 user_id: post.user_id,
@@ -9806,8 +9894,15 @@ function CommunityComponent({
                 message: `${currentUserProfileData?.full_name || 'Someone'} commented on your post`,
                 type: 'comment',
                 related_entity_type: 'post',
-                related_entity_id: postId
+                related_entity_id: postId,
+                metadata: { comment_id: insertedComment.id, post_id: postId }
               })
+            
+            if (notifError) {
+              console.error('Error creating comment notification:', notifError)
+            } else {
+              console.log('Comment notification created successfully for user:', post.user_id)
+            }
           }
         }
 
@@ -9843,7 +9938,7 @@ function CommunityComponent({
               .single()
 
             if (settings?.push_comments !== false) {
-              await supabase
+              const { error: notifError } = await supabase
                 .from('notifications')
                 .insert({
                   user_id: parentCommentOwnerId,
@@ -9851,8 +9946,13 @@ function CommunityComponent({
                   message: `${currentUserProfileData?.full_name || 'Someone'} replied to your comment`,
                   type: 'comment',
                   related_entity_type: 'comment',
-                  related_entity_id: parentReplyId
+                  related_entity_id: parentReplyId,
+                  metadata: { comment_id: insertedComment.id, parent_comment_id: parentReplyId, post_id: postId }
                 })
+              
+              if (notifError) {
+                console.error('Error creating reply notification:', notifError)
+              }
             }
           }
         }
@@ -10351,15 +10451,15 @@ function CommunityComponent({
     {/* Middle Column - Feed */}
     <div className="md:col-span-6 w-full">
       {/* Header with actions */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center">
-            <Users className="w-5 h-5 mr-2 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900">Feed</h2>
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-3 mb-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Feed</h2>
             
             {/* Real-time status */}
-            <div className="ml-3 hidden md:flex items-center">
-              <div className={`w-2 h-2 rounded-full mr-1.5 ${
+            <div className="ml-2 hidden md:flex items-center">
+              <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
                 realtimeStatus === 'connected' ? 'bg-green-500' : 
                 realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
               }`} />
@@ -10370,13 +10470,13 @@ function CommunityComponent({
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button 
               onClick={() => {
                 loadPosts(0, true);
                 loadFollowingPosts();
               }}
-              className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
               title="Refresh posts"
             >
               <RefreshCw className="w-4 h-4" />
@@ -10384,7 +10484,8 @@ function CommunityComponent({
             
             <button 
               onClick={() => setShowFilters(!showFilters)}
-              className="relative p-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              className="relative p-1.5 rounded-lg hover:bg-gray-100 transition-colors text-gray-600"
+              title="Filters"
             >
               <Filter className="w-4 h-4" />
               {(() => {
@@ -10397,7 +10498,7 @@ function CommunityComponent({
                   return acc;
                 }, 0);
                 return count > 0 ? (
-                <span className="absolute -top-1 -right-1 bg-blue-600 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                <span className="absolute -top-0.5 -right-0.5 bg-blue-600 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center">
                     {count}
                 </span>
                 ) : null
@@ -10412,10 +10513,10 @@ function CommunityComponent({
             haptic.light();
             setShowNewPostModal(true);
           }}
-          className="w-full flex items-center gap-3 px-4 py-3 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors text-left min-h-[44px]"
+          className="w-full flex items-center gap-3 px-3 py-2 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors text-left"
         >
-          <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-10 h-10" useInlineSize={false} />
-          <span className="text-gray-500 flex-1">Share an update, question or insight...</span>
+          <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-8 h-8" useInlineSize={false} />
+          <span className="text-sm text-gray-500 flex-1">Share an update, question or insight...</span>
         </button>
       </div>
 
@@ -10779,25 +10880,25 @@ function CommunityComponent({
             (activeFeedTab === 'all' ? posts : posts.filter(p => bookmarkedPosts.includes(p.id))).map(post => (
           <div 
             key={post.id} 
-            className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
             {/* Post Header with Menu */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-2 mb-2">
                   <button
                     onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
                     className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
                   >
-                    <Avatar src={post.user?.avatar_url} name={getUserDisplayName(post.user)} className="w-10 h-10" useInlineSize={false} />
+                    <Avatar src={post.user?.avatar_url} name={getUserDisplayName(post.user)} className="w-8 h-8" useInlineSize={false} />
                   </button>
                   <div>
                     <button
                       onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
-                      className="font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
+                      className="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
                     >
                       {getUserDisplayName(post.user)}
                     </button>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs text-gray-500">
                       {getUserProfession(post.user)} • {formatTime(post.created_at)}
                       {post.updated_at && post.updated_at !== post.created_at && (
                         <span className="text-gray-400"> (edited)</span>
@@ -10810,22 +10911,22 @@ function CommunityComponent({
                 {renderPostMetadata(post)}
                 
                 {/* Post Settings Indicators */}
-                <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-3">
+                <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 mb-2">
                   {postSettings[post.id]?.comments_disabled && (
-                    <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
-                      <MessageSquare className="w-3 h-3" />
+                    <span className="flex items-center gap-0.5 bg-red-50 text-red-700 px-1.5 py-0.5 rounded-full">
+                      <MessageSquare className="w-2.5 h-2.5" />
                       Comments disabled
                     </span>
                   )}
                   {postSettings[post.id]?.muted && (
-                    <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
-                      <Bell className="w-3 h-3" />
+                    <span className="flex items-center gap-0.5 bg-orange-50 text-orange-700 px-1.5 py-0.5 rounded-full">
+                      <Bell className="w-2.5 h-2.5" />
                       Notifications muted
                     </span>
                   )}
                   {followingPosts.includes(post.id) && (
-                    <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                      <Bell className="w-3 h-3" />
+                    <span className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">
+                      <Bell className="w-2.5 h-2.5" />
                       Following
                     </span>
                   )}
@@ -10845,9 +10946,9 @@ function CommunityComponent({
                     e.preventDefault();
                     setActiveMenuPost(activeMenuPost === post.id ? null : post.id);
                   }}
-                  className="flex items-center justify-center w-8 h-8 rounded-full hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
                 >
-                  <MoreHorizontal className="w-5 h-5 text-gray-500" />
+                  <MoreHorizontal className="w-4 h-4" />
                 </button>
 
                 {activeMenuPost === post.id && (
@@ -10938,7 +11039,7 @@ function CommunityComponent({
             </div>
 
             {/* Post Content with See More/Less */}
-            <div className="group relative text-gray-700 mb-4">
+            <div className="group relative text-gray-700 mb-3 text-sm leading-relaxed">
               {(() => {
                 const textContent = post.content.replace(/<[^>]*>/g, '')
                 const contentLength = textContent.length
@@ -11014,16 +11115,16 @@ function CommunityComponent({
 
             {/* Reaction Summary */}
             {(postReactions[post.id]?.length > 0 || postLikes[post.id]) && (
-              <div className="flex items-center gap-3 mb-3 text-sm text-gray-600">
+              <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
                 {postReactions[post.id]?.map((reaction, idx) => (
-                  <span key={idx} className="flex items-center gap-1">
-                    <span className="text-lg">{reaction.emoji}</span>
+                  <span key={idx} className="flex items-center gap-0.5">
+                    <span className="text-base">{reaction.emoji}</span>
                     <span>{reaction.count}</span>
                   </span>
                 ))}
                 {(postLikes[post.id] || 0) > 0 && (
-                  <span className="flex items-center gap-1">
-                    <ThumbsUp className="w-4 h-4 text-blue-600" />
+                  <span className="flex items-center gap-0.5">
+                    <ThumbsUp className="w-3.5 h-3.5 text-blue-600" />
                     {postLikes[post.id]}
                   </span>
                 )}
@@ -11031,8 +11132,8 @@ function CommunityComponent({
             )}
 
             {/* Action Bar */}
-            <div className="border-t border-gray-200 pt-3">
-              <div className="flex items-center justify-between gap-4">
+            <div className="border-t border-gray-100 pt-2 mt-2">
+              <div className="flex items-center justify-start gap-6">
                 {/* Like Button with Long Press */}
                 <div className="relative">
                   <button
@@ -11045,10 +11146,17 @@ function CommunityComponent({
                     onMouseLeave={handleLongPressEnd}
                     onTouchStart={(e) => handleLongPressStart(post.id, e)}
                     onTouchEnd={handleLongPressEnd}
-                    className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-colors flex-1 justify-center min-h-[44px]"
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                      userPostReactions[post.id] === 'like' 
+                        ? 'text-blue-600 bg-blue-50' 
+                        : 'text-gray-500 hover:bg-gray-100'
+                    }`}
+                    title="Like"
                   >
-                    <ThumbsUp className="w-4 h-4" />
-                    <span>Like</span>
+                    <ThumbsUp className="w-5 h-5" />
+                    {postLikes[post.id] > 0 && (
+                      <span className="text-xs font-medium">{postLikes[post.id]}</span>
+                    )}
                   </button>
 
                   {/* Emoji Picker Overlay */}
@@ -11078,58 +11186,68 @@ function CommunityComponent({
                     haptic.select();
                     toggleComments(post.id, e);
                   }}
-                  className="flex items-center gap-2 px-4 py-3 text-sm text-gray-600 hover:bg-green-50 hover:text-green-600 rounded-lg transition-colors flex-1 justify-center min-h-[44px]"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                    openComments[post.id] 
+                      ? 'text-green-600 bg-green-50' 
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                  title="Comments"
                 >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>
-                    {(() => {
-                      // If comments are loaded, use actual count
-                      const postComments = comments[post.id];
-                      if (postComments !== undefined) {
-                        // Count all top-level comments (not replies)
-                        const topLevelCount = postComments.filter(c => !c.parent_reply_id).length;
-                        // Count all replies recursively
-                        const countReplies = (commentList: Comment[]): number => {
-                          let count = 0;
-                          commentList.forEach(comment => {
-                            if (comment.replies && comment.replies.length > 0) {
-                              count += comment.replies.length;
-                              count += countReplies(comment.replies);
-                            }
-                          });
-                          return count;
-                        };
-                        const repliesCount = countReplies(postComments);
-                        return topLevelCount + repliesCount;
-                      }
-                      // Otherwise use replies_count from post
-                      return post.replies_count || 0;
-                    })()} Comments
-                  </span>
+                  <MessageSquare className="w-5 h-5" />
+                  {(() => {
+                    // If comments are loaded, use actual count
+                    const postComments = comments[post.id];
+                    let commentCount = 0;
+                    if (postComments !== undefined) {
+                      // Count all top-level comments (not replies)
+                      const topLevelCount = postComments.filter(c => !c.parent_reply_id).length;
+                      // Count all replies recursively
+                      const countReplies = (commentList: Comment[]): number => {
+                        let count = 0;
+                        commentList.forEach(comment => {
+                          if (comment.replies && comment.replies.length > 0) {
+                            count += comment.replies.length;
+                            count += countReplies(comment.replies);
+                          }
+                        });
+                        return count;
+                      };
+                      const repliesCount = countReplies(postComments);
+                      commentCount = topLevelCount + repliesCount;
+                    } else {
+                      commentCount = post.replies_count || 0;
+                    }
+                    return commentCount > 0 ? (
+                      <span className="text-xs font-medium">{commentCount}</span>
+                    ) : null;
+                  })()}
                 </button>
 
                 {/* Bookmark Button */}
                 <button
                   onClick={() => handleBookmarkPost(post.id)}
-                  className={`flex items-center gap-2 px-4 py-2 text-sm rounded-lg transition-colors flex-1 justify-center ${bookmarkedPosts.includes(post.id) ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'}`}
+                  className={`px-3 py-1.5 rounded-full transition-colors ${
+                    bookmarkedPosts.includes(post.id) 
+                      ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' 
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
                   title={bookmarkedPosts.includes(post.id) ? 'Saved' : 'Save post'}
                   aria-label={bookmarkedPosts.includes(post.id) ? 'Unsave post' : 'Save post'}
                 >
-                  <Bookmark className={`w-4 h-4 ${bookmarkedPosts.includes(post.id) ? 'fill-amber-500 stroke-amber-600' : ''}`} />
-                  <span>{bookmarkedPosts.includes(post.id) ? 'Saved' : 'Save'}</span>
+                  <Bookmark className={`w-5 h-5 ${bookmarkedPosts.includes(post.id) ? 'fill-current' : ''}`} />
                 </button>
               </div>
             </div>
 
             {/* Inline Comments Section */}
             {openComments[post.id] && (
-              <div className="mt-4 border-t border-gray-200 pt-4">
+              <div className="mt-3 border-t border-gray-100 pt-3">
                 {/* Add Comment */}
                 {!postSettings[post.id]?.comments_disabled && (
                   <div className="mb-4">
                     <div className="flex gap-2">
-                      <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-7 h-7 flex-shrink-0" useInlineSize={false} />
-                      <div className="flex-1 flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+                      <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-6 h-6 flex-shrink-0" useInlineSize={false} />
+                      <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 rounded-full focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                         <textarea
                           value={newComments[post.id] || ''}
                           onChange={(e) => {
@@ -11139,7 +11257,7 @@ function CommunityComponent({
                             e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
                           }}
                           placeholder="Write a comment..."
-                          className="flex-1 resize-none border-none outline-none text-sm py-1"
+                          className="flex-1 resize-none border-none outline-none text-sm py-0.5"
                           rows={1}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
@@ -11148,15 +11266,15 @@ function CommunityComponent({
                             }
                             // Shift+Enter allows new line (default behavior)
                           }}
-                          style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                          style={{ maxHeight: '80px', minHeight: '20px', height: '20px' }}
                         />
                         <button
                           onClick={() => addComment(post.id)}
                           disabled={!newComments[post.id]?.trim()}
-                          className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                          className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                           title="Post comment"
                         >
-                          <Send className="w-4 h-4" />
+                          <Send className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -11167,7 +11285,7 @@ function CommunityComponent({
                 {comments[post.id] && comments[post.id].length > 0 && (
                   <div className="space-y-4">
                     {comments[post.id].map(comment => (
-                      <div key={comment.id} className="flex gap-3 items-start">
+                      <div key={comment.id} data-comment-id={comment.id} className="flex gap-3 items-start">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -11325,7 +11443,7 @@ function CommunityComponent({
                               {expandedComments[comment.id] && (
                                 <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                   {comment.replies.map(reply => (
-                                    <div key={reply.id} className="flex gap-2 items-start">
+                                    <div key={reply.id} data-comment-id={reply.id} className="flex gap-2 items-start">
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -11483,7 +11601,7 @@ function CommunityComponent({
                                             {expandedReplies[reply.id] && (
                                               <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                                 {reply.replies.map(nestedReply => (
-                                                  <div key={nestedReply.id} className="flex gap-2 items-start">
+                                                  <div key={nestedReply.id} data-comment-id={nestedReply.id} className="flex gap-2 items-start">
                                                     <button
                                                       onClick={(e) => {
                                                         e.stopPropagation();
@@ -12866,7 +12984,7 @@ function CommunityComponent({
     {/* Post Detail Modal */}
     {selectedPost && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4">
-        <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto">
+        <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto modal-scroll-container">
           <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
             <h3 className="text-xl font-bold text-gray-900">Post Details</h3>
             <button 
@@ -13062,7 +13180,7 @@ function CommunityComponent({
               {!postSettings[selectedPost.id]?.comments_disabled && (
                 <div className="space-y-4">
                   {(comments[selectedPost.id] || []).map(comment => (
-                    <div key={comment.id} className="flex gap-3 items-start">
+                    <div key={comment.id} data-comment-id={comment.id} className="flex gap-3 items-start">
                       {/* Kullanıcı Avatarı */}
                       <button
                         onClick={(e) => {
@@ -13271,9 +13389,9 @@ function CommunityComponent({
 
                         {/* Yanıtlar (Replies) */}
                         {comment.replies && comment.replies.length > 0 && (
-                          <div className="ml-4 mt-3 space-y-3">
-                            {comment.replies.map((reply: any) => (
-                              <div key={reply.id} className="flex gap-2">
+                            <div className="ml-4 mt-3 space-y-3">
+                              {comment.replies.map((reply: any) => (
+                               <div key={reply.id} data-comment-id={reply.id} className="flex gap-2">
                                 {/* Yanıt Kullanıcı Avatarı */}
                                 <button
                                   onClick={(e) => {
@@ -13488,9 +13606,9 @@ function CommunityComponent({
 
                                   {/* Nested Yanıtlar (Yanıtların Yanıtları) */}
                                   {reply.replies && reply.replies.length > 0 && (
-                                    <div className="ml-4 mt-3 space-y-3">
-                                      {reply.replies.map((nestedReply: any) => (
-                                        <div key={nestedReply.id} className="flex gap-2 items-start">
+                                      <div className="ml-4 mt-3 space-y-3">
+                                        {reply.replies.map((nestedReply: any) => (
+                                         <div key={nestedReply.id} data-comment-id={nestedReply.id} className="flex gap-2 items-start">
                                           <button
                                             onClick={(e) => {
                                               e.stopPropagation();
