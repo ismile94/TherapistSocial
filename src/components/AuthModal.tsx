@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, ChevronDown } from 'lucide-react'
+import { X, ChevronDown, CheckCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '../lib/supabaseClient'
 import { modalVariants, backdropVariants } from '../utils/animations'
@@ -464,22 +464,17 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
                   <AnimatedButton
                     type="submit"
                     disabled={loading || (isSignUp && !formData.acceptTerms)}
-                    className="w-full py-3 rounded-xl"
+                    className="w-full py-3 rounded-xl flex items-center justify-center"
                     variant="primary"
                     aria-label={isSignUp ? 'Create account' : 'Sign in'}
+                    title={isSignUp ? 'Create Account' : 'Sign In'}
                   >
                     {loading ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <LoadingSpinner size="sm" />
-                        <span>Processing...</span>
-                      </div>
+                      <LoadingSpinner size="sm" />
                     ) : success ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <SuccessIcon size="sm" />
-                        <span>Success!</span>
-                      </div>
+                      <SuccessIcon size="sm" />
                     ) : (
-                      isSignUp ? 'Create Account' : 'Sign In'
+                      <CheckCircle className="w-5 h-5" />
                     )}
                   </AnimatedButton>
 

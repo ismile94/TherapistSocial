@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { useToast } from './useToast';
 
 interface Props {
@@ -72,9 +73,10 @@ class ErrorBoundary extends Component<Props, State> {
                 this.setState({ hasError: false, error: null });
                 window.location.reload();
               }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+              title="Refresh Page"
             >
-              Refresh Page
+              <RefreshCw className="w-5 h-5" />
             </button>
           </div>
         </div>

@@ -28,7 +28,7 @@ function Header({ activeView, onViewChange, onAccountClick }: HeaderProps) {
           <nav className="flex space-x-1">
             <motion.button
               onClick={() => onViewChange('map')}
-              className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              className={`flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium transition-all ${
                 activeView === 'map'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -37,13 +37,13 @@ function Header({ activeView, onViewChange, onAccountClick }: HeaderProps) {
               whileTap={{ scale: 0.95 }}
               aria-label="View map"
               aria-pressed={activeView === 'map'}
+              title="Map"
             >
-              <Map className="w-4 h-4 mr-2" />
-              Map
+              <Map className="w-5 h-5" />
             </motion.button>
             <motion.button
               onClick={() => onViewChange('community')}
-              className={`flex items-center px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              className={`flex items-center justify-center w-10 h-10 rounded-full text-sm font-medium transition-all ${
                 activeView === 'community'
                   ? 'bg-blue-100 text-blue-700'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
@@ -52,9 +52,9 @@ function Header({ activeView, onViewChange, onAccountClick }: HeaderProps) {
               whileTap={{ scale: 0.95 }}
               aria-label="View community feed"
               aria-pressed={activeView === 'community'}
+              title="Feed"
             >
-              <Users className="w-4 h-4 mr-2" />
-              Feed
+              <Users className="w-5 h-5" />
             </motion.button>
           </nav>
           
@@ -66,11 +66,11 @@ function Header({ activeView, onViewChange, onAccountClick }: HeaderProps) {
             <AnimatedButton
               onClick={onAccountClick}
               variant="primary"
-              className="flex items-center px-4 py-2 rounded-full"
+              className="flex items-center justify-center w-10 h-10 rounded-full"
               aria-label="View account"
+              title="Account"
             >
-              <User className="w-4 h-4 mr-2" />
-              Account
+              <User className="w-5 h-5" />
             </AnimatedButton>
           </motion.div>
         </div>

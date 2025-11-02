@@ -31,7 +31,8 @@ import {
     UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
     Download, Info, Trash2,ThumbsUp, Flag, RefreshCw, Printer,
     FileText, MessageCircle, Bookmark,
-    CheckCircle, Circle, UserX, Monitor, Smartphone, LogOut, QrCode
+    CheckCircle, Circle, UserX, Monitor, Smartphone, LogOut, QrCode,
+    Repeat2, Quote
 } from 'lucide-react'
 
 
@@ -101,6 +102,16 @@ interface PostMetadata {
   co_authors: string[]
   is_public: boolean
   visibility?: 'public' | 'connections' | 'only_me'
+  reposted_post_id?: string
+  is_repost?: boolean
+  quoted_post_id?: string
+  quoted_post_data?: {
+    id: string
+    content: string
+    title?: string
+    user_id: string
+    user?: Profile
+  }
 }
 
 interface FeedFilters {
@@ -1680,11 +1691,12 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                   <h4 className="font-semibold text-gray-900 mb-4">Account Deletion</h4>
                   <p className="text-sm text-gray-600 mb-3">Permanently delete your account and all data</p>
                   <button 
-                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-300"
+                    className="flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-full hover:bg-red-700 disabled:bg-gray-300"
                     onClick={handleDeleteAccount}
                     disabled={saving}
+                    title="Delete Account"
                   >
-                    Delete Account
+                    <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
               </div>
@@ -1981,9 +1993,10 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                     </button>
                     <button
                       onClick={() => setChangePasswordModal(false)}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                      className="flex items-center justify-center w-10 h-10 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                      title="Cancel"
                     >
-                      Cancel
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -2036,9 +2049,10 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                     </button>
                     <button
                       onClick={() => setTwoFactorModal(false)}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                      className="flex items-center justify-center w-10 h-10 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                      title="Cancel"
                     >
-                      Cancel
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
@@ -2286,6 +2300,7 @@ function AppInner() {
     window.addEventListener('openProfileDetail', handleOpenProfileDetail as EventListener)
     return () => window.removeEventListener('openProfileDetail', handleOpenProfileDetail as EventListener)
   }, [])
+
 
   useEffect(() => {
     const handleOpenCVMaker = () => {
@@ -2608,26 +2623,11 @@ function AppInner() {
           console.log('Connection change (sender):', payload);
 
           if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
-            // New outgoing request (though sender initiates via function)
-            const { data: receiver } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', payload.new.receiver_id)
-              .single();
-
-            const newRequest: Connection = {
-              id: payload.new.id,
-              created_at: payload.new.created_at,
-              sender_id: payload.new.sender_id,
-              receiver_id: payload.new.receiver_id,
-              status: payload.new.status,
-              sender: userProfile,
-              receiver
-            };
-
-            setConnectionRequests(prev => [...prev, newRequest]);
+            // New outgoing request - should NOT be added to connectionRequests
+            // connectionRequests should only contain requests received by us (receiver_id === currentUser.id)
+            // Outgoing requests are handled separately by loadSentRequests() in ConnectionsManager
           } else if (payload.eventType === 'UPDATE') {
-            // Status change for outgoing
+            // Status change for outgoing - should only update connections, not connectionRequests
             if (payload.new.status === 'accepted') {
               const acceptedConnection: Connection = {
                 id: payload.new.id,
@@ -2639,12 +2639,11 @@ function AppInner() {
                 receiver: payload.old?.receiver
               };
               setConnections(prev => [...prev, acceptedConnection]);
-              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
-            } else if (payload.new.status === 'rejected') {
-              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
+              // Don't filter connectionRequests here - this is an outgoing request
             }
+            // Rejected outgoing requests don't need to update connectionRequests
           } else if (payload.eventType === 'DELETE') {
-            setConnectionRequests(prev => prev.filter(req => req.id !== payload.old.id));
+            // Only remove from connections, not from connectionRequests (outgoing request)
             setConnections(prev => prev.filter(conn => conn.id !== payload.old.id));
           }
         }
@@ -3219,6 +3218,27 @@ profileCacheRef.current = {}
       }
     })
   }
+
+  // Event listeners for chat box and connection requests
+  useEffect(() => {
+    const handleOpenChatBox = (event: Event) => {
+      const customEvent = event as CustomEvent
+      openChatBox(customEvent.detail.conversation)
+    }
+
+    const handleSendConnectionRequest = async (event: Event) => {
+      const customEvent = event as CustomEvent
+      await sendConnectionRequest(customEvent.detail.receiverId)
+    }
+
+    window.addEventListener('openChatBox', handleOpenChatBox)
+    window.addEventListener('sendConnectionRequest', handleSendConnectionRequest)
+    
+    return () => {
+      window.removeEventListener('openChatBox', handleOpenChatBox)
+      window.removeEventListener('sendConnectionRequest', handleSendConnectionRequest)
+    }
+  }, [openChatBox, sendConnectionRequest])
 
   const filteredTherapists = therapists.filter(therapist => {
     // Filter out blocked users (either I blocked them or they blocked me)
@@ -4079,7 +4099,6 @@ function MobileChatScreen({
   )
 }
 
-// Connections Management Component - Güncellenmiş versiyon
 function ConnectionsManager({ 
   currentUserId,
   onClose,
@@ -4120,6 +4139,12 @@ function ConnectionsManager({
 
   const loadSuggested = async () => {
     setLoading(true)
+    
+    // First load sent requests if not already loaded
+    if (sentRequests.length === 0) {
+      await loadSentRequests()
+    }
+    
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -4131,7 +4156,12 @@ function ConnectionsManager({
       const connectedUserIds = connections.map(conn => 
         conn.sender_id === currentUserId ? conn.receiver_id : conn.sender_id
       )
-      const requestedUserIds = sentRequests.map(req => req.receiver_id)
+      // Get all users we've sent requests to
+      const sentRequestUserIds = sentRequests.map(req => req.receiver_id)
+      // Get all users who sent us requests (these should also not appear in suggested)
+      const receivedRequestUserIds = connectionRequests.map(req => req.sender_id)
+      // Combine both
+      const requestedUserIds = [...new Set([...sentRequestUserIds, ...receivedRequestUserIds])]
       
       // Get users who blocked me
       const { data: blockedByData } = await supabase
@@ -4266,7 +4296,7 @@ function ConnectionsManager({
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              Requests ({requestSubTab === 'received' ? connectionRequests.length : sentRequests.length})
+              Requests ({connectionRequests.length + sentRequests.length})
             </button>
             <button
               onClick={() => setActiveTab('suggested')}
@@ -4358,7 +4388,11 @@ function ConnectionsManager({
           {activeTab === 'requests' && requestSubTab === 'received' && (
             <div className="space-y-4">
               {connectionRequests.filter(request => {
-                return request.sender && !blockedUserIds?.includes(request.sender.id)
+                // Only show requests where we are the receiver (sender_id !== currentUserId)
+                return request.sender_id !== currentUserId && 
+                       request.receiver_id === currentUserId &&
+                       request.sender && 
+                       !blockedUserIds?.includes(request.sender.id)
               }).map(request => (
                 <div 
                   key={request.id} 
@@ -4418,9 +4452,10 @@ function ConnectionsManager({
                       e.stopPropagation()
                       handleCancelRequest(request.id)
                     }}
-                    className="px-2 sm:px-3 py-1 text-xs sm:text-sm text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                    className="flex items-center justify-center w-8 h-8 text-red-600 hover:bg-red-50 rounded-lg border border-red-200"
+                    title="Cancel"
                   >
-                    Cancel
+                    <X className="w-4 h-4" />
                   </button>
                 </div>
               ))}
@@ -5791,9 +5826,10 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
                   )}
                   <button
                     onClick={() => onProfileClick(t.id)}
-                    className="w-full mt-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                    className="flex items-center justify-center w-full mt-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                    title="View Full Profile"
                   >
-                    View Full Profile
+                    <User className="w-4 h-4" />
                   </button>
                 </div>
               </Popup>
@@ -6205,18 +6241,18 @@ function ProfileDetailPage({
         <div className="flex gap-3 flex-wrap">
           <button
             onClick={() => startEditing('basic')}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 font-medium transition-colors"
+            title="Edit Profile"
           >
-            <Edit2 className="w-4 h-4" />
-            Edit Profile
+            <Edit2 className="w-5 h-5" />
           </button>
           
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('openCVMaker'))}
-            className="flex items-center gap-2 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-medium transition-colors"
+            className="flex items-center justify-center w-10 h-10 bg-purple-600 text-white rounded-full hover:bg-purple-700 font-medium transition-colors"
+            title="Generate CV"
           >
-            <Briefcase className="w-4 h-4" />
-            Generate CV
+            <Briefcase className="w-5 h-5" />
           </button>
         </div>
       )
@@ -6226,29 +6262,29 @@ function ProfileDetailPage({
       <div className="flex gap-3 flex-wrap">
         <button
           onClick={handleMessage}
-          className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+          className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 font-medium transition-colors"
+          title="Message"
         >
-          <MessageSquare className="w-4 h-4" />
-          Message
+          <MessageSquare className="w-5 h-5" />
         </button>
 
         {connectionStatus === 'not_connected' && (
           <button
             onClick={handleConnect}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition-colors"
+            className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 font-medium transition-colors"
+            title="Connect"
           >
-            <UserPlus className="w-4 h-4" />
-            Connect
+            <UserPlus className="w-5 h-5" />
           </button>
         )}
 
         {connectionStatus === 'pending' && (
           <button
             disabled
-            className="flex items-center gap-2 px-6 py-3 bg-gray-400 text-white rounded-lg font-medium cursor-not-allowed"
+            className="flex items-center justify-center w-10 h-10 bg-gray-400 text-white rounded-full font-medium cursor-not-allowed"
+            title="Pending"
           >
-            <Clock className="w-4 h-4" />
-            Pending
+            <Clock className="w-5 h-5" />
           </button>
         )}
 
@@ -6256,11 +6292,10 @@ function ProfileDetailPage({
           <div className="relative">
             <button
               onClick={() => setShowConnectionOptions(!showConnectionOptions)}
-              className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium transition-colors"
+              className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 font-medium transition-colors"
+              title="Connected"
             >
-              <UserCheck className="w-4 h-4" />
-              Connected
-              <ChevronDown className="w-4 h-4" />
+              <UserCheck className="w-5 h-5" />
             </button>
             
             {showConnectionOptions && (
@@ -6271,9 +6306,10 @@ function ProfileDetailPage({
                     setConnectionStatus('not_connected')
                     setShowConnectionOptions(false)
                   }}
-                  className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-lg"
+                  className="flex items-center justify-center w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-50 rounded-lg"
+                  title="Remove Connection"
                 >
-                  Remove Connection
+                  <UserX className="w-4 h-4" />
                 </button>
               </div>
             )}
@@ -6288,30 +6324,30 @@ function ProfileDetailPage({
                 onClose()
               }
             }}
-            className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium transition-colors"
+            className="flex items-center justify-center w-10 h-10 bg-red-600 text-white rounded-full hover:bg-red-700 font-medium transition-colors"
+            title="Block User"
           >
-            <UserX className="w-4 h-4" />
-            Block User
+            <UserX className="w-5 h-5" />
           </button>
         )}
 
         {profile.contact_email && (
           <a 
             href={`mailto:${profile.contact_email}?subject=Contact from UK Therapist Network&body=Hello ${profile.full_name}, I found your profile on UK Therapist Network and would like to get in touch.`}
-            className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+            className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 font-medium transition-colors"
+            title="Email"
           >
-            <Mail className="w-4 h-4" />
-            Email
+            <Mail className="w-5 h-5" />
           </a>
         )}
         
         {profile.phone && (
           <a 
             href={`tel:${profile.phone}`}
-            className="flex items-center gap-2 px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium transition-colors"
+            className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 font-medium transition-colors"
+            title="Call"
           >
-            <Phone className="w-4 h-4" />
-            Call
+            <Phone className="w-5 h-5" />
           </a>
         )}
       </div>
@@ -6450,17 +6486,17 @@ function ProfileDetailPage({
                     <button
                       onClick={() => saveSection('basic')}
                       disabled={loading}
-                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300 text-sm font-medium"
+                      className="flex items-center justify-center w-10 h-10 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:bg-gray-300"
+                      title="Save Changes"
                     >
-                      <Check className="w-4 h-4 inline mr-1" />
-                      Save Changes
+                      <Check className="w-5 h-5" />
                     </button>
                     <button
                       onClick={cancelEditing}
-                      className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 text-sm font-medium"
+                      className="flex items-center justify-center w-10 h-10 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                      title="Cancel"
                     >
-                      <X className="w-4 h-4 inline mr-1" />
-                      Cancel
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
                   
@@ -7296,8 +7332,11 @@ function CommunityComponent({
   const [replyContents, setReplyContents] = useState<{ [commentId: string]: string }>({})
   const [postSettings, setPostSettings] = useState<{ [postId: string]: { comments_disabled: boolean; muted: boolean } }>({})
   const [followingPosts, setFollowingPosts] = useState<string[]>([])
+  const [repostedPosts, setRepostedPosts] = useState<string[]>([])
+  const [repostCounts, setRepostCounts] = useState<Record<string, number>>({})
   const [realtimeStatus, setRealtimeStatus] = useState<'connected' | 'disconnected' | 'connecting'>('connecting');
   const [activeMenuPost, setActiveMenuPost] = useState<string | null>(null);
+  const [quotePostData, setQuotePostData] = useState<CommunityPost | null>(null);
   const menuRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
   const [feedFilters, setFeedFilters] = useState<FeedFilters>({
     professions: [],
@@ -7576,6 +7615,94 @@ function CommunityComponent({
       window.removeEventListener('openPostFromNotification', handler)
     }
   }, [posts, comments, expandedComments, expandedReplies])
+
+  const handleRepost = async (postId: string) => {
+    if (!user) {
+      toast.info('Please sign in to repost')
+      return
+    }
+
+    try {
+      const post = posts.find(p => p.id === postId)
+      if (!post) return
+
+      // Check if already reposted
+      const { data: existingRepost } = await supabase
+        .from('posts')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('post_metadata->>reposted_post_id', postId)
+        .maybeSingle()
+
+      const isReposted = !!existingRepost
+
+      if (isReposted) {
+        // Remove repost
+        const { error } = await supabase
+          .from('posts')
+          .delete()
+          .eq('id', existingRepost.id)
+
+        if (error) throw error
+
+        setRepostedPosts(prev => prev.filter(id => id !== postId))
+        setRepostCounts(prev => ({
+          ...prev,
+          [postId]: Math.max(0, (prev[postId] || 0) - 1)
+        }))
+        toast.success('Repost removed')
+        await loadPosts(0, true)
+      } else {
+        // Create repost
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        if (!currentUser) return
+
+        const { error } = await supabase
+          .from('posts')
+          .insert({
+            user_id: currentUser.id,
+            title: post.title ? `Repost: ${post.title}` : 'Repost',
+            content: post.content,
+            post_metadata: {
+              ...post.post_metadata,
+              reposted_post_id: postId,
+              is_repost: true
+            }
+          })
+
+        if (error) throw error
+
+        setRepostedPosts(prev => [...prev, postId])
+        setRepostCounts(prev => ({
+          ...prev,
+          [postId]: (prev[postId] || 0) + 1
+        }))
+        toast.success('Post reposted')
+        await loadPosts(0, true)
+      }
+    } catch (err) {
+      console.error('Error reposting:', err)
+      toast.error('Failed to repost')
+    }
+  }
+
+  const handleQuote = (post: CommunityPost) => {
+    if (!user) {
+      toast.info('Please sign in to quote')
+      return
+    }
+
+    setQuotePostData(post)
+    setNewPost(prev => ({
+      title: '',
+      content: '',
+      metadata: {
+        ...prev.metadata,
+        quoted_post_id: post.id
+      } as PostMetadata
+    }))
+    setShowNewPostModal(true)
+  }
 
   const handleBookmarkPost = async (postId: string) => {
     if (!user?.id) { 
@@ -9057,6 +9184,35 @@ function CommunityComponent({
             }))
           }
 
+          // Load repost count and check if current user reposted
+          const { count: repostCount } = await supabase
+            .from('posts')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_metadata->>reposted_post_id', post.id)
+
+          if (repostCount !== null && repostCount > 0) {
+            setRepostCounts(prev => ({ ...prev, [post.id]: repostCount }))
+          }
+
+          // Check if current user reposted this post
+          if (user) {
+            const { data: userRepost } = await supabase
+              .from('posts')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('post_metadata->>reposted_post_id', post.id)
+              .maybeSingle()
+
+            if (userRepost) {
+              setRepostedPosts(prev => {
+                if (!prev.includes(post.id)) {
+                  return [...prev, post.id]
+                }
+                return prev
+              })
+            }
+          }
+
           return {
             ...post,
             user_id: post.user_id,
@@ -9200,7 +9356,7 @@ function CommunityComponent({
   const createPost = async () => {
     // Allow posting if there's content (strip HTML tags for length check)
     const textContent = newPost.content.replace(/<[^>]*>/g, '').trim()
-    if (!textContent) return
+    if (!textContent && !newPost.metadata.quoted_post_id) return
 
     setLoading(true)
     const { data: { user: currentUser } } = await supabase.auth.getUser()
@@ -9213,8 +9369,19 @@ function CommunityComponent({
 
     try {
       // Use content preview as title (strip HTML and get first line or first 100 chars)
-      const textPreview = textContent.split('\n')[0].slice(0, 100) || 'Post'
+      const textPreview = textContent.split('\n')[0].slice(0, 100) || (newPost.metadata.quoted_post_id ? 'Quote' : 'Post')
       const titleValue = textPreview
+      
+      const metadata: PostMetadata = { ...newPost.metadata }
+      if (quotePostData && metadata.quoted_post_id) {
+        metadata.quoted_post_data = {
+          id: quotePostData.id,
+          content: quotePostData.content,
+          title: quotePostData.title,
+          user_id: quotePostData.user_id,
+          user: quotePostData.user
+        }
+      }
       
       const { error } = await supabase
         .from('posts')
@@ -9222,7 +9389,7 @@ function CommunityComponent({
           user_id: currentUser.id,
           title: titleValue,
           content: newPost.content, // Store HTML content
-          post_metadata: newPost.metadata
+          post_metadata: metadata
         })
         .select()
         .single()
@@ -9233,7 +9400,7 @@ function CommunityComponent({
         return
       }
 
-      toast.success('Post created successfully')
+      toast.success(newPost.metadata.quoted_post_id ? 'Post quoted successfully' : 'Post created successfully')
 
       // Reset form
       setNewPost({
@@ -9253,6 +9420,7 @@ function CommunityComponent({
           visibility: 'public'
         }
       })
+      setQuotePostData(null)
       setTagInput('')
       setAttachmentInput('')
       setCoAuthorInput('')
@@ -10961,10 +11129,10 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('edit', post.id, e);
                           }}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          title="Edit Post"
                         >
-                          <Edit2 className="w-4 h-4 mr-3 text-blue-600" />
-                          Edit Post
+                          <Edit2 className="w-4 h-4 text-blue-600" />
                         </button>
                         <button
                           onClick={(e) => {
@@ -10972,10 +11140,10 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('toggle_comments', post.id, e);
                           }}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          title={postSettings[post.id]?.comments_disabled ? 'Enable Comments' : 'Disable Comments'}
                         >
-                          <MessageSquare className="w-4 h-4 mr-3 text-green-600" />
-                          {postSettings[post.id]?.comments_disabled ? 'Enable Comments' : 'Disable Comments'}
+                          <MessageSquare className="w-4 h-4 text-green-600" />
                         </button>
                         <button
                           onClick={(e) => {
@@ -10983,10 +11151,10 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('toggle_mute', post.id, e);
                           }}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          title={postSettings[post.id]?.muted ? 'Enable Notifications' : 'Mute Notifications'}
                         >
-                          <Bell className="w-4 h-4 mr-3 text-orange-600" />
-                          {postSettings[post.id]?.muted ? 'Enable Notifications' : 'Mute Notifications'}
+                          <Bell className="w-4 h-4 text-orange-600" />
                         </button>
                         <div className="border-t border-gray-100 my-1"></div>
                         <button
@@ -10995,10 +11163,10 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('delete', post.id, e);
                           }}
-                          className="flex items-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          title="Delete Post"
                         >
-                          <Trash2 className="w-4 h-4 mr-3" />
-                          Delete Post
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </>
                     ) : (
@@ -11009,10 +11177,10 @@ function CommunityComponent({
                           e.preventDefault();
                           handleMenuAction('follow', post.id, e);
                         }}
-                        className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        title={followingPosts.includes(post.id) ? 'Unfollow Post' : 'Follow Post'}
                       >
-                        <Bell className="w-4 h-4 mr-3 text-purple-600" />
-                        {followingPosts.includes(post.id) ? 'Unfollow Post' : 'Follow Post'}
+                        <Bell className="w-4 h-4 text-purple-600" />
                       </button>
                         <button
                           onClick={async (e) => {
@@ -11026,10 +11194,10 @@ function CommunityComponent({
                               toast.error('Failed to copy link');
                             }
                           }}
-                          className="flex items-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          title="Share Post"
                         >
-                          <Download className="w-4 h-4 mr-3 text-blue-600" />
-                          Share Post
+                          <Download className="w-4 h-4 text-blue-600" />
                         </button>
                       </>
                     )}
@@ -11077,6 +11245,67 @@ function CommunityComponent({
                 )
               })()}
             </div>
+
+            {/* Quoted Post */}
+            {post.post_metadata?.quoted_post_data && (
+              <button
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  const quotedPostId = post.post_metadata?.quoted_post_data?.id
+                  if (!quotedPostId) return
+
+                  // Find post in current posts
+                  let targetPost = posts.find(p => p.id === quotedPostId)
+                  
+                  // If not found, load it
+                  if (!targetPost) {
+                    const { data } = await supabase
+                      .from('posts')
+                      .select(`
+                        *,
+                        user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
+                      `)
+                      .eq('id', quotedPostId)
+                      .single()
+                    
+                    if (data) {
+                      targetPost = data
+                      setPosts(prev => [...prev, data])
+                    }
+                  }
+
+                  if (targetPost) {
+                    setSelectedPost(targetPost)
+                    // Load comments if needed
+                    if (!comments[quotedPostId]) {
+                      await loadComments(quotedPostId)
+                    }
+                  }
+                }}
+                className="w-full text-left border-l-4 border-blue-500 bg-gray-50 rounded-lg p-3 mb-3 mt-3 hover:bg-gray-100 transition-colors cursor-pointer"
+              >
+                <div className="flex items-center gap-2 mb-2">
+                  <Avatar 
+                    src={post.post_metadata.quoted_post_data.user?.avatar_url} 
+                    name={post.post_metadata.quoted_post_data.user?.full_name || 'Unknown'} 
+                    className="w-6 h-6" 
+                    useInlineSize={false} 
+                  />
+                  <div>
+                    <p className="text-xs font-semibold text-gray-900">
+                      {post.post_metadata.quoted_post_data.user?.full_name || 'Unknown User'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {post.post_metadata.quoted_post_data.user?.profession || ''}
+                    </p>
+                  </div>
+                </div>
+                <div 
+                  className="text-sm text-gray-700 line-clamp-4 rich-text-content pointer-events-none"
+                  dangerouslySetInnerHTML={{ __html: post.post_metadata.quoted_post_data.content }}
+                />
+              </button>
+            )}
 
             {/* Attachments */}
             {post.post_metadata?.attachments && post.post_metadata.attachments.length > 0 && (
@@ -11223,6 +11452,37 @@ function CommunityComponent({
                   })()}
                 </button>
 
+                {/* Repost Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRepost(post.id);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                    repostedPosts.includes(post.id) 
+                      ? 'text-green-600 bg-green-50 hover:bg-green-100' 
+                      : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                  title="Repost"
+                >
+                  <Repeat2 className={`w-5 h-5 ${repostedPosts.includes(post.id) ? 'fill-current' : ''}`} />
+                  {repostCounts[post.id] > 0 && (
+                    <span className="text-xs font-medium">{repostCounts[post.id]}</span>
+                  )}
+                </button>
+
+                {/* Quote Button */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleQuote(post);
+                  }}
+                  className="px-3 py-1.5 rounded-full transition-colors text-gray-500 hover:bg-gray-100"
+                  title="Quote"
+                >
+                  <Quote className="w-5 h-5" />
+                </button>
+
                 {/* Bookmark Button */}
                 <button
                   onClick={() => handleBookmarkPost(post.id)}
@@ -11362,18 +11622,20 @@ function CommunityComponent({
                                   <button
                                     onClick={() => handleEditComment(comment.id, post.id)}
                                     disabled={!editCommentContent.trim()}
-                                    className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                                    className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
+                                    title="Save"
                                   >
-                                    Save
+                                    <Check className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={() => {
                                       setEditingCommentId(null);
                                       setEditCommentContent('');
                                     }}
-                                    className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300"
+                                    className="flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
+                                    title="Cancel"
                                   >
-                                    Cancel
+                                    <X className="w-4 h-4" />
                                   </button>
                                 </div>
                               </div>
@@ -11520,18 +11782,20 @@ function CommunityComponent({
                                                 <button
                                                   onClick={() => handleEditComment(reply.id, post.id)}
                                                   disabled={!editCommentContent.trim()}
-                                                  className="px-2 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                  className="flex items-center justify-center w-7 h-7 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                  title="Save"
                                                 >
-                                                  Save
+                                                  <Check className="w-3.5 h-3.5" />
                                                 </button>
                                                 <button
                                                   onClick={() => {
                                                     setEditingCommentId(null);
                                                     setEditCommentContent('');
                                                   }}
-                                                  className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                                                  className="flex items-center justify-center w-7 h-7 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                                  title="Cancel"
                                                 >
-                                                  Cancel
+                                                  <X className="w-3.5 h-3.5" />
                                                 </button>
                                               </div>
                                             </div>
@@ -11678,18 +11942,20 @@ function CommunityComponent({
                                                               <button
                                                                 onClick={() => handleEditComment(nestedReply.id, post.id)}
                                                                 disabled={!editCommentContent.trim()}
-                                                                className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                                className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                                title="Save"
                                                               >
-                                                                Save
+                                                                <Check className="w-3 h-3" />
                                                               </button>
                                                               <button
                                                                 onClick={() => {
                                                                   setEditingCommentId(null);
                                                                   setEditCommentContent('');
                                                                 }}
-                                                                className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                                                                className="flex items-center justify-center w-6 h-6 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                                                title="Cancel"
                                                               >
-                                                                Cancel
+                                                                <X className="w-3 h-3" />
                                                               </button>
                                                             </div>
                                                           </div>
@@ -11991,6 +12257,11 @@ function CommunityComponent({
                 onClick={() => {
                   setShowAdvancedOptions(false)
                   setShowNewPostModal(false)
+                  setQuotePostData(null)
+                  setNewPost(prev => ({
+                    ...prev,
+                    metadata: { ...prev.metadata, quoted_post_id: undefined }
+                  }))
                 }} 
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 disabled={loading}
@@ -12001,11 +12272,54 @@ function CommunityComponent({
           </div>
 
           <div className="p-4 space-y-3">
+            {/* Quote Post Preview */}
+            {quotePostData && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Avatar 
+                      src={quotePostData.user?.avatar_url} 
+                      name={getUserDisplayName(quotePostData.user)} 
+                      className="w-6 h-6" 
+                      useInlineSize={false} 
+                    />
+                    <div>
+                      <p className="text-xs font-semibold text-gray-900">
+                        {getUserDisplayName(quotePostData.user)}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                      {getUserProfession(quotePostData.user)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setQuotePostData(null)
+                      setNewPost(prev => ({
+                        ...prev,
+                        metadata: { ...prev.metadata, quoted_post_id: undefined } as PostMetadata
+                      }))
+                    }}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {quotePostData.title && (
+                  <p className="text-sm font-medium text-gray-900 mb-1">{quotePostData.title}</p>
+                )}
+                <p className="text-xs text-gray-600 line-clamp-3">
+                  {quotePostData.content.replace(/<[^>]*>/g, '').slice(0, 150)}
+                  {quotePostData.content.replace(/<[^>]*>/g, '').length > 150 ? '...' : ''}
+                </p>
+              </div>
+            )}
+
             {/* Content Rich Text Editor */}
             <RichTextEditor
               value={newPost.content}
               onChange={(value) => setNewPost({ ...newPost, content: value })}
-              placeholder="What do you want to talk about?"
+              placeholder={quotePostData ? "Add your thoughts..." : "What do you want to talk about?"}
               disabled={loading}
               attachments={newPost.metadata.attachments}
               onAttachmentsChange={(attachments) => {
@@ -12885,15 +13199,13 @@ function CommunityComponent({
               <button
                 onClick={handleUpdatePost}
                 disabled={loading || !editForm.content.replace(/<[^>]*>/g, '').trim()}
-                className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
+                className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                title={loading ? 'Updating...' : 'Update Post'}
               >
                 {loading ? (
-                  <>
-                    <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    Updating...
-                  </>
+                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
                 ) : (
-                  'Update Post'
+                  <Check className="w-5 h-5" />
                 )}
               </button>
             </div>
@@ -12910,16 +13222,91 @@ function CommunityComponent({
           <div className="p-6 space-y-6">
             {/* Profile Header */}
             <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-1">
                 <Avatar 
                   src={selectedUserProfile.avatar_url} 
                   name={selectedUserProfile.full_name} 
                   className="w-20 h-20" 
                   useInlineSize={false} 
                 />
-              <div>
-                <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
-                <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+              <div className="flex-1">
+                <div className="flex items-center gap-3">
+                  <div>
+                    <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
+                    <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+                  </div>
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={async () => {
+                        if (!user?.id) {
+                          toast.info('Please sign in to send messages');
+                          return;
+                        }
+                        const { data: existingConversations } = await supabase
+                          .from('conversations')
+                          .select('*, user1:profiles!user1_id(*), user2:profiles!user2_id(*)')
+                          .or(`and(user1_id.eq.${user.id},user2_id.eq.${selectedUserProfile.id}),and(user1_id.eq.${selectedUserProfile.id},user2_id.eq.${user.id})`)
+
+                        let conversation
+                        if (existingConversations && existingConversations.length > 0) {
+                          const conv = existingConversations[0]
+                          conversation = {
+                            ...conv,
+                            other_user: conv.user1_id === user.id ? conv.user2 : conv.user1
+                          }
+                        } else {
+                          const { data: newConv } = await supabase
+                            .from('conversations')
+                            .insert({
+                              user1_id: user.id,
+                              user2_id: selectedUserProfile.id
+                            })
+                            .select('*, user1:profiles!user1_id(*), user2:profiles!user2_id(*)')
+                            .single()
+
+                          if (newConv) {
+                            conversation = {
+                              ...newConv,
+                              other_user: newConv.user1_id === user.id ? newConv.user2 : newConv.user1
+                            }
+                          }
+                        }
+                        if (conversation) {
+                          window.dispatchEvent(new CustomEvent('openChatBox', { detail: { conversation } }))
+                        }
+                      }}
+                      className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                      title="Message"
+                    >
+                      <MessageSquare className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id) {
+                          toast.info('Please sign in to connect');
+                          return;
+                        }
+                        window.dispatchEvent(new CustomEvent('sendConnectionRequest', { detail: { receiverId: selectedUserProfile.id } }))
+                        toast.success('Connection request sent!')
+                      }}
+                      className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+                      title="Connect"
+                    >
+                      <UserPlus className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={() => { 
+                        setSelectedUserProfile(null); 
+                        window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: selectedUserProfile.id } })); 
+                      }} 
+                      className="flex items-center justify-center w-10 h-10 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors"
+                      title="View Full Profile"
+                    >
+                      <User className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
               </div>
               </div>
 
@@ -12967,15 +13354,6 @@ function CommunityComponent({
                 </div>
               )}
             </div>
-            <button 
-              onClick={() => { 
-                setSelectedUserProfile(null); 
-                window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: selectedUserProfile.id } })); 
-              }} 
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              View Full Profile
-            </button>
           </div>
         </div>
       </div>
@@ -13288,18 +13666,20 @@ function CommunityComponent({
                                 <button
                                   onClick={() => handleEditComment(comment.id, selectedPost.id)}
                                   disabled={!editCommentContent.trim()}
-                                  className="px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                  className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
+                                  title="Save"
                                 >
-                                  Save
+                                  <Check className="w-4 h-4" />
                                 </button>
                                 <button
                                   onClick={() => {
                                     setEditingCommentId(null);
                                     setEditCommentContent('');
                                   }}
-                                  className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition-colors"
+                                  className="flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                                  title="Cancel"
                                 >
-                                  Cancel
+                                  <X className="w-4 h-4" />
                                 </button>
                               </div>
                             </div>
@@ -13346,7 +13726,11 @@ function CommunityComponent({
                                 }}
                                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                               >
-                                {replyingTo[comment.id] ? 'Cancel' : 'Reply'}
+                                {replyingTo[comment.id] ? (
+                                  <X className="w-4 h-4" />
+                                ) : (
+                                  <MessageSquare className="w-4 h-4" />
+                                )}
                               </button>
                             )}
                           </div>
@@ -13563,7 +13947,11 @@ function CommunityComponent({
                                           }}
                                           className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                                         >
-                                          {replyingTo[reply.id] ? 'Cancel' : 'Reply'}
+                                          {replyingTo[reply.id] ? (
+                                            <X className="w-4 h-4" />
+                                          ) : (
+                                            <MessageSquare className="w-4 h-4" />
+                                          )}
                                         </button>
                                       )}
                                     </div>
@@ -13686,18 +14074,20 @@ function CommunityComponent({
                                                         }
                                                       }}
                                                       disabled={!editCommentContent.trim()}
-                                                      className="px-2 py-0.5 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                      className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
+                                                      title="Save"
                                                     >
-                                                      Save
+                                                      <Check className="w-3 h-3" />
                                                     </button>
                                                     <button
                                                       onClick={() => {
                                                         setEditingCommentId(null);
                                                         setEditCommentContent('');
                                                       }}
-                                                      className="px-2 py-0.5 bg-gray-200 text-gray-700 text-xs rounded hover:bg-gray-300"
+                                                      className="flex items-center justify-center w-6 h-6 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
+                                                      title="Cancel"
                                                     >
-                                                      Cancel
+                                                      <X className="w-3 h-3" />
                                                     </button>
                                                   </div>
                                                 </div>
@@ -15758,9 +16148,10 @@ function AuthModalComponent({
               <div className="bg-blue-50 rounded-xl p-4 mb-4 relative">
                 <button
                   onClick={handleOpenProfileDetail}
-                  className="absolute top-4 right-4 px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+                  className="absolute top-4 right-4 flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700"
+                  title="View Full Profile"
                 >
-                  View Full Profile
+                  <User className="w-5 h-5" />
                 </button>
                 <div className="flex items-center gap-3">
                   {userProfile?.avatar_url ? (
@@ -16028,9 +16419,10 @@ function AuthModalComponent({
                 <p className="text-sm text-amber-800 mb-3">Generate a professional CV from your profile information</p>
                 <button
                   onClick={() => window.dispatchEvent(new CustomEvent('openCVMaker'))}
-                  className="w-full py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors"
+                  className="flex items-center justify-center w-full py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors"
+                  title="Generate CV"
                 >
-                  Generate CV
+                  <Briefcase className="w-5 h-5" />
                 </button>
               </div>
 

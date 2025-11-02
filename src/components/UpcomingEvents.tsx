@@ -710,35 +710,33 @@ function EventDetailModal({
             {currentUserId && (
               <button
                 onClick={onRSVP}
-                className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+                className={`flex items-center justify-center w-10 h-10 rounded-full font-medium transition-colors ${
                   isParticipant
                     ? 'bg-green-600 text-white hover:bg-green-700'
                     : 'bg-blue-600 text-white hover:bg-blue-700'
                 }`}
+                title={isParticipant ? 'Joined - Leave Event' : 'Join Event'}
               >
                 {isParticipant ? (
-                  <>
-                    <CheckCircle className="w-4 h-4 inline mr-2" />
-                    Joined - Leave Event
-                  </>
+                  <X className="w-5 h-5" />
                 ) : (
-                  'Join Event / Katıl'
+                  <CheckCircle className="w-5 h-5" />
                 )}
               </button>
             )}
             <button
               onClick={onAddToCalendar}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+              title="Add to Calendar"
             >
-              <Calendar className="w-4 h-4" />
-              Add to Calendar
+              <Calendar className="w-5 h-5" />
             </button>
             <button
               onClick={onShare}
-              className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2"
+              className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+              title="Share"
             >
-              <Share2 className="w-4 h-4" />
-              Share
+              <Share2 className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -997,20 +995,26 @@ function EventCreateModal({
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-3 pt-4 border-t border-gray-200 justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+                title="Cancel"
               >
-                Cancel
+                <X className="w-5 h-5" />
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
+                title={loading ? 'Creating...' : 'Create Event'}
               >
-                {loading ? 'Creating...' : 'Create Event'}
+                {loading ? (
+                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                ) : (
+                  <CheckCircle className="w-5 h-5" />
+                )}
               </button>
             </div>
           </form>
@@ -1232,9 +1236,10 @@ function EventOrganizerPanel({
                             loadParticipants(event.id)
                           }
                         }}
-                        className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50"
+                        className="flex items-center justify-center w-8 h-8 border border-gray-300 rounded-full hover:bg-gray-50"
+                        title="View Participants"
                       >
-                        View Participants
+                        <Users className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleEditEvent(event)}
@@ -1558,20 +1563,26 @@ function EventEditModal({
             </div>
 
             {/* Actions */}
-            <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <div className="flex gap-3 pt-4 border-t border-gray-200 justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+                title="Cancel"
               >
-                Cancel
+                <X className="w-5 h-5" />
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors disabled:opacity-50"
+                title={loading ? 'Updating...' : 'Update Event'}
               >
-                {loading ? 'Updating...' : 'Update Event'}
+                {loading ? (
+                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                ) : (
+                  <CheckCircle className="w-5 h-5" />
+                )}
               </button>
             </div>
           </form>
