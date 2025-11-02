@@ -3153,7 +3153,7 @@ profileCacheRef.current = {}
 
   async function geocodeLocation(city: string, county: string): Promise<[number, number] | null> {
     try {
-      const query = `${city}, ${county}, UK`
+      const query = `${city}, ${county}`
       const response = await fetch(
         `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`
       )
@@ -5782,9 +5782,31 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
     addCoordinates();
   }, [therapists]);
 
+  // Calculate map center from therapists' coordinates, or use world center
+  const calculateMapCenter = () => {
+    const validCoords = therapistsWithCoords.filter(t => 
+      t.lat != null && t.lng != null &&
+      typeof t.lat === 'number' && typeof t.lng === 'number' &&
+      !isNaN(t.lat) && !isNaN(t.lng) &&
+      t.lat >= -90 && t.lat <= 90 && t.lng >= -180 && t.lng <= 180
+    )
+    
+    if (validCoords.length === 0) {
+      return [20, 0] // World center
+    }
+    
+    const avgLat = validCoords.reduce((sum, t) => sum + (t.lat || 0), 0) / validCoords.length
+    const avgLng = validCoords.reduce((sum, t) => sum + (t.lng || 0), 0) / validCoords.length
+    
+    return [avgLat, avgLng]
+  }
+
+  const mapCenter = calculateMapCenter()
+  const mapZoom = therapistsWithCoords.length > 0 ? 4 : 2
+
   return (
     <div className="h-full">
-      <MapContainer center={[54.5, -2]} zoom={6} className="h-full w-full">
+      <MapContainer center={mapCenter as [number, number]} zoom={mapZoom} className="h-full w-full">
         <TileLayer
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap'
@@ -7493,6 +7515,20 @@ function CommunityComponent({
     }
     if (user?.id) loadBookmarks(); else setBookmarkedPosts([])
   }, [user?.id])
+
+  // Listen for openUserProfileModal events
+  useEffect(() => {
+    const handleOpenUserProfileModal = (event: Event) => {
+      const customEvent = event as CustomEvent
+      setSelectedUserProfile(customEvent.detail.profile)
+    }
+
+    window.addEventListener('openUserProfileModal', handleOpenUserProfileModal)
+    
+    return () => {
+      window.removeEventListener('openUserProfileModal', handleOpenUserProfileModal)
+    }
+  }, [])
 
   // Listen for notification events to open posts
   useEffect(() => {
@@ -13363,19 +13399,15 @@ function CommunityComponent({
     {selectedPost && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4">
         <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto modal-scroll-container">
-          <div className="flex justify-between items-center p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
-            <h3 className="text-xl font-bold text-gray-900">Post Details</h3>
-            <button 
-              onClick={() => setSelectedPost(null)} 
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-
           <div className="p-6">
             {/* Post Header */}
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-4 relative">
+              <button 
+                onClick={() => setSelectedPost(null)} 
+                className="absolute top-0 right-0 text-gray-400 hover:text-gray-600 transition-colors z-10"
+              >
+                <X className="w-6 h-6" />
+              </button>
               <button
                 onClick={() => {
                   viewUserProfile(selectedPost.user_id || getUserId(selectedPost.user))
@@ -13444,8 +13476,45 @@ function CommunityComponent({
               )}
             </div>
 
-            {/* Post Content */}
-            <p className="text-gray-700 mb-6 whitespace-pre-line text-lg leading-relaxed">{selectedPost.content}</p>
+            {/* Post Content with See More/Less */}
+            <div className="group relative text-gray-700 mb-6 text-lg leading-relaxed">
+              {(() => {
+                const textContent = selectedPost.content.replace(/<[^>]*>/g, '')
+                const contentLength = textContent.length
+                return (
+                  <>
+                    {contentLength > 300 && (
+                      <>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(selectedPost.id); }}
+                          className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[selectedPost.id] ? 'block' : 'hidden'}`}
+                        >
+                          See less
+                        </button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(selectedPost.id); }}
+                          className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[selectedPost.id] ? 'hidden' : 'block'}`}
+                        >
+                          See more
+                        </button>
+                      </>
+                    )}
+
+                    <div 
+                      className={`
+                        ${expandedPosts[selectedPost.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                        rich-text-content
+                      `}
+                      dangerouslySetInnerHTML={{ __html: selectedPost.content }}
+                    />
+
+                    {!expandedPosts[selectedPost.id] && contentLength > 300 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                    )}
+                  </>
+                )
+              })()}
+            </div>
 
             {/* Attachments */}
             {selectedPost.post_metadata?.attachments && selectedPost.post_metadata.attachments.length > 0 && (
@@ -15895,7 +15964,7 @@ function AuthModalComponent({
       setIsSearchingLocation(true)
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationSearch)}&format=json&limit=5&countrycodes=gb&addressdetails=1`
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(locationSearch)}&format=json&limit=5&addressdetails=1`
         )
         const data = await response.json()
         setLocationSuggestions(data)
@@ -15925,9 +15994,14 @@ function AuthModalComponent({
     const city = suggestion.address.city || 
                  suggestion.address.town || 
                  suggestion.address.village || 
-                 suggestion.address.hamlet || ''
+                 suggestion.address.hamlet ||
+                 suggestion.address.municipality ||
+                 suggestion.address.locality || ''
     const county = suggestion.address.county || 
-                   suggestion.address.state || ''
+                   suggestion.address.state || 
+                   suggestion.address.region ||
+                   suggestion.address.province ||
+                   suggestion.address.district || ''
     
     setFormData({
       ...formData,
@@ -16448,11 +16522,6 @@ function AuthModalComponent({
                     ) : (
                       <>
                         <p className="text-sm font-medium text-gray-900">{userProfile?.regulator_number || 'Not set'}</p>
-                        {userProfile?.experience_year && (
-                          <p className="text-xs text-gray-600 mt-1">
-                            {userProfile.experience_year} years of experience
-                          </p>
-                        )}
                       </>
                     )}
                   </div>
@@ -17120,8 +17189,10 @@ function AuthModalComponent({
                     ) : (
                       <>
                         <p className="text-sm font-medium text-gray-900">
-                          {userProfile?.city && userProfile?.county 
-                            ? `${userProfile.city}, ${userProfile.county}` 
+                          {userProfile?.city 
+                            ? userProfile.county 
+                              ? `${userProfile.city}, ${userProfile.county}` 
+                              : userProfile.city
                             : 'Not set'}
                         </p>
                         {userProfile?.offers_remote && (

@@ -507,6 +507,11 @@ export default function UpcomingEvents({ currentUserId, userProfile }: UpcomingE
             onRSVP={() => handleRSVP(selectedEvent.id, participantStatuses[selectedEvent.id] || false)}
             onAddToCalendar={() => addToCalendar(selectedEvent)}
             onShare={() => copyEventLink(selectedEvent.id)}
+            onEdit={() => {
+              setEventToEdit(selectedEvent)
+              setShowEditModal(true)
+              setShowDetailModal(false)
+            }}
             onClose={() => {
               setShowDetailModal(false)
               setSelectedEvent(null)
@@ -578,6 +583,7 @@ function EventDetailModal({
   onRSVP,
   onAddToCalendar,
   onShare,
+  onEdit,
   onClose
 }: {
   event: Event
@@ -586,10 +592,77 @@ function EventDetailModal({
   onRSVP: () => void
   onAddToCalendar: () => void
   onShare: () => void
+  onEdit?: () => void
   onClose: () => void
 }) {
+  const toast = useToast()
+  const [participants, setParticipants] = useState<any[]>([])
+  const [loadingParticipants, setLoadingParticipants] = useState(false)
+  const [showParticipants, setShowParticipants] = useState(false)
   const startDate = new Date(event.start_time)
   const endDate = event.end_time ? new Date(event.end_time) : null
+
+  const loadParticipants = async () => {
+    if (loadingParticipants || participants.length > 0) return
+    
+    try {
+      setLoadingParticipants(true)
+      const { data, error } = await supabase
+        .from('event_participants')
+        .select(`
+          *,
+          user:profiles!user_id(id, full_name, profession, avatar_url)
+        `)
+        .eq('event_id', event.id)
+        .eq('rsvp_status', true)
+
+      if (error) {
+        if (error.code === '42P01' || error.message.includes('does not exist')) {
+          toast.error('Events feature not set up. Please run the SQL migration first.')
+          setParticipants([])
+          return
+        }
+        throw error
+      }
+      setParticipants(data || [])
+    } catch (error: any) {
+      console.error('Error loading participants:', error)
+      toast.error('Failed to load participants')
+      setParticipants([])
+    } finally {
+      setLoadingParticipants(false)
+    }
+  }
+
+  const handleViewParticipants = () => {
+    if (!showParticipants) {
+      setShowParticipants(true)
+      loadParticipants()
+    } else {
+      setShowParticipants(false)
+    }
+  }
+
+  const handleProfileClick = async (userId: string) => {
+    try {
+      // Profile verisini yükle ve modal'ı aç
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) throw error
+      
+      // User profile modal'ını açmak için custom event
+      window.dispatchEvent(new CustomEvent('openUserProfileModal', { 
+        detail: { profile: data } 
+      }))
+    } catch (err) {
+      console.error('Error loading user profile:', err)
+      toast.error('Failed to load profile')
+    }
+  }
 
   return (
     <div
@@ -677,13 +750,75 @@ function EventDetailModal({
 
             <div className="flex items-start gap-3">
               <Users className="w-5 h-5 text-gray-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-gray-900">Participants</p>
-                <p className="text-sm text-gray-600">
-                  {event.participant_count || 0}
-                  {event.max_participants && ` / ${event.max_participants}`}
-                </p>
-              </div>
+              {(event.participant_count || 0) > 0 ? (
+                <button
+                  onClick={handleViewParticipants}
+                  className="flex-1 text-left"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-sm font-medium text-gray-900">Participants</p>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {event.participant_count || 0}
+                    {event.max_participants && ` / ${event.max_participants}`}
+                  </p>
+                  {showParticipants && (
+                    <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+                      {loadingParticipants ? (
+                        <div className="text-xs text-gray-500 flex items-center gap-2">
+                          <div className="animate-spin h-3 w-3 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                          Loading...
+                        </div>
+                      ) : participants.length === 0 ? (
+                        <p className="text-xs text-gray-500">No participants yet</p>
+                      ) : (
+                        participants.map((participant: any) => (
+                          <button
+                            key={participant.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              participant.user?.id && handleProfileClick(participant.user.id)
+                            }}
+                            className="w-full flex items-center gap-2 text-left hover:bg-gray-50 p-2 rounded-lg transition-colors"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              {participant.user?.avatar_url ? (
+                                <img 
+                                  src={participant.user.avatar_url} 
+                                  alt={participant.user.full_name} 
+                                  className="w-full h-full rounded-full object-cover" 
+                                />
+                              ) : (
+                                <span className="text-blue-600 text-xs font-semibold">
+                                  {participant.user?.full_name?.charAt(0) || 'U'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-gray-900 truncate">
+                                {participant.user?.full_name || 'Unknown'}
+                              </p>
+                              {participant.user?.profession && (
+                                <p className="text-xs text-gray-500 truncate">
+                                  {participant.user.profession}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </button>
+              ) : (
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900 mb-1">Participants</p>
+                  <p className="text-sm text-gray-600">
+                    {event.participant_count || 0}
+                    {event.max_participants && ` / ${event.max_participants}`}
+                  </p>
+                </div>
+              )}
             </div>
 
             {event.organizer && (
@@ -722,6 +857,15 @@ function EventDetailModal({
                 ) : (
                   <CheckCircle className="w-5 h-5" />
                 )}
+              </button>
+            )}
+            {onEdit && currentUserId === event.organizer_id && (
+              <button
+                onClick={onEdit}
+                className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 transition-colors"
+                title="Edit Event"
+              >
+                <Edit2 className="w-5 h-5" />
               </button>
             )}
             <button
