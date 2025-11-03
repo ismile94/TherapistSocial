@@ -3534,6 +3534,10 @@ profileCacheRef.current = {}
           <ProfileDetailPage 
             profileId={selectedProfileId} 
             onClose={() => setSelectedProfileId(null)}
+            navigateToCommunity={() => {
+              setSelectedProfileId(null)
+              setActiveView('community')
+            }}
             currentUserId={currentUser?.id}
             onStartConversation={openChatBox}
             connections={connections}
@@ -5866,6 +5870,7 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
 function ProfileDetailPage({ 
   profileId, 
   onClose, 
+  navigateToCommunity,
   currentUserId,
   onStartConversation,
   connections,
@@ -5878,6 +5883,7 @@ function ProfileDetailPage({
 }: { 
   profileId: string
   onClose: () => void
+  navigateToCommunity?: () => void
   currentUserId?: string
   onStartConversation: (conversation: Conversation) => void
   connections: Connection[]
@@ -5918,11 +5924,12 @@ function ProfileDetailPage({
   const [showConnectionOptions, setShowConnectionOptions] = useState(false)
   const [connectionId, setConnectionId] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [activeTab, setActiveTab] = useState<'about' | 'posts' | 'activities'>('about')
-  const [userPosts, setUserPosts] = useState<CommunityPost[]>([])
-  const [loadingPosts, setLoadingPosts] = useState(false)
+  const [activeTab, setActiveTab] = useState<'about' | 'activities'>('about')
   const [activities, setActivities] = useState<any[]>([])
   const [loadingActivities, setLoadingActivities] = useState(false)
+  const [activityFilter, setActivityFilter] = useState<'all' | 'posts' | 'comments' | 'likes' | 'replies'>('all')
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all')
+  const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
     // Check if this profile is blocked
@@ -5940,9 +5947,7 @@ function ProfileDetailPage({
   }, [profileId, allHiddenUserIds])
 
   useEffect(() => {
-    if (profile && activeTab === 'posts') {
-      loadUserPosts()
-    } else if (profile && activeTab === 'activities') {
+    if (profile && activeTab === 'activities') {
       loadUserActivities()
     }
   }, [profileId, activeTab, profile])
@@ -5953,6 +5958,43 @@ function ProfileDetailPage({
       checkConnectionStatus()
     }
   }, [currentUserId, profile, connections, connectionRequests])
+
+  // Listen for openUserProfileModal events
+  useEffect(() => {
+    const handleOpenUserProfileModal = async (event: Event) => {
+      const customEvent = event as CustomEvent
+      const profileData = customEvent.detail.profile
+      
+      // If profile is missing important fields (like specialties, languages), fetch full profile
+      if (profileData && profileData.id && (!profileData.specialties || !profileData.languages || !profileData.profession)) {
+        try {
+          const { data: fullProfile, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', profileData.id)
+            .single()
+          
+          if (!error && fullProfile) {
+            setSelectedUserProfile(fullProfile)
+          } else {
+            // If fetch fails, use the provided profile data
+            setSelectedUserProfile(profileData)
+          }
+        } catch (err) {
+          console.error('Error loading full profile:', err)
+          setSelectedUserProfile(profileData)
+        }
+      } else {
+        setSelectedUserProfile(profileData)
+      }
+    }
+
+    window.addEventListener('openUserProfileModal', handleOpenUserProfileModal)
+    
+    return () => {
+      window.removeEventListener('openUserProfileModal', handleOpenUserProfileModal)
+    }
+  }, [])
 
   const loadAllProfessions = async () => {
     try {
@@ -5984,7 +6026,7 @@ function ProfileDetailPage({
         .from('connections')
         .select('*')
         .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${profile.id}),and(sender_id.eq.${profile.id},receiver_id.eq.${currentUserId})`)
-        .single()
+        .maybeSingle()
 
       if (data) {
         setConnectionStatus(data.status)
@@ -6266,68 +6308,6 @@ function ProfileDetailPage({
     }
   }
 
-  // Contact butonları için render fonksiyonu
-  const loadUserPosts = async () => {
-    if (!profileId) return
-    setLoadingPosts(true)
-    try {
-      // Fetch all posts by this user (including reposts and quotes)
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`
-          *,
-          user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
-        `)
-        .eq('user_id', profileId)
-        .order('created_at', { ascending: false }) // Newest to oldest (reposts are sorted by repost time, not original post time)
-
-      if (error) {
-        console.error('Error loading user posts:', error)
-        return
-      }
-
-      // For reposts, fetch the original post details
-      const postsWithDetails = await Promise.all((data || []).map(async (post: any) => {
-        let originalPost = null
-        if (post.post_metadata?.is_repost && post.post_metadata?.reposted_post_id) {
-          // Fetch original post details
-          const { data: originalPostData } = await supabase
-            .from('posts')
-            .select(`
-              id,
-              title,
-              content,
-              created_at,
-              user_id,
-              user:profiles!user_id (id, full_name, profession, avatar_url)
-            `)
-            .eq('id', post.post_metadata.reposted_post_id)
-            .single()
-          
-          if (originalPostData) {
-            originalPost = originalPostData
-          }
-        }
-
-        return {
-          ...post,
-          user: post.user || {
-            full_name: 'Unknown User',
-            profession: '',
-            id: post.user_id
-          },
-          post_metadata: post.post_metadata || {},
-          original_post: originalPost
-        }
-      }))
-
-      setUserPosts(postsWithDetails)
-    } catch (err) {
-      console.error('Error loading user posts:', err)
-    } finally {
-      setLoadingPosts(false)
-    }
-  }
 
   const loadUserActivities = async () => {
     if (!profileId) return
@@ -6346,7 +6326,7 @@ function ProfileDetailPage({
             title,
             content,
             user_id,
-            user:profiles!user_id (full_name, avatar_url)
+            user:profiles!user_id (id, full_name, avatar_url)
           )
         `)
         .eq('user_id', profileId)
@@ -6360,7 +6340,8 @@ function ProfileDetailPage({
             postId: item.post_id,
             timestamp: item.created_at,
             post: item.post,
-            message: `"${item.post?.title || item.post?.content?.slice(0, 50) || 'post'}" postunu beğendin`
+            message: `${item.post?.user?.full_name}'s post`,
+            messageDetail: `${item.post?.user?.full_name}'in postunu beğendin`
           })
         })
       }
@@ -6370,8 +6351,18 @@ function ProfileDetailPage({
         .from('comment_reactions')
         .select(`
           comment_id,
-          created_at,
-          comment:comments!comment_id (
+          created_at
+        `)
+        .eq('user_id', profileId)
+        .eq('reaction_type', 'like')
+        .order('created_at', { ascending: false })
+      
+      if (likedComments && likedComments.length > 0) {
+        // Fetch comment details separately
+        const commentIds = likedComments.map(r => r.comment_id)
+        const { data: commentsWithPosts } = await supabase
+          .from('post_comments')
+          .select(`
             id,
             content,
             post_id,
@@ -6380,31 +6371,33 @@ function ProfileDetailPage({
               title,
               content,
               user_id,
-              user:profiles!user_id (full_name, avatar_url)
+              user:profiles!user_id (id, full_name, avatar_url)
             )
-          )
-        `)
-        .eq('user_id', profileId)
-        .eq('reaction_type', 'like')
-        .order('created_at', { ascending: false })
-
-      if (likedComments) {
-        likedComments.forEach((item: any) => {
-          activitiesList.push({
-            type: 'liked_comment',
-            postId: item.comment?.post_id,
-            commentId: item.comment_id,
-            timestamp: item.created_at,
-            comment: item.comment,
-            post: item.comment?.post,
-            message: `"${item.comment?.post?.title || item.comment?.post?.content?.slice(0, 50) || 'post'}" gönderisindeki yorumu beğendin`
+          `)
+          .in('id', commentIds)
+        
+        if (commentsWithPosts) {
+          likedComments.forEach((reaction: any) => {
+            const comment = commentsWithPosts.find((c: any) => c.id === reaction.comment_id)
+            if (comment && comment.post) {
+              activitiesList.push({
+                type: 'liked_comment',
+                postId: comment.post_id,
+                commentId: comment.id,
+                timestamp: reaction.created_at,
+                comment: comment,
+                post: comment.post,
+                message: `${(comment.post as any)?.user?.full_name}'s post`,
+                messageDetail: `${(comment.post as any)?.user?.full_name}'in gönderisindeki yorumu beğendin`
+              })
+            }
           })
-        })
+        }
       }
 
       // 3. Get comments made by user
       const { data: userComments } = await supabase
-        .from('comments')
+        .from('post_comments')
         .select(`
           id,
           content,
@@ -6415,7 +6408,7 @@ function ProfileDetailPage({
             title,
             content,
             user_id,
-            user:profiles!user_id (full_name, avatar_url)
+            user:profiles!user_id (id, full_name, avatar_url)
           )
         `)
         .eq('user_id', profileId)
@@ -6430,37 +6423,38 @@ function ProfileDetailPage({
             timestamp: item.created_at,
             comment: item,
             post: item.post,
-            message: `"${item.post?.title || item.post?.content?.slice(0, 50) || 'post'}" gönderisine yorum yaptın`
+            message: `${item.post?.user?.full_name}'s post`,
+            messageDetail: `${item.post?.user?.full_name}'ün gönderisine yorum yaptın`
           })
         })
       }
 
       // 4. Get replies to user's comments
       const { data: userCommentsForReplies } = await supabase
-        .from('comments')
+        .from('post_comments')
         .select('id, post_id')
         .eq('user_id', profileId)
 
       if (userCommentsForReplies && userCommentsForReplies.length > 0) {
         const userCommentIds = userCommentsForReplies.map(c => c.id)
         const { data: replies } = await supabase
-          .from('comments')
+          .from('post_comments')
           .select(`
             id,
             content,
             post_id,
-            parent_comment_id,
+            parent_reply_id,
             created_at,
             post:posts!post_id (
               id,
               title,
               content,
               user_id,
-              user:profiles!user_id (full_name, avatar_url)
+              user:profiles!user_id (id, full_name, avatar_url)
             ),
-            user:profiles!user_id (full_name, avatar_url)
+            user:profiles!user_id (id, full_name, avatar_url)
           `)
-          .in('parent_comment_id', userCommentIds)
+          .in('parent_reply_id', userCommentIds)
           .neq('user_id', profileId) // Exclude replies made by the user themselves
           .order('created_at', { ascending: false })
 
@@ -6469,12 +6463,13 @@ function ProfileDetailPage({
             activitiesList.push({
               type: 'reply_received',
               postId: reply.post_id,
-              commentId: reply.parent_comment_id,
+              commentId: reply.parent_reply_id,
               replyId: reply.id,
               timestamp: reply.created_at,
               reply: reply,
               post: reply.post,
-              message: `"${reply.post?.title || reply.post?.content?.slice(0, 50) || 'post'}" gönderisindeki yorumuna cevap verildi`
+              message: `${reply.user?.full_name} replied to your comment`,
+              messageDetail: `${reply.user?.full_name}, ${reply.post?.user?.full_name || 'someone'}'ün gönderisindeki yorumuna cevap verdi`
             })
           })
         }
@@ -6482,23 +6477,23 @@ function ProfileDetailPage({
 
       // 5. Get replies made by user (to other comments)
       const { data: userReplies } = await supabase
-        .from('comments')
+        .from('post_comments')
         .select(`
           id,
           content,
           post_id,
-          parent_comment_id,
+          parent_reply_id,
           created_at,
           post:posts!post_id (
             id,
             title,
             content,
             user_id,
-            user:profiles!user_id (full_name, avatar_url)
+            user:profiles!user_id (id, full_name, avatar_url)
           )
         `)
         .eq('user_id', profileId)
-        .not('parent_comment_id', 'is', null)
+        .not('parent_reply_id', 'is', null)
         .order('created_at', { ascending: false })
 
       if (userReplies) {
@@ -6506,12 +6501,13 @@ function ProfileDetailPage({
           activitiesList.push({
             type: 'replied',
             postId: item.post_id,
-            commentId: item.parent_comment_id,
+            commentId: item.parent_reply_id,
             replyId: item.id,
             timestamp: item.created_at,
             comment: item,
             post: item.post,
-            message: `"${item.post?.title || item.post?.content?.slice(0, 50) || 'post'}" gönderisindeki yoruma cevap verdin`
+            message: `${item.post?.user?.full_name}'s post`,
+            messageDetail: `${item.post?.user?.full_name}'ün gönderisindeki yoruma cevap verdin`
           })
         })
       }
@@ -6671,6 +6667,60 @@ function ProfileDetailPage({
   }
 
   const totalExperience = calculateTotalExperience(profile?.work_experience || [])
+
+  // Filter activities based on filters
+  const filteredActivities = activities.filter(activity => {
+    // Activity type filter
+    if (activityFilter !== 'all') {
+      if (activityFilter === 'posts' && !['liked_post'].includes(activity.type)) return false
+      if (activityFilter === 'comments' && !['commented'].includes(activity.type)) return false
+      if (activityFilter === 'likes' && !['liked_post', 'liked_comment'].includes(activity.type)) return false
+      if (activityFilter === 'replies' && !['replied', 'reply_received'].includes(activity.type)) return false
+    }
+
+    // Date filter
+    if (dateFilter !== 'all') {
+      const now = new Date()
+      const activityDate = new Date(activity.timestamp)
+      const diffMs = now.getTime() - activityDate.getTime()
+      const diffDays = diffMs / (1000 * 60 * 60 * 24)
+      
+      if (dateFilter === 'today' && diffDays > 1) return false
+      if (dateFilter === 'week' && diffDays > 7) return false
+      if (dateFilter === 'month' && diffDays > 30) return false
+      if (dateFilter === 'year' && diffDays > 365) return false
+    }
+
+    return true
+  })
+
+  // Group activities by date
+  const groupedActivities = filteredActivities.reduce((groups: any, activity) => {
+    const date = new Date(activity.timestamp)
+    const dateStr = date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+    
+    if (!groups[dateStr]) {
+      groups[dateStr] = []
+    }
+    groups[dateStr].push(activity)
+    return groups
+  }, {} as any)
+  
+  // Sort activities within each date group (already sorted globally, but ensure)
+  Object.keys(groupedActivities).forEach(dateStr => {
+    (groupedActivities[dateStr] as any[]).sort((a: any, b: any) => 
+      new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    )
+  })
+
+  // Sort date strings in descending order (newest first)
+  // Create sorted entries by parsing activities' timestamps
+  const sortedGroupedActivities = Object.entries(groupedActivities).sort((a: any, b: any) => {
+    // Get the most recent activity from each group to compare
+    const aMostRecent = a[1][0]?.timestamp || ''
+    const bMostRecent = b[1][0]?.timestamp || ''
+    return new Date(bMostRecent).getTime() - new Date(aMostRecent).getTime()
+  })
 
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto">
@@ -6898,19 +6948,6 @@ function ProfileDetailPage({
               <div className="flex items-center justify-center gap-2">
                 <User className="w-4 h-4" />
                 <span>About Me</span>
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('posts')}
-              className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
-                activeTab === 'posts'
-                  ? 'text-blue-600 border-b-2 border-blue-600'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                <FileText className="w-4 h-4" />
-                <span>Posts</span>
               </div>
             </button>
             <button
@@ -7619,176 +7656,492 @@ function ProfileDetailPage({
         </div>
         )}
 
-        {/* Posts Tab */}
-        {activeTab === 'posts' && (
-          <div className="space-y-4">
-            {loadingPosts ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : userPosts.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No posts yet</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {userPosts.map((post: any) => {
-                  // For reposts, use original post data for display
-                  const displayPost = post.post_metadata?.is_repost && post.original_post 
-                    ? post.original_post 
-                    : post
-                  
-                  return (
-                    <div
-                      key={post.id}
-                      className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => {
-                        // For reposts, open the original post
-                        const targetPostId = post.post_metadata?.is_repost && post.original_post
-                          ? post.original_post.id
-                          : post.id
-                        window.dispatchEvent(new CustomEvent('openPostFromNotification', {
-                          detail: { postId: targetPostId }
-                        }))
-                      }}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar
-                            src={displayPost.user?.avatar_url}
-                            name={displayPost.user?.full_name || 'User'}
-                            className="w-10 h-10"
-                            useInlineSize={false}
-                          />
-                          <div>
-                            <p className="font-semibold text-gray-900">{displayPost.user?.full_name}</p>
-                            <p className="text-sm text-gray-500">
-                              {post.post_metadata?.is_repost ? (
-                                <>
-                                  Reposted {new Date(post.created_at).toLocaleDateString('en-US', {
-                                    month: 'short',
-                                    day: 'numeric',
-                                    year: 'numeric'
-                                  })}
-                                </>
-                              ) : (
-                                new Date(post.created_at).toLocaleDateString('en-US', {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                                })
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                        {post.post_metadata?.is_repost && (
-                          <div className="flex items-center gap-1 text-blue-600 text-sm">
-                            <Repeat2 className="w-4 h-4" />
-                            <span>Reposted</span>
-                          </div>
-                        )}
-                        {post.post_metadata?.quoted_post_id && (
-                          <div className="flex items-center gap-1 text-blue-600 text-sm">
-                            <Quote className="w-4 h-4" />
-                            <span>Quoted</span>
-                          </div>
-                        )}
-                      </div>
-                      
-                      {displayPost.title && (
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">{displayPost.title}</h3>
-                      )}
-                      
-                      {displayPost.content && (
-                        <p className="text-gray-700 mb-4 line-clamp-3">
-                          {displayPost.content.length > 200 ? `${displayPost.content.slice(0, 200)}...` : displayPost.content}
-                        </p>
-                      )}
-                      
-                      {post.post_metadata?.quoted_post_data && (
-                        <div className="border-l-4 border-blue-500 pl-4 py-2 mb-4 bg-gray-50 rounded-r">
-                          <p className="text-sm font-medium text-gray-900 mb-1">
-                            {post.post_metadata.quoted_post_data.user?.full_name || 'User'}
-                          </p>
-                          {post.post_metadata.quoted_post_data.title && (
-                            <p className="text-sm font-medium text-gray-900 mb-1">
-                              {post.post_metadata.quoted_post_data.title}
-                            </p>
-                          )}
-                          <p className="text-sm text-gray-700">
-                            {post.post_metadata.quoted_post_data.content?.slice(0, 150)}
-                            {post.post_metadata.quoted_post_data.content?.length > 150 && '...'}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Activities Tab */}
         {activeTab === 'activities' && (
-          <div className="space-y-4">
-            {loadingActivities ? (
-              <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : activities.length === 0 ? (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
-                <ThumbsUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No activities yet</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {activities.map((activity, index) => (
-                  <div
-                    key={`${activity.type}-${activity.postId || activity.commentId || activity.replyId}-${activity.timestamp}-${index}`}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow hover:border-blue-300"
-                    onClick={() => {
-                      if (activity.postId) {
-                        window.dispatchEvent(new CustomEvent('openPostFromNotification', {
-                          detail: {
-                            postId: activity.postId,
-                            commentId: activity.commentId || activity.replyId
-                          }
-                        }))
-                      }
-                    }}
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Left Sidebar - Filters */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sticky top-24">
+                <h3 className="font-semibold text-gray-900 mb-4">Filters</h3>
+                
+                {/* Activity Type Filter */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Activity Type</label>
+                  <select
+                    value={activityFilter}
+                    onChange={(e) => setActivityFilter(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 mt-1">
-                        {activity.type === 'liked_post' && <ThumbsUp className="w-5 h-5 text-blue-600" />}
-                        {activity.type === 'liked_comment' && <ThumbsUp className="w-5 h-5 text-blue-600" />}
-                        {activity.type === 'commented' && <MessageCircle className="w-5 h-5 text-green-600" />}
-                        {activity.type === 'replied' && <MessageCircle className="w-5 h-5 text-green-600" />}
-                        {activity.type === 'reply_received' && <MessageCircle className="w-5 h-5 text-purple-600" />}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-gray-700 text-sm">
-                          {activity.message}
-                        </p>
-                        <p className="text-gray-400 text-xs mt-1">
-                          {new Date(activity.timestamp).toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: 'numeric',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                    <option value="all">All Activities</option>
+                    <option value="posts">Posts</option>
+                    <option value="comments">Comments</option>
+                    <option value="likes">Likes</option>
+                    <option value="replies">Replies</option>
+                  </select>
+                </div>
+
+                {/* Date Range Filter */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                  <select
+                    value={dateFilter}
+                    onChange={(e) => setDateFilter(e.target.value as any)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">All Time</option>
+                    <option value="today">Today</option>
+                    <option value="week">This Week</option>
+                    <option value="month">This Month</option>
+                    <option value="year">This Year</option>
+                  </select>
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Right Content - Activities List */}
+            <div className="lg:col-span-3">
+              {loadingActivities ? (
+                <div className="flex justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : filteredActivities.length === 0 ? (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                  <ThumbsUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No activities found</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {sortedGroupedActivities.map(([dateStr, dateActivities]) => (
+                    <div key={dateStr} className="space-y-3">
+                      {/* Date Header */}
+                      <h2 className="text-lg font-bold text-gray-900 pt-2">
+                        {dateStr}
+                      </h2>
+                      
+                      {/* Activities for this date */}
+                      {(dateActivities as any[]).map((activity: any, index: number) => (
+                        <div
+                          key={`${activity.type}-${activity.postId || activity.commentId || activity.replyId}-${activity.timestamp}-${index}`}
+                          className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow"
+                        >
+                          {/* Left Checkbox */}
+                          <div className="flex items-start gap-4 p-4">
+                            <input 
+                              type="checkbox" 
+                              className="mt-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 cursor-pointer" 
+                            />
+                            
+                            {/* Main Content */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start gap-3 mb-2">
+                                {/* Avatar */}
+                                <Avatar
+                                  src={activity.post?.user?.avatar_url || activity.comment?.user?.avatar_url || activity.reply?.user?.avatar_url}
+                                  name={activity.post?.user?.full_name || activity.comment?.user?.full_name || activity.reply?.user?.full_name || 'User'}
+                                  className="w-12 h-12"
+                                  useInlineSize={false}
+                                />
+                                
+                                {/* Activity Content */}
+                                <div className="flex-1 min-w-0">
+                                  {/* Activity Text */}
+                                  <p className="text-gray-900 text-sm mb-2 leading-relaxed">
+                                    <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        if (profile?.id) {
+                                          window.dispatchEvent(new CustomEvent('openProfileDetail', {
+                                            detail: { profileId: profile.id }
+                                          }))
+                                        }
+                                      }}
+                                    >
+                                      You
+                                    </span>
+                                    {activity.type === 'commented' && (
+                                      <>
+                                        {' commented on '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.post?.user?.id) {
+                                              window.dispatchEvent(new CustomEvent('openUserProfileModal', {
+                                                detail: { profile: activity.post.user }
+                                              }))
+                                            }
+                                          }}
+                                        >
+                                          {activity.post?.user?.full_name}'s
+                                        </span>
+                                        {' '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.postId && navigateToCommunity) {
+                                              navigateToCommunity()
+                                              setTimeout(() => {
+                                                window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                                                  detail: {
+                                                    postId: activity.postId,
+                                                    commentId: activity.commentId
+                                                  }
+                                                }))
+                                              }, 100)
+                                            }
+                                          }}
+                                        >
+                                          post
+                                        </span>
+                                      </>
+                                    )}
+                                    {activity.type === 'liked_post' && (
+                                      <>
+                                        {' liked '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.post?.user?.id) {
+                                              window.dispatchEvent(new CustomEvent('openUserProfileModal', {
+                                                detail: { profile: activity.post.user }
+                                              }))
+                                            }
+                                          }}
+                                        >
+                                          {activity.post?.user?.full_name}'s
+                                        </span>
+                                        {' '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.postId && navigateToCommunity) {
+                                              navigateToCommunity()
+                                              setTimeout(() => {
+                                                window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                                                  detail: {
+                                                    postId: activity.postId
+                                                  }
+                                                }))
+                                              }, 100)
+                                            }
+                                          }}
+                                        >
+                                          post
+                                        </span>
+                                      </>
+                                    )}
+                                    {activity.type === 'liked_comment' && (
+                                      <>
+                                        {' liked a comment on '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.post?.user?.id) {
+                                              window.dispatchEvent(new CustomEvent('openUserProfileModal', {
+                                                detail: { profile: activity.post.user }
+                                              }))
+                                            }
+                                          }}
+                                        >
+                                          {activity.post?.user?.full_name}'s
+                                        </span>
+                                        {' '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.postId && navigateToCommunity) {
+                                              navigateToCommunity()
+                                              setTimeout(() => {
+                                                window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                                                  detail: {
+                                                    postId: activity.postId,
+                                                    commentId: activity.commentId
+                                                  }
+                                                }))
+                                              }, 100)
+                                            }
+                                          }}
+                                        >
+                                          post
+                                        </span>
+                                      </>
+                                    )}
+                                    {activity.type === 'replied' && (
+                                      <>
+                                        {' replied to a comment on '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.post?.user?.id) {
+                                              window.dispatchEvent(new CustomEvent('openUserProfileModal', {
+                                                detail: { profile: activity.post.user }
+                                              }))
+                                            }
+                                          }}
+                                        >
+                                          {activity.post?.user?.full_name}'s
+                                        </span>
+                                        {' '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.postId && navigateToCommunity) {
+                                              navigateToCommunity()
+                                              setTimeout(() => {
+                                                window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                                                  detail: {
+                                                    postId: activity.postId,
+                                                    commentId: activity.commentId
+                                                  }
+                                                }))
+                                              }, 100)
+                                            }
+                                          }}
+                                        >
+                                          post
+                                        </span>
+                                      </>
+                                    )}
+                                    {activity.type === 'reply_received' && (
+                                      <>
+                                        {' received a reply from '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.reply?.user?.id) {
+                                              window.dispatchEvent(new CustomEvent('openUserProfileModal', {
+                                                detail: { profile: activity.reply.user }
+                                              }))
+                                            }
+                                          }}
+                                        >
+                                          {activity.reply?.user?.full_name}
+                                        </span>
+                                        {' on your '}
+                                        <span className="font-semibold text-blue-600 hover:underline cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            if (activity.postId && activity.commentId && navigateToCommunity) {
+                                              navigateToCommunity()
+                                              setTimeout(() => {
+                                                window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                                                  detail: {
+                                                    postId: activity.postId,
+                                                    commentId: activity.commentId
+                                                  }
+                                                }))
+                                              }, 100)
+                                            }
+                                          }}
+                                        >
+                                          comment
+                                        </span>
+                                      </>
+                                    )}
+                                  </p>
+                                  
+                                  {/* Comment Content (if available) */}
+                                  {activity.comment?.content && (
+                                    <div className="text-gray-700 text-sm mb-2 line-clamp-3 leading-relaxed">
+                                      {activity.comment.content.replace(/<[^>]*>/g, '').slice(0, 200)}
+                                      {activity.comment.content.replace(/<[^>]*>/g, '').length > 200 && '...'}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Reply Content (if available) */}
+                                  {activity.reply?.content && (
+                                    <div className="text-gray-700 text-sm mb-2 line-clamp-3 leading-relaxed">
+                                      {activity.reply.content.replace(/<[^>]*>/g, '').slice(0, 200)}
+                                      {activity.reply.content.replace(/<[^>]*>/g, '').length > 200 && '...'}
+                                    </div>
+                                  )}
+                                  
+                                  {/* Metadata */}
+                                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <span>
+                                      {new Date(activity.timestamp).toLocaleTimeString('en-US', {
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Right Action Buttons */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (activity.postId && navigateToCommunity) {
+                                    navigateToCommunity()
+                                    setTimeout(() => {
+                                      window.dispatchEvent(new CustomEvent('openPostFromNotification', {
+                                        detail: {
+                                          postId: activity.postId,
+                                          commentId: activity.commentId || activity.replyId
+                                        }
+                                      }))
+                                    }, 100)
+                                  }
+                                }}
+                                className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-medium transition-colors"
+                              >
+                                View
+                              </button>
+                              <button className="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors">
+                                <MoreHorizontal className="w-4 h-4 text-gray-600" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {/* User Profile Modal */}
+      {selectedUserProfile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-60 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 space-y-6">
+              {/* Profile Header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-4 flex-1">
+                  <Avatar 
+                    src={selectedUserProfile.avatar_url} 
+                    name={selectedUserProfile.full_name} 
+                    className="w-20 h-20" 
+                    useInlineSize={false} 
+                  />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3">
+                      <div>
+                        <h4 className="text-2xl font-bold text-gray-900">{selectedUserProfile.full_name}</h4>
+                        <p className="text-lg text-gray-600">{selectedUserProfile.profession}</p>
+                      </div>
+                      {/* Action Buttons */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={async () => {
+                            if (!currentUserId) {
+                              window.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Please sign in to send messages', type: 'info' } }))
+                              return;
+                            }
+                            if (onStartConversation) {
+                              const { data: existingConversations } = await supabase
+                                .from('conversations')
+                                .select('*, user1:profiles!user1_id(*), user2:profiles!user2_id(*)')
+                                .or(`and(user1_id.eq.${currentUserId},user2_id.eq.${selectedUserProfile.id}),and(user1_id.eq.${selectedUserProfile.id},user2_id.eq.${currentUserId})`)
+
+                              let conversation
+                              if (existingConversations && existingConversations.length > 0) {
+                                const conv = existingConversations[0]
+                                conversation = {
+                                  ...conv,
+                                  other_user: conv.user1_id === currentUserId ? conv.user2 : conv.user1
+                                }
+                              } else {
+                                const { data: newConv } = await supabase
+                                  .from('conversations')
+                                  .insert({
+                                    user1_id: currentUserId,
+                                    user2_id: selectedUserProfile.id
+                                  })
+                                  .select('*, user1:profiles!user1_id(*), user2:profiles!user2_id(*)')
+                                  .single()
+
+                                if (newConv) {
+                                  conversation = {
+                                    ...newConv,
+                                    other_user: newConv.user1_id === currentUserId ? newConv.user2 : newConv.user1
+                                  }
+                                }
+                              }
+                              if (conversation && onStartConversation) {
+                                onStartConversation(conversation as Conversation)
+                              }
+                            }
+                          }}
+                          className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                          title="Message"
+                        >
+                          <MessageSquare className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (!currentUserId) {
+                              window.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Please sign in to connect', type: 'info' } }))
+                              return;
+                            }
+                            await onSendConnectionRequest(selectedUserProfile.id)
+                            window.dispatchEvent(new CustomEvent('showToast', { detail: { message: 'Connection request sent!', type: 'success' } }))
+                          }}
+                          className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+                          title="Connect"
+                        >
+                          <UserPlus className="w-5 h-5" />
+                        </button>
+                        <button 
+                          onClick={() => { 
+                            setSelectedUserProfile(null); 
+                            window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: selectedUserProfile.id } })); 
+                          }} 
+                          className="flex items-center justify-center w-10 h-10 bg-gray-600 text-white rounded-full hover:bg-gray-700 transition-colors"
+                          title="View Full Profile"
+                        >
+                          <User className="w-5 h-5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setSelectedUserProfile(null)} 
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Profile Details */}
+              <div className="space-y-4">
+                {selectedUserProfile.specialties && selectedUserProfile.specialties.length > 0 && (
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-700 mb-2">Specialties</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedUserProfile.specialties.map((specialty: string) => (
+                        <span key={specialty} className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                          {specialty}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedUserProfile.languages && selectedUserProfile.languages.length > 0 && (
+                  <div>
+                    <h5 className="text-sm font-medium text-gray-700 mb-2">Languages</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedUserProfile.languages.map((language: string) => (
+                        <span key={language} className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm">
+                          {language}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -7870,7 +8223,7 @@ function CommunityComponent({
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({})
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
-  const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved'>('all')
+  const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved' | 'my'>('all')
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
   const [showCompletenessChecklist, setShowCompletenessChecklist] = useState(false)
   
@@ -7897,6 +8250,7 @@ function CommunityComponent({
   const [postReactions, setPostReactions] = useState<Record<string, { emoji: string; count: number }[]>>({})
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
+  const [emojiPickerHideTimer, setEmojiPickerHideTimer] = useState<NodeJS.Timeout | null>(null)
   const [editForm, setEditForm] = useState<{
     id: string;
     title: string;
@@ -9739,6 +10093,18 @@ function CommunityComponent({
                 return prev
               })
             }
+
+            // Check if current user reacted to this post
+            const { data: userReaction } = await supabase
+              .from('post_reactions')
+              .select('reaction_type')
+              .eq('post_id', post.id)
+              .eq('user_id', user.id)
+              .maybeSingle()
+
+            if (userReaction) {
+              setUserPostReactions(prev => ({ ...prev, [post.id]: userReaction.reaction_type }))
+            }
           }
 
           return {
@@ -11003,6 +11369,14 @@ function CommunityComponent({
     return comment.user_id === user?.id;
   };
 
+  // Filter posts based on active tab
+  const filteredPosts = useMemo(() => {
+    if (activeFeedTab === 'all') return posts
+    if (activeFeedTab === 'my') return posts.filter(p => p.user_id === user?.id)
+    if (activeFeedTab === 'saved') return posts.filter(p => bookmarkedPosts.includes(p.id))
+    return posts
+  }, [posts, activeFeedTab, user?.id, bookmarkedPosts])
+
   return (
     <div className="flex-1 bg-gray-50 overflow-y-auto pb-20 md:pb-6">
 <div className="max-w-7xl mx-auto p-4 md:p-6">
@@ -11510,6 +11884,12 @@ function CommunityComponent({
               All
             </button>
             <button
+              onClick={() => setActiveFeedTab('my')}
+              className={`px-3 py-1.5 text-sm rounded-full border ${activeFeedTab === 'my' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              My Posts
+            </button>
+            <button
               onClick={() => setActiveFeedTab('saved')}
               className={`px-3 py-1.5 text-sm rounded-full border ${activeFeedTab === 'saved' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
             >
@@ -11557,7 +11937,14 @@ function CommunityComponent({
           )}
         </div>
 
-        {(activeFeedTab === 'saved' && posts.filter(p => bookmarkedPosts.includes(p.id)).length === 0) && (
+        {activeFeedTab === 'my' && filteredPosts.length === 0 && !loading && (
+          <EmptyState
+            icon={<FileText className="w-16 h-16 text-gray-300" />}
+            title="No posts yet"
+            description="Share your thoughts with the community!"
+          />
+        )}
+        {activeFeedTab === 'saved' && filteredPosts.length === 0 && !loading && (
           <EmptyState
             icon={<Bookmark className="w-16 h-16 text-gray-300" />}
             title="No saved posts"
@@ -11573,7 +11960,7 @@ function CommunityComponent({
               <PostSkeleton />
             </>
           ) : (
-            (activeFeedTab === 'all' ? posts : posts.filter(p => bookmarkedPosts.includes(p.id))).map(post => (
+            filteredPosts.map(post => (
           <div 
             key={post.id} 
             className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -11648,7 +12035,7 @@ function CommunityComponent({
                 </button>
 
                 {activeMenuPost === post.id && (
-                  <div className="absolute right-0 top-10 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-2">
+                  <div className="absolute right-0 top-10 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1">
                     {isPostOwner(post) ? (
                       <>
                         <button
@@ -11657,7 +12044,7 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('edit', post.id, e);
                           }}
-                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                           title="Edit Post"
                         >
                           <Edit2 className="w-4 h-4 text-blue-600" />
@@ -11668,7 +12055,7 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('toggle_comments', post.id, e);
                           }}
-                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                           title={postSettings[post.id]?.comments_disabled ? 'Enable Comments' : 'Disable Comments'}
                         >
                           <MessageSquare className="w-4 h-4 text-green-600" />
@@ -11679,7 +12066,7 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('toggle_mute', post.id, e);
                           }}
-                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                           title={postSettings[post.id]?.muted ? 'Enable Notifications' : 'Mute Notifications'}
                         >
                           <Bell className="w-4 h-4 text-orange-600" />
@@ -11691,7 +12078,7 @@ function CommunityComponent({
                             e.preventDefault();
                             handleMenuAction('delete', post.id, e);
                           }}
-                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                          className="flex items-center justify-center w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
                           title="Delete Post"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -11705,7 +12092,7 @@ function CommunityComponent({
                           e.preventDefault();
                           handleMenuAction('follow', post.id, e);
                         }}
-                        className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                         title={followingPosts.includes(post.id) ? 'Unfollow Post' : 'Follow Post'}
                       >
                         <Bell className="w-4 h-4 text-purple-600" />
@@ -11722,7 +12109,7 @@ function CommunityComponent({
                               toast.error('Failed to copy link');
                             }
                           }}
-                          className="flex items-center justify-center w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                          className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                           title="Share Post"
                         >
                           <Download className="w-4 h-4 text-blue-600" />
@@ -11871,7 +12258,7 @@ function CommunityComponent({
             )}
 
             {/* Reaction Summary */}
-            {(postReactions[post.id]?.length > 0 || postLikes[post.id]) && (
+            {(postReactions[post.id]?.length > 0 || (postLikes[post.id] && postLikes[post.id] > 0)) && (
               <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
                 {postReactions[post.id]?.map((reaction, idx) => (
                   <span key={idx} className="flex items-center gap-0.5">
@@ -11892,7 +12279,22 @@ function CommunityComponent({
             <div className="border-t border-gray-100 pt-2 mt-2">
               <div className="flex items-center justify-start gap-6">
                 {/* Like Button with Long Press */}
-                <div className="relative">
+                <div 
+                  className="relative"
+                  onMouseEnter={() => {
+                    if (emojiPickerHideTimer) {
+                      clearTimeout(emojiPickerHideTimer)
+                      setEmojiPickerHideTimer(null)
+                    }
+                    setShowEmojiPicker(post.id)
+                  }}
+                  onMouseLeave={() => {
+                    const timer = setTimeout(() => {
+                      setShowEmojiPicker(null)
+                    }, 1000)
+                    setEmojiPickerHideTimer(timer)
+                  }}
+                >
                   <button
                     onClick={(e) => {
                       haptic.like();
@@ -11900,11 +12302,10 @@ function CommunityComponent({
                     }}
                     onMouseDown={(e) => handleLongPressStart(post.id, e)}
                     onMouseUp={handleLongPressEnd}
-                    onMouseLeave={handleLongPressEnd}
                     onTouchStart={(e) => handleLongPressStart(post.id, e)}
                     onTouchEnd={handleLongPressEnd}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
-                      userPostReactions[post.id] === 'like' 
+                      userPostReactions[post.id] 
                         ? 'text-blue-600 bg-blue-50' 
                         : 'text-gray-500 hover:bg-gray-100'
                     }`}

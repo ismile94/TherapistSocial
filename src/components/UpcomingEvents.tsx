@@ -116,6 +116,9 @@ export default function UpcomingEvents({ currentUserId, userProfile }: UpcomingE
       // Load participant counts and user's participation status
       const eventsWithParticipants = await Promise.all(
         (data || []).map(async (event) => {
+          // Check if current user is the organizer
+          const isOrganizer = currentUserId && event.organizer_id === currentUserId
+
           // Get participant count
           let participantCount = 0
           try {
@@ -159,16 +162,22 @@ export default function UpcomingEvents({ currentUserId, userProfile }: UpcomingE
           return {
             ...event,
             participant_count: participantCount,
-            is_participant: isParticipant
+            is_participant: isParticipant,
+            is_organizer: isOrganizer
           }
         })
       )
 
-      setEvents(eventsWithParticipants as Event[])
+      // Filter: show only events where user is organizer OR participant
+      const visibleEvents = eventsWithParticipants.filter(event => 
+        event.is_organizer || event.is_participant
+      )
+
+      setEvents(visibleEvents as Event[])
       
       // Store participant statuses
       const statuses: Record<string, boolean> = {}
-      eventsWithParticipants.forEach(event => {
+      visibleEvents.forEach(event => {
         statuses[event.id] = event.is_participant || false
       })
       setParticipantStatuses(statuses)
