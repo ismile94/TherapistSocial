@@ -24,6 +24,7 @@ import L from 'leaflet'
 import { IoHome } from "react-icons/io5";
 import { useSession } from '@supabase/auth-helpers-react'
 import UpcomingEvents from './components/UpcomingEvents'
+import LandingPage from './components/LandingPage'
 import { 
     Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
@@ -83,6 +84,9 @@ interface CommunityPost {
   post_metadata: PostMetadata
   user?: Profile
   replies_count?: number
+  likes_count?: number
+  emoji_reactions?: { emoji: string; count: number }[]
+  original_post?: CommunityPost | null
 }
 
 interface CVMakerProps {
@@ -598,7 +602,17 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
     profile_view_tracking: true,
     quiet_hours_enabled: false,
     quiet_hours_start: '22:00',
-    quiet_hours_end: '08:00'
+    quiet_hours_end: '08:00',
+    // Profile information visibility settings
+    profile_info_visibility: 'public' as 'public' | 'network' | 'private',
+    connection_request_permissions: 'public' as 'public' | 'network' | 'none',
+    show_email: 'network' as 'public' | 'network' | 'private',
+    show_phone: 'network' as 'public' | 'network' | 'private',
+    show_location: 'public' as 'public' | 'network' | 'private',
+    show_profession: 'public' as 'public' | 'network' | 'private',
+    show_specialties: 'public' as 'public' | 'network' | 'private',
+    show_qualifications: 'network' as 'public' | 'network' | 'private',
+    show_experience: 'network' as 'public' | 'network' | 'private'
   })
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -813,7 +827,16 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
           profile_view_tracking: data.profile_view_tracking ?? true,
           quiet_hours_enabled: data.quiet_hours_enabled ?? false,
           quiet_hours_start: data.quiet_hours_start || '22:00',
-          quiet_hours_end: data.quiet_hours_end || '08:00'
+          quiet_hours_end: data.quiet_hours_end || '08:00',
+          profile_info_visibility: data.profile_info_visibility || 'public',
+          connection_request_permissions: data.connection_request_permissions || 'public',
+          show_email: data.show_email || 'network',
+          show_phone: data.show_phone || 'network',
+          show_location: data.show_location || 'public',
+          show_profession: data.show_profession || 'public',
+          show_specialties: data.show_specialties || 'public',
+          show_qualifications: data.show_qualifications || 'network',
+          show_experience: data.show_experience || 'network'
         })
       }
     } catch (err) {
@@ -1304,20 +1327,18 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-6xl h-[80vh] overflow-hidden flex">
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 bg-white border-b z-10 p-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold text-gray-900">Settings & Privacy</h2>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="w-6 h-6" />
-            </button>
-          </div>
-        </div>
+      <div className="bg-white rounded-2xl w-full max-w-6xl h-[80vh] overflow-hidden flex relative">
+        {/* Close Button - Top Right */}
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 z-20 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors"
+        >
+          <X className="w-5 h-5" />
+        </button>
 
         {/* Sidebar */}
-        <div className="w-64 bg-gray-50 border-r pt-20 h-full overflow-y-auto">
-          <nav className="p-4 space-y-1">
+        <div className="w-64 bg-gray-50 border-r h-full overflow-y-auto">
+          <nav className="p-6 space-y-1">
             {sections.map((section) => {
               const Icon = section.icon
               return (
@@ -1339,7 +1360,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 pt-20 h-full overflow-y-auto p-8">
+        <div className="flex-1 h-full overflow-y-auto p-8">
           {activeSection === 'account' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-gray-900">Account Preferences</h3>
@@ -1570,6 +1591,145 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
                       />
                       <span className="text-sm text-gray-700">Private - No one can message me</span>
                     </label>
+                  </div>
+                </div>
+
+                {/* Connection Request Permissions */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Who Can Send You Connection Requests</h4>
+                  <div className="space-y-3">
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="connection_request_permissions" 
+                        className="mr-2" 
+                        checked={settings.connection_request_permissions === 'public'}
+                        onChange={() => saveSettings({ connection_request_permissions: 'public' })}
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700">Anyone - Anyone can send you connection requests</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="connection_request_permissions" 
+                        className="mr-2" 
+                        checked={settings.connection_request_permissions === 'network'}
+                        onChange={() => saveSettings({ connection_request_permissions: 'network' })}
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700">Network Only - Only people in your network can send requests</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input 
+                        type="radio" 
+                        name="connection_request_permissions" 
+                        className="mr-2" 
+                        checked={settings.connection_request_permissions === 'none'}
+                        onChange={() => saveSettings({ connection_request_permissions: 'none' })}
+                        disabled={saving}
+                      />
+                      <span className="text-sm text-gray-700">No One - No one can send you connection requests</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Profile Information Visibility */}
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="font-semibold text-gray-900 mb-4">Profile Information Visibility</h4>
+                  <p className="text-sm text-gray-600 mb-4">Control who can see specific information on your profile</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Email Address</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_email}
+                        onChange={(e) => saveSettings({ show_email: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Phone Number</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_phone}
+                        onChange={(e) => saveSettings({ show_phone: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Location (City, County)</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_location}
+                        onChange={(e) => saveSettings({ show_location: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Profession</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_profession}
+                        onChange={(e) => saveSettings({ show_profession: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Specialties</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_specialties}
+                        onChange={(e) => saveSettings({ show_specialties: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Qualifications</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_qualifications}
+                        onChange={(e) => saveSettings({ show_qualifications: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-2">Work Experience</label>
+                      <select 
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        value={settings.show_experience}
+                        onChange={(e) => saveSettings({ show_experience: e.target.value as 'public' | 'network' | 'private' })}
+                        disabled={saving}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="network">Connections Only</option>
+                        <option value="private">Only Me</option>
+                      </select>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2139,6 +2299,10 @@ function AppInner() {
   // Cache
   const profileCacheRef = useRef<{ [key: string]: { data: any, timestamp: number } }>({})
   const loadingProfileRef = useRef<{ [key: string]: boolean }>({})
+  
+  // Track last processed user ID to avoid duplicate profile loads
+  const lastProcessedUserIdRef = useRef<string | null>(null)
+  const loadingProfileForUserIdRef = useRef<string | null>(null)
 
   const updateProfileInState = (updatedProfile: Profile) => {
     console.log('🔄 Updating profile in state:', updatedProfile.id);
@@ -2369,14 +2533,19 @@ function AppInner() {
     
     try {
       // Load users I blocked
+      // Use maybeSingle() instead of single() because new users may not have user_settings record yet
       const { data, error } = await supabase
         .from('user_settings')
         .select('blocked_users')
         .eq('id', currentUser.id)
-        .single()
+        .maybeSingle()
       
-      if (error && error.code !== 'PGRST116') { // PGRST116 = not found
-        console.error('Error loading blocked users:', error)
+      if (error) {
+        // Only log non-404 errors (404/PGRST116 means record doesn't exist, which is fine for new users)
+        if (error.code !== 'PGRST116') {
+          console.error('Error loading blocked users:', error)
+        }
+        setBlockedUserIds([])
       } else {
         const blockedIds = data?.blocked_users || []
         setBlockedUserIds(blockedIds)
@@ -2389,7 +2558,10 @@ function AppInner() {
         .contains('blocked_users', [currentUser.id])
       
       if (blockedByError) {
-        console.error('Error loading users who blocked me:', blockedByError)
+        // Only log non-404 errors
+        if (blockedByError.code !== 'PGRST116') {
+          console.error('Error loading users who blocked me:', blockedByError)
+        }
         setBlockedByUserIds([])
       } else {
         const blockedByIds = (blockedByData || []).map(s => s.id)
@@ -2689,6 +2861,7 @@ function AppInner() {
     if (!currentUser?.id) return
     
     try {
+      // Load notifications
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
@@ -2701,8 +2874,71 @@ function AppInner() {
         return
       }
       
-      setNotifications(data || [])
-      const unreadCount = (data || []).filter(n => !n.read).length
+      // Fetch related data for each notification
+      const notificationsWithData = await Promise.all((data || []).map(async (notification) => {
+        const result: any = { ...notification }
+        
+        // Extract actor name from message and fetch profile
+        if (notification.message) {
+          const messageMatch = notification.message.match(/^([^ ]+)/)
+          if (messageMatch && messageMatch[1] !== 'Someone') {
+            const { data: actorProfile } = await supabase
+              .from('profiles')
+              .select('id, full_name, avatar_url')
+              .ilike('full_name', `%${messageMatch[1]}%`)
+              .limit(1)
+              .maybeSingle()
+            
+            if (actorProfile) {
+              result.actor = actorProfile
+            }
+          }
+        }
+        
+        // Fetch post data if needed
+        if (notification.related_entity_type === 'post' && notification.related_entity_id) {
+          const { data: postData } = await supabase
+            .from('posts')
+            .select('id, title, content, post_metadata')
+            .eq('id', notification.related_entity_id)
+            .maybeSingle()
+          
+          if (postData) {
+            result.post = postData
+          }
+        }
+        
+        // Fetch comment data if needed
+        if (notification.related_entity_type === 'comment' && notification.related_entity_id) {
+          const { data: commentData } = await supabase
+            .from('post_comments')
+            .select('id, content, user_id')
+            .eq('id', notification.related_entity_id)
+            .maybeSingle()
+          
+          if (commentData) {
+            result.comment = commentData
+          }
+        }
+        
+        // Also check metadata for comment_id
+        if (notification.metadata?.comment_id) {
+          const { data: commentData } = await supabase
+            .from('post_comments')
+            .select('id, content, user_id')
+            .eq('id', notification.metadata.comment_id)
+            .maybeSingle()
+          
+          if (commentData) {
+            result.comment = commentData
+          }
+        }
+        
+        return result
+      }))
+      
+      setNotifications(notificationsWithData || [])
+      const unreadCount = (notificationsWithData || []).filter(n => !n.read).length
       setUnreadNotificationsCount(unreadCount)
     } catch (err) {
       console.error('Error loading notifications:', err)
@@ -3056,36 +3292,45 @@ function AppInner() {
       if (session?.user) {
         console.log('✅ Initial session found:', session.user.id)
         setCurrentUser(session.user)
-        await loadUserProfile(session.user.id)
+        // Initial load'da da retry mekanizması ile yükle
+        setTimeout(async () => {
+          await loadUserProfile(session.user.id)
+        }, 300)
       }
 
-      let timeoutId: NodeJS.Timeout
-      
       const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('🔐 Auth event:', event)
         
-        clearTimeout(timeoutId)
-        
-        timeoutId = setTimeout(async () => {
-          if (event === 'SIGNED_IN' && session?.user) {
-            if (currentUser?.id !== session.user.id) {
-              console.log('✅ New user signed in:', session.user.id)
-              setCurrentUser(session.user)
-              await loadUserProfile(session.user.id)
-            }
-          } else if (event === 'SIGNED_OUT') {
-            console.log('👋 User signed out')
-            setCurrentUser(null)
-            setUserProfile(null)
-            setSelectedProfileId(null)
-            setChatBoxes([])
-profileCacheRef.current = {}
+        if (event === 'SIGNED_IN' && session?.user) {
+          // Avoid duplicate profile loads
+          const userId = session.user.id
+          if (lastProcessedUserIdRef.current !== userId && loadingProfileForUserIdRef.current !== userId) {
+            console.log('✅ New user signed in:', userId)
+            lastProcessedUserIdRef.current = userId
+            loadingProfileForUserIdRef.current = userId
+            setCurrentUser(session.user)
+            setError(null) // Sign in'de error'ı temizle
+            // Profile load'u retry mekanizması ile yükle (network error'ları için)
+            // Kısa bir delay ekle network'in hazır olması için
+            setTimeout(async () => {
+              await loadUserProfile(userId)
+              loadingProfileForUserIdRef.current = null
+            }, 300)
           }
-        }, 1000)
+        } else if (event === 'SIGNED_OUT') {
+          console.log('👋 User signed out')
+          lastProcessedUserIdRef.current = null
+          loadingProfileForUserIdRef.current = null
+          setCurrentUser(null)
+          setUserProfile(null)
+          setSelectedProfileId(null)
+          setChatBoxes([])
+          profileCacheRef.current = {}
+          setError(null) // Sign out'ta error'ı temizle
+        }
       })
 
       return () => {
-        clearTimeout(timeoutId)
         authListener.subscription.unsubscribe()
       }
     } catch (err) {
@@ -3093,7 +3338,7 @@ profileCacheRef.current = {}
     }
   }
 
-  async function loadUserProfile(userId: string) {
+  async function loadUserProfile(userId: string, retryCount = 0) {
     const cached = profileCacheRef.current[userId]
     const now = Date.now()
     
@@ -3120,19 +3365,56 @@ profileCacheRef.current = {}
       
       if (error) {
         console.error('❌ Profile load error:', error)
-        setError('Failed to load profile')
+        
+        // Network error'ları için retry yap, diğer hatalar için error state set etme
+        const isNetworkError = error.message?.includes('NetworkError') || 
+                              error.message?.includes('fetch') ||
+                              error.code === '' || 
+                              !error.code
+        
+        if (isNetworkError && retryCount < 3) {
+          console.log(`🔄 Retrying profile load (attempt ${retryCount + 1}/3)...`)
+          loadingProfileRef.current[userId] = false
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+          return loadUserProfile(userId, retryCount + 1)
+        }
+        
+        // Sadece gerçek hatalar için error state set et (network error'ları değil)
+        if (!isNetworkError) {
+          setError('Failed to load profile')
+        } else {
+          // Network error için sadece log, error state set etme
+          console.warn('⚠️ Network error loading profile, will retry on next auth event')
+        }
       } else {
         console.log('✅ Profile loaded:', data.full_name)
         setUserProfile(data)
+        setError(null) // Başarılı olunca error'ı temizle
         
         profileCacheRef.current[userId] = {
           data,
           timestamp: Date.now()
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('❌ Profile load exception:', err)
-      setError('Failed to load profile')
+      
+      // Network error'ları için retry
+      const isNetworkError = err?.message?.includes('NetworkError') || 
+                            err?.message?.includes('fetch') ||
+                            err?.name === 'TypeError'
+      
+      if (isNetworkError && retryCount < 3) {
+        console.log(`🔄 Retrying profile load after exception (attempt ${retryCount + 1}/3)...`)
+        loadingProfileRef.current[userId] = false
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)))
+        return loadUserProfile(userId, retryCount + 1)
+      }
+      
+      // Sadece gerçek hatalar için error state set et
+      if (!isNetworkError) {
+        setError('Failed to load profile')
+      }
     } finally {
       loadingProfileRef.current[userId] = false
     }
@@ -3295,6 +3577,15 @@ profileCacheRef.current = {}
         </div>
       </div>
     )
+  }
+
+  // Show landing page if user is not authenticated
+  if (!currentUser) {
+    return <LandingPage onSignInSuccess={() => {
+      // Auth state change event'i zaten currentUser'ı güncelleyecek ve profile'ı yükleyecek
+      // Burada hiçbir şey yapmaya gerek yok, auth state change event'i handle edecek
+      // Sadece bir callback olarak bırakıyoruz, gerçek iş auth state change event'inde yapılıyor
+    }} />
   }
 
   return (
@@ -3471,39 +3762,127 @@ profileCacheRef.current = {}
                 
                 <div className="overflow-y-auto flex-1">
                   {notifications.length > 0 ? (
-                    notifications.map((notification) => (
-                      <div
-                        key={notification.id}
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-                          !notification.read ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                            !notification.read ? 'bg-blue-600' : 'bg-transparent'
-                          }`} />
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-sm ${!notification.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                              {notification.title}
-                            </p>
-                            {notification.message && (
-                              <p className="text-xs text-gray-600 mt-1">
-                                {notification.message}
-                              </p>
-                            )}
-                            <p className="text-xs text-gray-500 mt-1">
-                              {new Date(notification.created_at).toLocaleDateString('en-GB', {
-                                day: 'numeric',
-                                month: 'short',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </p>
+                    notifications.map((notification) => {
+                      // Format time
+                      const timeAgo = (() => {
+                        const now = new Date()
+                        const created = new Date(notification.created_at)
+                        const diffMs = now.getTime() - created.getTime()
+                        const diffMins = Math.floor(diffMs / 60000)
+                        const diffHours = Math.floor(diffMs / 3600000)
+                        const diffDays = Math.floor(diffMs / 86400000)
+                        
+                        if (diffMins < 1) return 'now'
+                        if (diffMins < 60) return `${diffMins}m`
+                        if (diffHours < 24) return `${diffHours}h`
+                        if (diffDays < 7) return `${diffDays}d`
+                        return created.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                      })()
+
+                      // Extract actor name from message
+                      const actorName = notification.actor?.full_name || notification.message?.split(' ')[0] || 'Someone'
+                      const actorAvatar = notification.actor?.avatar_url
+                      
+                      // Get notification description
+                      const getNotificationText = () => {
+                        if (notification.type === 'post_reaction') {
+                          return 'liked your post'
+                        } else if (notification.type === 'comment_reaction') {
+                          return 'liked your comment'
+                        } else if (notification.type === 'comment') {
+                          if (notification.related_entity_type === 'comment') {
+                            return 'replied to your comment'
+                          }
+                          return 'commented on your post'
+                        } else if (notification.type === 'post_bookmark') {
+                          return 'saved your post'
+                        }
+                        return notification.message || ''
+                      }
+
+                      // Determine if we should render the actor name prefix.
+                      // If description falls back to original message, avoid duplicating the name (show only message).
+                      const description = getNotificationText()
+                      const showActorPrefix = description !== (notification.message || '')
+
+                      // Get comment content preview if available
+                      const commentPreview = notification.comment?.content || notification.metadata?.comment_content
+                      const postThumbnail = notification.post?.post_metadata?.attachments?.[0] || notification.post?.post_metadata?.image_url
+
+                      return (
+                        <div
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
+                          className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
+                            !notification.read ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            {/* Avatar */}
+                            <div className="relative flex-shrink-0">
+                              <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 flex items-center justify-center">
+                                {actorAvatar ? (
+                                  <img 
+                                    src={actorAvatar} 
+                                    alt={actorName}
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-semibold text-sm">
+                                    {actorName.charAt(0).toUpperCase()}
+                                  </div>
+                                )}
+                              </div>
+                              {!notification.read && (
+                                <div className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-blue-600 border-2 border-white" />
+                              )}
+                            </div>
+                            
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 flex items-start justify-between gap-2">
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm leading-snug ${!notification.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                                  {showActorPrefix && (
+                                    <>
+                                      <span className="font-bold text-gray-900">{actorName}</span>
+                                      {' '}
+                                    </>
+                                  )}
+                                  <span className="text-gray-600">{description}</span>
+                                  {commentPreview && (
+                                    <>
+                                      {' '}
+                                      <span className="text-gray-500 italic">"{commentPreview.length > 50 ? commentPreview.substring(0, 50) + '...' : commentPreview}"</span>
+                                    </>
+                                  )}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                  {timeAgo}
+                                </p>
+                              </div>
+                              
+                              {/* Post/Comment Thumbnail */}
+                              {postThumbnail && (
+                                <div className="flex-shrink-0">
+                                  <img 
+                                    src={postThumbnail} 
+                                    alt="Post"
+                                    className="w-11 h-11 rounded object-cover"
+                                  />
+                                </div>
+                              )}
+                              {!postThumbnail && notification.related_entity_type === 'post' && (
+                                <div className="flex-shrink-0 w-11 h-11 rounded bg-gray-100 flex items-center justify-center">
+                                  <svg className="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clipRule="evenodd" />
+                                  </svg>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))
+                      )
+                    })
                   ) : (
                     <div className="p-8 text-center">
                       <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -5924,12 +6303,42 @@ function ProfileDetailPage({
   const [showConnectionOptions, setShowConnectionOptions] = useState(false)
   const [connectionId, setConnectionId] = useState<string | null>(null)
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [activeTab, setActiveTab] = useState<'about' | 'activities'>('about')
+  const [activeTab, setActiveTab] = useState<'about' | 'posts' | 'activities'>('about')
   const [activities, setActivities] = useState<any[]>([])
   const [loadingActivities, setLoadingActivities] = useState(false)
+  const [userPosts, setUserPosts] = useState<CommunityPost[]>([])
+  const [loadingPosts, setLoadingPosts] = useState(false)
+  const [postsPage, setPostsPage] = useState(0)
+  const [hasMorePosts, setHasMorePosts] = useState(true)
+  const [isTabSticky, setIsTabSticky] = useState(false)
+  // Post interaction states
+  const [postLikes, setPostLikes] = useState<Record<string, number>>({})
+  const [postReactions, setPostReactions] = useState<Record<string, { emoji: string; count: number }[]>>({})
+  const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({})
+  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({})
+  const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
+  const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({})
+  const [newComments, setNewComments] = useState<{ [postId: string]: string }>({})
+  const [replyingTo, setReplyingTo] = useState<{ [commentId: string]: boolean }>({})
+  const [replyContents, setReplyContents] = useState<{ [commentId: string]: string }>({})
+  const [repostedPosts, setRepostedPosts] = useState<string[]>([])
+  const [repostCounts, setRepostCounts] = useState<Record<string, number>>({})
+  const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
+  const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null)
+  const [activeMenuPost, setActiveMenuPost] = useState<string | null>(null)
+  const menuRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({})
+  const session = useSession()
+  const currentUserForPosts = session?.user
   const [activityFilter, setActivityFilter] = useState<'all' | 'posts' | 'comments' | 'likes' | 'replies'>('all')
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'year'>('all')
   const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
+  const [mutualConnections, setMutualConnections] = useState<Profile[]>([])
+  const [loadingMutualConnections, setLoadingMutualConnections] = useState(false)
+  const [reactionsModalOpen, setReactionsModalOpen] = useState(false)
+  const [reactionsModalPostId, setReactionsModalPostId] = useState<string | null>(null)
+  const [reactionsModalData, setReactionsModalData] = useState<{ emoji: string; users: { user: Profile; reaction_type: string }[] }[]>([])
+  const [reactionsModalActiveTab, setReactionsModalActiveTab] = useState<string>('ALL')
+  const [loadingReactionsModal, setLoadingReactionsModal] = useState(false)
 
   useEffect(() => {
     // Check if this profile is blocked
@@ -5944,13 +6353,42 @@ function ProfileDetailPage({
     }
     loadProfile()
     loadAllProfessions()
-  }, [profileId, allHiddenUserIds])
+    if (currentUserId && profileId) {
+      loadMutualConnections()
+    }
+  }, [profileId, allHiddenUserIds, currentUserId])
 
   useEffect(() => {
     if (profile && activeTab === 'activities') {
       loadUserActivities()
     }
+    if (profile && activeTab === 'posts') {
+      loadUserPosts(0, true)
+    }
   }, [profileId, activeTab, profile])
+
+  // Scroll listener for sticky tabs and profile header
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY
+      // Trigger sticky when scrolled past profile header (approximately 300px)
+      setIsTabSticky(scrollY > 300)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+  
+  const [isHeaderSticky, setIsHeaderSticky] = useState(false)
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      const scrollY = window.scrollY
+      // Trigger sticky header when scrolled past initial position
+      setIsHeaderSticky(scrollY > 200)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   // Connection durumunu kontrol et
   useEffect(() => {
@@ -5994,7 +6432,7 @@ function ProfileDetailPage({
     return () => {
       window.removeEventListener('openUserProfileModal', handleOpenUserProfileModal)
     }
-  }, [])
+  }, [currentUserId])
 
   const loadAllProfessions = async () => {
     try {
@@ -6069,6 +6507,122 @@ function ProfileDetailPage({
       setProfessionInput(data.profession || '')
     }
     setLoading(false)
+  }
+
+  const loadReactionsModal = async (postId: string) => {
+    setReactionsModalOpen(true)
+    setReactionsModalPostId(postId)
+    setLoadingReactionsModal(true)
+    setReactionsModalActiveTab('ALL')
+    
+    try {
+      // Fetch all reactions for this post
+      const { data: reactions, error } = await supabase
+        .from('post_reactions')
+        .select('user_id, reaction_type, profiles!post_reactions_user_id_fkey(*)')
+        .eq('post_id', postId)
+      
+      if (error) throw error
+      
+      // Group reactions by type
+      const reactionsByType: Record<string, { user: Profile; reaction_type: string }[]> = {}
+      
+      if (reactions) {
+        reactions.forEach((reaction: any) => {
+          const reactionType = reaction.reaction_type === 'like' ? '👍' : reaction.reaction_type
+          if (!reactionsByType[reactionType]) {
+            reactionsByType[reactionType] = []
+          }
+          if (reaction.profiles) {
+            reactionsByType[reactionType].push({
+              user: reaction.profiles as Profile,
+              reaction_type: reaction.reaction_type
+            })
+          }
+        })
+      }
+      
+      // Convert to array format
+      const reactionsArray = Object.entries(reactionsByType).map(([emoji, users]) => ({
+        emoji,
+        users
+      }))
+      
+      setReactionsModalData(reactionsArray)
+    } catch (err) {
+      console.error('Error loading reactions:', err)
+      setReactionsModalData([])
+    } finally {
+      setLoadingReactionsModal(false)
+    }
+  }
+
+  const loadMutualConnections = async () => {
+    if (!currentUserId || !profileId || currentUserId === profileId) {
+      setMutualConnections([])
+      return
+    }
+    
+    setLoadingMutualConnections(true)
+    try {
+      // Get current user's connections
+      const { data: currentUserConnections } = await supabase
+        .from('connections')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`)
+        .eq('status', 'accepted')
+      
+      // Get profile user's connections
+      const { data: profileUserConnections } = await supabase
+        .from('connections')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${profileId},receiver_id.eq.${profileId}`)
+        .eq('status', 'accepted')
+      
+      if (!currentUserConnections || !profileUserConnections) {
+        setMutualConnections([])
+        setLoadingMutualConnections(false)
+        return
+      }
+      
+      // Extract connection IDs
+      const currentUserConnectionIds = new Set(
+        currentUserConnections.map(c => 
+          c.sender_id === currentUserId ? c.receiver_id : c.sender_id
+        )
+      )
+      
+      const profileUserConnectionIds = new Set(
+        profileUserConnections.map(c => 
+          c.sender_id === profileId ? c.receiver_id : c.sender_id
+        )
+      )
+      
+      // Find mutual connections
+      const mutualIds = Array.from(currentUserConnectionIds).filter(id => 
+        profileUserConnectionIds.has(id)
+      )
+      
+      if (mutualIds.length === 0) {
+        setMutualConnections([])
+        setLoadingMutualConnections(false)
+        return
+      }
+      
+      // Load mutual connection profiles
+      const { data: mutualProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, profession, specialties, languages, city, county')
+        .in('id', mutualIds)
+        .limit(10)
+      
+      setMutualConnections((mutualProfiles || []) as Profile[])
+    } catch (err) {
+      console.error('Error loading mutual connections:', err)
+      setMutualConnections([])
+    } finally {
+      setLoadingMutualConnections(false)
+    }
   }
 
   const toggleItem = (index: number) => {
@@ -6525,6 +7079,767 @@ function ProfileDetailPage({
     }
   }
 
+  const formatTime = (timestamp: string) => {
+    const date = new Date(timestamp)
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+    const weeks = Math.floor(days / 7)
+    const months = Math.floor(days / 30)
+    const years = Math.floor(days / 365)
+
+    if (years > 0) return `${years}y ago`
+    if (months > 0) return `${months}mo ago`
+    if (weeks > 0) return `${weeks}w ago`
+    if (days > 0) return `${days}d ago`
+    if (hours > 0) return `${hours}h ago`
+    const minutes = Math.floor(diff / (1000 * 60))
+    if (minutes > 0) return `${minutes}m ago`
+    return 'just now'
+  }
+
+  const getUserDisplayName = (user: any): string => {
+    if (!user) return 'Unknown User';
+    return user.full_name || 'Unknown User';
+  };
+
+  const getUserProfession = (user: any): string => {
+    if (!user) return '';
+    return user.profession || '';
+  };
+
+  const getUserId = (user: any): string => {
+    if (!user) return '';
+    return user.id || '';
+  };
+
+  const renderPostMetadata = (post: CommunityPost) => {
+    const metadata = post.post_metadata || {}
+    return (
+      <div className="flex flex-wrap gap-2 mt-3">
+        {metadata.content_type && (
+          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
+            {metadata.content_type}
+          </span>
+        )}
+        {metadata.audience_level && (
+          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+            {metadata.audience_level}
+          </span>
+        )}
+        {metadata.language && metadata.language !== 'English' && (
+          <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+            {metadata.language}
+          </span>
+        )}
+        {(metadata.professions || []).slice(0, 2).map(profession => (
+          <span key={profession} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
+            {profession}
+          </span>
+        ))}
+        {(metadata.clinical_areas || []).slice(0, 2).map(area => (
+          <span key={area} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
+            {area}
+          </span>
+        ))}
+        {(metadata.tags || []).slice(0, 3).map(tag => (
+          <span key={tag} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
+            #{tag}
+          </span>
+        ))}
+        {(metadata.professions || []).length > 2 && (
+          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
+            +{(metadata.professions || []).length - 2} more
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  // Post interaction functions
+  const toggleExpandPost = (postId: string) => {
+    setExpandedPosts(prev => ({ ...prev, [postId]: !prev[postId] }))
+  }
+
+  const toggleComments = async (postId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    const isOpen = !openComments[postId]
+    setOpenComments(prev => ({ ...prev, [postId]: isOpen }))
+    if (isOpen && !comments[postId]) {
+      await loadComments(postId)
+    }
+  }
+
+  const loadComments = async (postId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .select(`
+          *,
+          user:profiles!user_id(*)
+        `)
+        .eq('post_id', postId)
+        .is('parent_reply_id', null)
+        .order('created_at', { ascending: false })
+
+      if (error) throw error
+
+      // Load replies for each comment
+      const commentsWithReplies = await Promise.all(
+        (data || []).map(async (comment) => {
+          const { data: replies } = await supabase
+            .from('post_comments')
+            .select(`
+              *,
+              user:profiles!user_id(*)
+            `)
+            .eq('parent_reply_id', comment.id)
+            .order('created_at', { ascending: true })
+
+          return {
+            ...comment,
+            replies: replies || []
+          }
+        })
+      )
+
+      setComments(prev => ({ ...prev, [postId]: commentsWithReplies }))
+    } catch (err) {
+      console.error('Error loading comments:', err)
+    }
+  }
+
+  const handleLikePost = async (postId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUserForPosts) return;
+
+    const currentReaction = userPostReactions[postId];
+    const likeEmoji = '👍';
+
+    try {
+      if (currentReaction === likeEmoji) {
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          return {
+            ...prev,
+            [postId]: current.map(r => 
+              r.emoji === likeEmoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+            ).filter(r => r.count > 0)
+          };
+        });
+        setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', currentUserForPosts.id);
+      } else {
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          const existing = current.find(r => r.emoji === likeEmoji);
+          if (existing) {
+            return {
+              ...prev,
+              [postId]: current.map(r => 
+                r.emoji === likeEmoji ? { ...r, count: r.count + 1 } : r
+              )
+            };
+          } else {
+            return {
+              ...prev,
+              [postId]: [...current, { emoji: likeEmoji, count: 1 }]
+            };
+          }
+        });
+        if (currentReaction && currentReaction !== likeEmoji) {
+          setPostReactions(prev => {
+            const current = prev[postId] || [];
+            return {
+              ...prev,
+              [postId]: current.map(r => 
+                r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+              ).filter(r => r.count > 0)
+            };
+          });
+        }
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', currentUserForPosts.id);
+        setUserPostReactions(prev => ({ ...prev, [postId]: likeEmoji }));
+        await supabase
+          .from('post_reactions')
+          .upsert({
+            post_id: postId,
+            user_id: currentUserForPosts.id,
+            reaction_type: likeEmoji
+          }, { onConflict: 'post_id,user_id' });
+
+        // Create notification for post owner
+        const post = userPosts.find(p => p.id === postId)
+        const postOwnerId = String(post?.user_id || '')
+        const currentUserId = String(currentUserForPosts?.id || '')
+        
+        if (post && postOwnerId !== '' && currentUserId !== '' && postOwnerId !== currentUserId) {
+          // Get current user profile for notification
+          const { data: currentUserProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUserForPosts.id)
+            .single()
+          
+          // Check user notification settings
+          const { data: settings, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('push_post_reactions')
+            .eq('id', post.user_id)
+            .maybeSingle()
+
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          if (settingsError && settingsError.code !== 'PGRST116') {
+            console.error('Error fetching user settings for like notification:', settingsError)
+          }
+
+          // If no settings found or push_post_reactions is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_post_reactions !== false) {
+            const { error: notifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: post.user_id,
+                title: 'New like on your post',
+                message: `${currentUserProfile?.full_name || 'Someone'} liked your post`,
+                type: 'post_reaction',
+                related_entity_type: 'post',
+                related_entity_id: postId
+              })
+            
+            if (notifError) {
+              console.error('Error creating like notification:', notifError)
+            } else {
+              console.log('Like notification created successfully for user:', post.user_id)
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error updating post like:', err);
+    }
+  }
+
+  const handleEmojiReaction = async (postId: string, emoji: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUserForPosts) return;
+
+    const currentReaction = userPostReactions[postId];
+
+    try {
+      if (currentReaction === emoji) {
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          return {
+            ...prev,
+            [postId]: current.map(r => 
+              r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+            ).filter(r => r.count > 0)
+          };
+        });
+        setUserPostReactions(prev => ({ ...prev, [postId]: null }));
+        await supabase
+          .from('post_reactions')
+          .delete()
+          .eq('post_id', postId)
+          .eq('user_id', currentUserForPosts.id);
+      } else {
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          const existing = current.find(r => r.emoji === emoji);
+          if (existing) {
+            return {
+              ...prev,
+              [postId]: current.map(r => 
+                r.emoji === emoji ? { ...r, count: r.count + 1 } : r
+              )
+            };
+          } else {
+            return {
+              ...prev,
+              [postId]: [...current, { emoji, count: 1 }]
+            };
+          }
+        });
+
+        if (currentReaction) {
+          if (currentReaction === 'like') {
+            setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+          } else {
+            setPostReactions(prev => {
+              const current = prev[postId] || [];
+              return {
+                ...prev,
+                [postId]: current.map(r => 
+                  r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+                ).filter(r => r.count > 0)
+              };
+            });
+          }
+          await supabase
+            .from('post_reactions')
+            .delete()
+            .eq('post_id', postId)
+            .eq('user_id', currentUserForPosts.id);
+        }
+
+        setUserPostReactions(prev => ({ ...prev, [postId]: emoji }));
+        await supabase
+          .from('post_reactions')
+          .upsert({ post_id: postId, user_id: currentUserForPosts.id, reaction_type: emoji }, { onConflict: 'post_id,user_id' });
+
+        // Create notification for post owner
+        const post = userPosts.find(p => p.id === postId)
+        const postOwnerId = String(post?.user_id || '')
+        const currentUserId = String(currentUserForPosts?.id || '')
+        
+        if (post && postOwnerId !== '' && currentUserId !== '' && postOwnerId !== currentUserId) {
+          // Get current user profile for notification
+          const { data: currentUserProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUserForPosts.id)
+            .single()
+          
+          // Check user notification settings
+          const { data: settings, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('push_post_reactions')
+            .eq('id', post.user_id)
+            .maybeSingle()
+
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          if (settingsError && settingsError.code !== 'PGRST116') {
+            console.error('Error fetching user settings for emoji reaction notification:', settingsError)
+          }
+
+          // If no settings found or push_post_reactions is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_post_reactions !== false) {
+            const { error: notifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: post.user_id,
+                title: 'New reaction on your post',
+                message: `${currentUserProfile?.full_name || 'Someone'} reacted ${emoji} to your post`,
+                type: 'post_reaction',
+                related_entity_type: 'post',
+                related_entity_id: postId
+              })
+            
+            if (notifError) {
+              console.error('Error creating emoji reaction notification:', notifError)
+            } else {
+              console.log('Emoji reaction notification created successfully for user:', post.user_id)
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error updating emoji reaction:', err);
+    }
+  }
+
+  const handleRepost = async (postId: string) => {
+    if (!currentUserForPosts) {
+      const event = new CustomEvent('showToast', { detail: { message: 'Please sign in to repost', type: 'info' } })
+      window.dispatchEvent(event)
+      return
+    }
+
+    try {
+      const post = userPosts.find(p => p.id === postId)
+      if (!post) return
+
+      const { data: existingRepost } = await supabase
+        .from('posts')
+        .select('id')
+        .eq('user_id', currentUserForPosts.id)
+        .eq('post_metadata->>reposted_post_id', postId)
+        .maybeSingle()
+
+      const isReposted = !!existingRepost
+
+      if (isReposted) {
+        await supabase
+          .from('posts')
+          .delete()
+          .eq('id', existingRepost.id)
+
+        setRepostedPosts(prev => prev.filter(id => id !== postId))
+        setRepostCounts(prev => ({
+          ...prev,
+          [postId]: Math.max(0, (prev[postId] || 0) - 1)
+        }))
+        const event = new CustomEvent('showToast', { detail: { message: 'Repost removed', type: 'success' } })
+        window.dispatchEvent(event)
+        await loadUserPosts(0, true)
+      } else {
+        await supabase
+          .from('posts')
+          .insert({
+            user_id: currentUserForPosts.id,
+            title: post.title ? `Repost: ${post.title}` : 'Repost',
+            content: post.content,
+            post_metadata: {
+              ...post.post_metadata,
+              reposted_post_id: postId,
+              is_repost: true
+            }
+          })
+
+        setRepostedPosts(prev => [...prev, postId])
+        setRepostCounts(prev => ({
+          ...prev,
+          [postId]: (prev[postId] || 0) + 1
+        }))
+        const event = new CustomEvent('showToast', { detail: { message: 'Post reposted', type: 'success' } })
+        window.dispatchEvent(event)
+        await loadUserPosts(0, true)
+      }
+    } catch (err) {
+      console.error('Error reposting:', err)
+      const event = new CustomEvent('showToast', { detail: { message: 'Failed to repost', type: 'error' } })
+      window.dispatchEvent(event)
+    }
+  }
+
+  const handleQuote = (post: CommunityPost) => {
+    if (!currentUserForPosts) {
+      const event = new CustomEvent('showToast', { detail: { message: 'Please sign in to quote', type: 'info' } })
+      window.dispatchEvent(event)
+      return
+    }
+    // Navigate to community with quote post data
+    if (navigateToCommunity) {
+      navigateToCommunity()
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('quotePost', { detail: { post } }))
+      }, 100)
+    }
+  }
+
+  const handleBookmarkPost = async (postId: string) => {
+    if (!currentUserForPosts?.id) { 
+      const event = new CustomEvent('showToast', { detail: { message: 'Please sign in to save posts', type: 'info' } })
+      window.dispatchEvent(event)
+      return;
+    }
+    
+    const isBookmarked = bookmarkedPosts.includes(postId);
+    setBookmarkedPosts(prev => isBookmarked ? prev.filter(id => id !== postId) : [...prev, postId]);
+    
+    try {
+      if (isBookmarked) {
+        await supabase.from('post_bookmarks').delete().eq('post_id', postId).eq('user_id', currentUserForPosts.id);
+        const event = new CustomEvent('showToast', { detail: { message: 'Post removed from saved', type: 'success' } })
+        window.dispatchEvent(event)
+      } else {
+        await supabase.from('post_bookmarks').insert({ post_id: postId, user_id: currentUserForPosts.id });
+        const event = new CustomEvent('showToast', { detail: { message: 'Post saved', type: 'success' } })
+        window.dispatchEvent(event)
+
+        // Create notification for post owner
+        const post = userPosts.find(p => p.id === postId)
+        const postOwnerId = String(post?.user_id || '')
+        const currentUserId = String(currentUserForPosts?.id || '')
+        
+        if (post && postOwnerId !== '' && currentUserId !== '' && postOwnerId !== currentUserId) {
+          // Get current user profile for notification
+          const { data: currentUserProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUserForPosts.id)
+            .single()
+          
+          // Check user notification settings
+          const { data: settings, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('push_post_reactions')
+            .eq('id', post.user_id)
+            .maybeSingle()
+
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          if (settingsError && settingsError.code !== 'PGRST116') {
+            console.error('Error fetching user settings for bookmark notification:', settingsError)
+          }
+
+          // If no settings found or push_post_reactions is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_post_reactions !== false) {
+            const { error: notifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: post.user_id,
+                title: 'Your post was saved',
+                message: `${currentUserProfile?.full_name || 'Someone'} saved your post`,
+                type: 'post_bookmark',
+                related_entity_type: 'post',
+                related_entity_id: postId
+              })
+            
+            if (notifError) {
+              console.error('Error creating bookmark notification:', notifError)
+            } else {
+              console.log('Bookmark notification created successfully for user:', post.user_id)
+            }
+          }
+        }
+      }
+    } catch (error) {
+      setBookmarkedPosts(prev => isBookmarked ? [...prev, postId] : prev.filter(id => id !== postId));
+      const event = new CustomEvent('showToast', { detail: { message: 'Failed to save post', type: 'error' } })
+      window.dispatchEvent(event)
+    }
+  }
+
+  const addComment = async (postId: string) => {
+    if (!currentUserForPosts || !newComments[postId]?.trim()) return
+
+    try {
+      const { data, error } = await supabase
+        .from('post_comments')
+        .insert({
+          post_id: postId,
+          user_id: currentUserForPosts.id,
+          content: newComments[postId].trim()
+        })
+        .select(`
+          *,
+          user:profiles!user_id(*)
+        `)
+        .single()
+
+      if (error) throw error
+
+      setComments(prev => ({
+        ...prev,
+        [postId]: [data, ...(prev[postId] || [])]
+      }))
+      setNewComments(prev => ({ ...prev, [postId]: '' }))
+      
+      // Update post replies count
+      setUserPosts(prev => prev.map(p => 
+        p.id === postId 
+          ? { ...p, replies_count: (p.replies_count || 0) + 1 }
+          : p
+      ))
+    } catch (err) {
+      console.error('Error adding comment:', err)
+      const event = new CustomEvent('showToast', { detail: { message: 'Failed to add comment', type: 'error' } })
+      window.dispatchEvent(event)
+    }
+  }
+
+  const isPostOwner = (post: CommunityPost) => {
+    return post.user_id === currentUserForPosts?.id
+  }
+
+  const viewUserProfile = (userId: string) => {
+    const event = new CustomEvent('viewUserProfile', { detail: { userId } })
+    window.dispatchEvent(event)
+  }
+
+  const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
+  const [emojiPickerHideTimer, setEmojiPickerHideTimer] = useState<NodeJS.Timeout | null>(null)
+
+  const handleLongPressStart = (postId: string, e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault()
+    const timer = setTimeout(() => {
+      setShowEmojiPicker(postId)
+    }, 500)
+    setLongPressTimer(timer)
+  }
+
+  const handleLongPressEnd = () => {
+    if (longPressTimer) {
+      clearTimeout(longPressTimer)
+      setLongPressTimer(null)
+    }
+  }
+
+  // Load user profile for comments
+  const [currentUserProfile, setCurrentUserProfile] = useState<Profile | null>(null)
+  useEffect(() => {
+    if (currentUserForPosts?.id) {
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUserForPosts.id)
+        .single()
+        .then(({ data }) => {
+          if (data) setCurrentUserProfile(data)
+        })
+    }
+  }, [currentUserForPosts?.id])
+
+  const loadUserPosts = async (page: number = 0, reset: boolean = false) => {
+    if (!profileId) return
+    
+    try {
+      if (reset) {
+        setLoadingPosts(true)
+        setPostsPage(0)
+        setHasMorePosts(true)
+      }
+
+      const POSTS_PER_PAGE = 10
+      const from = page * POSTS_PER_PAGE
+      const to = from + POSTS_PER_PAGE - 1
+
+      const { data, error, count } = await supabase
+        .from('posts')
+        .select(`
+          *,
+          user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
+        `, { count: 'exact' })
+        .eq('user_id', profileId)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+
+      if (error) {
+        console.error('Error loading user posts:', error)
+        if (reset) setLoadingPosts(false)
+        return
+      }
+
+      if (count !== null) {
+        const hasMore = to < (count - 1)
+        setHasMorePosts(hasMore)
+      }
+
+      const postsWithDetails = await Promise.all(
+        (data || []).map(async (post) => {
+          // Count comments
+          const { count: commentsCount } = await supabase
+            .from('post_comments')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_id', post.id)
+
+          // Load reaction counts
+          const { data: reactions } = await supabase
+            .from('post_reactions')
+            .select('reaction_type')
+            .eq('post_id', post.id)
+          
+          let likesCount = 0
+          const emojiReactions: Record<string, number> = {}
+          
+          if (reactions) {
+            reactions.forEach(r => {
+              if (r.reaction_type === 'like') {
+                likesCount++
+              } else {
+                emojiReactions[r.reaction_type] = (emojiReactions[r.reaction_type] || 0) + 1
+              }
+            })
+          }
+
+          // Set reaction counts in state
+          if (likesCount > 0) {
+            setPostLikes(prev => ({ ...prev, [post.id]: likesCount }))
+          }
+          if (Object.keys(emojiReactions).length > 0) {
+            setPostReactions(prev => ({
+              ...prev,
+              [post.id]: Object.entries(emojiReactions).map(([emoji, count]) => ({ emoji, count }))
+            }))
+          }
+
+          // Load repost count
+          const { count: repostCount } = await supabase
+            .from('posts')
+            .select('*', { count: 'exact', head: true })
+            .eq('post_metadata->>reposted_post_id', post.id)
+
+          if (repostCount !== null && repostCount > 0) {
+            setRepostCounts(prev => ({ ...prev, [post.id]: repostCount }))
+          }
+
+          // Check if current user reposted this post
+          if (currentUserForPosts) {
+            const { data: userRepost } = await supabase
+              .from('posts')
+              .select('id')
+              .eq('user_id', currentUserForPosts.id)
+              .eq('post_metadata->>reposted_post_id', post.id)
+              .maybeSingle()
+
+            if (userRepost) {
+              setRepostedPosts(prev => {
+                if (!prev.includes(post.id)) {
+                  return [...prev, post.id]
+                }
+                return prev
+              })
+            }
+
+            // Check if current user reacted to this post
+            const { data: userReaction } = await supabase
+              .from('post_reactions')
+              .select('reaction_type')
+              .eq('post_id', post.id)
+              .eq('user_id', currentUserForPosts.id)
+              .maybeSingle()
+
+            if (userReaction) {
+              setUserPostReactions(prev => ({ ...prev, [post.id]: userReaction.reaction_type }))
+            }
+
+            // Check if current user bookmarked this post
+            const { data: bookmark } = await supabase
+              .from('post_bookmarks')
+              .select('id')
+              .eq('post_id', post.id)
+              .eq('user_id', currentUserForPosts.id)
+              .maybeSingle()
+
+            if (bookmark) {
+              setBookmarkedPosts(prev => {
+                if (!prev.includes(post.id)) {
+                  return [...prev, post.id]
+                }
+                return prev
+              })
+            }
+          }
+
+          return {
+            ...post,
+            user_id: post.user_id,
+            user: post.user || { 
+              full_name: 'Unknown User', 
+              profession: '', 
+              id: post.user_id 
+            },
+            replies_count: commentsCount || 0,
+            post_metadata: post.post_metadata || {},
+            likes_count: likesCount,
+            emoji_reactions: Object.entries(emojiReactions).map(([emoji, count]) => ({ emoji, count }))
+          }
+        })
+      )
+
+      if (reset) {
+        setUserPosts(postsWithDetails)
+      } else {
+        setUserPosts(prev => [...prev, ...postsWithDetails])
+      }
+    } catch (err) {
+      console.error('Error loading user posts:', err)
+    } finally {
+      if (reset) {
+        setLoadingPosts(false)
+      }
+    }
+  }
+
   const renderContactButtons = () => {
     if (!profile) return null
     const isOwnProfile = currentUserId === profileId
@@ -6737,19 +8052,27 @@ function ProfileDetailPage({
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div className={`max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8 ${isTabSticky || isHeaderSticky ? 'grid grid-cols-1 md:grid-cols-12 gap-6' : ''}`}>
         {/* Profile Header Card - TEK BİR KEZ RENDER EDİLİYOR */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 mb-6">
-          <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+        <div 
+          className={`bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-8 mb-6 transition-all duration-300 ${
+            isHeaderSticky 
+              ? 'sticky top-6 z-30 rounded-lg overflow-hidden md:col-span-3 h-fit' 
+              : isTabSticky 
+                ? 'md:col-span-9' 
+                : ''
+          }`}
+        >
+          <div className={`flex items-start gap-4 ${isHeaderSticky ? 'flex-row' : 'flex-col sm:flex-row'} ${isHeaderSticky ? 'gap-3' : 'gap-4 sm:gap-6'}`}>
             <div className="relative flex-shrink-0">
               {profile?.avatar_url ? (
                 <img
                   src={profile.avatar_url}
                   alt={profile?.full_name || 'Profile photo'}
-                  className="w-24 h-24 sm:w-32 sm:h-32 rounded-full object-cover"
+                  className={`rounded-full object-cover ${isHeaderSticky ? 'w-16 h-16' : 'w-24 h-24 sm:w-32 sm:h-32'}`}
                 />
               ) : (
-                <div className="w-24 h-24 sm:w-32 sm:h-32 bg-blue-600 rounded-full flex items-center justify-center text-white text-4xl sm:text-5xl font-bold">
+                <div className={`bg-blue-600 rounded-full flex items-center justify-center text-white font-bold ${isHeaderSticky ? 'w-16 h-16 text-2xl' : 'w-24 h-24 sm:w-32 sm:h-32 text-4xl sm:text-5xl'}`}>
               {profile?.full_name?.charAt(0) || 'T'}
                 </div>
               )}
@@ -6905,26 +8228,35 @@ function ProfileDetailPage({
                 </div>
               ) : (
                 <>
-                  <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">{profile?.full_name}</h1>
-                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
-                    <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile?.profession}</p>
-                    {totalExperience !== '0' && (
-                      <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
-                        {totalExperience} total experience
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>{profile.city}, {profile.county}</span>
+                  <h1 className={`font-bold text-gray-900 mb-2 ${isHeaderSticky ? 'text-lg' : 'text-2xl sm:text-3xl'}`}>{profile?.full_name}</h1>
+                  {!isHeaderSticky && (
+                    <>
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4">
+                        <p className="text-lg sm:text-xl text-blue-600 font-medium">{profile?.profession}</p>
+                        {totalExperience !== '0' && (
+                          <span className="bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-semibold">
+                            {totalExperience} total experience
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-sm text-gray-600 mb-4">
+                        <div className="flex items-center gap-2">
+                          <MapPin className="w-4 h-4" />
+                          <span>{profile.city}, {profile.county}</span>
+                        </div>
+                        {profile.offers_remote && (
+                          <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
+                            ✅ Remote Available
+                          </span>
+                        )}
+                      </div>
+                    </>
+                  )}
+                  {isHeaderSticky && (
+                    <div className="text-sm text-gray-600">
+                      <p className="text-blue-600 font-medium">{profile?.profession}</p>
                     </div>
-                    {profile.offers_remote && (
-                      <span className="bg-green-50 text-green-700 px-3 py-1 rounded-full text-xs font-medium">
-                        ✅ Remote Available
-                      </span>
-                    )}
-                  </div>
+                  )}
                 </>
               )}
               
@@ -6932,10 +8264,63 @@ function ProfileDetailPage({
               {editingSection !== 'basic' && renderContactButtons()}
             </div>
           </div>
+
+          {/* Mutual Connections */}
+          {!isOwnProfile && currentUserId && (
+            loadingMutualConnections ? (
+              <div className="mt-4 pt-4 border-t border-gray-200 flex items-center gap-2 text-sm text-gray-500">
+                <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                <span>Loading mutual connections...</span>
+              </div>
+            ) : mutualConnections.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="w-4 h-4 text-gray-600" />
+                <h3 className="text-sm font-semibold text-gray-900">
+                  {mutualConnections.length} {mutualConnections.length === 1 ? 'mutual connection' : 'mutual connections'}
+                </h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {mutualConnections.slice(0, 6).map((mutual: Profile) => (
+                  <button
+                    key={mutual.id}
+                    onClick={() => {
+                      const event = new CustomEvent('viewUserProfile', { detail: { userId: mutual.id } })
+                      window.dispatchEvent(event)
+                    }}
+                    className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+                    title={mutual.full_name}
+                  >
+                    <Avatar 
+                      src={mutual.avatar_url} 
+                      name={mutual.full_name} 
+                      className="w-6 h-6 flex-shrink-0" 
+                      useInlineSize={false} 
+                    />
+                    <span className="text-xs font-medium text-gray-700 group-hover:text-blue-600 transition-colors truncate max-w-[120px]">
+                      {mutual.full_name}
+                    </span>
+                  </button>
+                ))}
+                {mutualConnections.length > 6 && (
+                  <span className="text-xs text-gray-500 px-2 py-1.5">
+                    +{mutualConnections.length - 6} more
+                  </span>
+                )}
+              </div>
+            </div>
+            )
+          )}
         </div>
 
         {/* Tabs Navigation */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 mb-6">
+        <div 
+          className={`bg-white rounded-2xl shadow-sm border border-gray-200 mb-6 transition-all duration-300 ${
+            isTabSticky 
+              ? 'sticky top-6 z-40 rounded-lg md:col-span-3 h-fit' 
+              : ''
+          }`}
+        >
           <div className="flex border-b border-gray-200">
             <button
               onClick={() => setActiveTab('about')}
@@ -6948,6 +8333,19 @@ function ProfileDetailPage({
               <div className="flex items-center justify-center gap-2">
                 <User className="w-4 h-4" />
                 <span>About Me</span>
+              </div>
+            </button>
+            <button
+              onClick={() => setActiveTab('posts')}
+              className={`flex-1 px-6 py-4 text-center font-medium transition-colors ${
+                activeTab === 'posts'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <div className="flex items-center justify-center gap-2">
+                <FileText className="w-4 h-4" />
+                <span>Posts</span>
               </div>
             </button>
             <button
@@ -6968,7 +8366,7 @@ function ProfileDetailPage({
 
         {/* Tab Content */}
         {activeTab === 'about' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6">
+          <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 ${isTabSticky ? 'md:col-span-9' : ''}`}>
           {/* Left Column - Main Info */}
           <div className="md:col-span-2 space-y-4 sm:space-y-6">
             {/* About Me */}
@@ -7656,9 +9054,665 @@ function ProfileDetailPage({
         </div>
         )}
 
+        {/* Posts Tab */}
+        {activeTab === 'posts' && (
+          <div className={`space-y-4 ${isTabSticky ? 'md:col-span-9' : ''}`}>
+            {loadingPosts && userPosts.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : userPosts.length === 0 ? (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-12 text-center">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-600">No posts yet</p>
+              </div>
+            ) : (
+              userPosts.map(post => (
+                <div 
+                  key={post.id} 
+                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                >
+                  {/* Post Header with Menu */}
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
+                          className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
+                        >
+                          <Avatar src={post.user?.avatar_url} name={getUserDisplayName(post.user)} className="w-8 h-8" useInlineSize={false} />
+                        </button>
+                        <div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
+                            className="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
+                          >
+                            {getUserDisplayName(post.user)}
+                          </button>
+                          <p className="text-xs text-gray-500">
+                            {getUserProfession(post.user)} • {formatTime(post.created_at)}
+                            {post.updated_at && post.updated_at !== post.created_at && (
+                              <span className="text-gray-400"> (edited)</span>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {/* Post Metadata */}
+                      {renderPostMetadata(post)}
+                    </div>
+
+                    {/* Menu Button */}
+                    {isPostOwner(post) && (
+                      <div 
+                        className="relative" 
+                        ref={el => {
+                          menuRefs.current[post.id] = el;
+                        }}
+                      >
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            setActiveMenuPost(activeMenuPost === post.id ? null : post.id);
+                          }}
+                          className="flex items-center justify-center w-7 h-7 rounded-full hover:bg-gray-100 transition-colors text-gray-500"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+
+                        {activeMenuPost === post.id && (
+                          <div className="absolute right-0 top-10 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1">
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                e.preventDefault();
+                                const postUrl = `${window.location.origin}?post=${post.id}`;
+                                try {
+                                  await navigator.clipboard.writeText(postUrl);
+                                  const event = new CustomEvent('showToast', { detail: { message: 'Post link copied to clipboard!', type: 'success' } })
+                                  window.dispatchEvent(event)
+                                } catch (err) {
+                                  const event = new CustomEvent('showToast', { detail: { message: 'Failed to copy link', type: 'error' } })
+                                  window.dispatchEvent(event)
+                                }
+                                setActiveMenuPost(null)
+                              }}
+                              className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                              title="Share Post"
+                            >
+                              <Download className="w-4 h-4 text-blue-600" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Post Content with See More/Less */}
+                  <div className="group relative text-gray-700 mb-3 text-sm leading-relaxed">
+                    {(() => {
+                      const textContent = post.content.replace(/<[^>]*>/g, '')
+                      const contentLength = textContent.length
+                      return (
+                        <>
+                          {contentLength > 300 && (
+                            <>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                                className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
+                              >
+                                See less
+                              </button>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                                className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
+                              >
+                                See more
+                              </button>
+                            </>
+                          )}
+
+                          <div 
+                            className={`
+                              ${expandedPosts[post.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                              rich-text-content
+                            `}
+                            dangerouslySetInnerHTML={{ __html: post.content }}
+                          />
+
+                          {!expandedPosts[post.id] && contentLength > 300 && (
+                            <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                          )}
+                        </>
+                      )
+                    })()}
+                  </div>
+
+                  {/* Quoted Post */}
+                  {post.post_metadata?.quoted_post_data && (
+                    <button
+                      onClick={async (e) => {
+                        e.stopPropagation()
+                        const quotedPostId = post.post_metadata?.quoted_post_data?.id
+                        if (!quotedPostId) return
+                        // Navigate to community to view quoted post
+                        if (navigateToCommunity) navigateToCommunity()
+                      }}
+                      className="w-full text-left border-l-4 border-blue-500 bg-gray-50 rounded-lg p-3 mb-3 mt-3 hover:bg-gray-100 transition-colors cursor-pointer"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Avatar 
+                          src={post.post_metadata.quoted_post_data.user?.avatar_url} 
+                          name={post.post_metadata.quoted_post_data.user?.full_name || 'Unknown'} 
+                          className="w-6 h-6" 
+                          useInlineSize={false} 
+                        />
+                        <div>
+                          <p className="text-xs font-semibold text-gray-900">
+                            {post.post_metadata.quoted_post_data.user?.full_name || 'Unknown User'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {post.post_metadata.quoted_post_data.user?.profession || ''}
+                          </p>
+                        </div>
+                      </div>
+                      <div 
+                        className="text-sm text-gray-700 line-clamp-4 rich-text-content pointer-events-none"
+                        dangerouslySetInnerHTML={{ __html: post.post_metadata.quoted_post_data.content }}
+                      />
+                    </button>
+                  )}
+
+                  {/* Attachments */}
+                  {post.post_metadata?.attachments && post.post_metadata.attachments.length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex flex-wrap gap-2">
+                        {post.post_metadata.attachments.map((attachment: string, idx: number) => {
+                          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment)
+                          return isImage ? (
+                            <img
+                              key={idx}
+                              src={attachment}
+                              alt={`Attachment ${idx + 1}`}
+                              className="max-w-full max-h-64 rounded-lg object-cover cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                window.open(attachment, '_blank')
+                              }}
+                            />
+                          ) : (
+                            <a
+                              key={idx}
+                              href={attachment}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span>Attachment {idx + 1}</span>
+                            </a>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Reaction Summary - LinkedIn Style */}
+                  {(() => {
+                    const allReactions: { emoji: string; count: number }[] = [];
+                    
+                    // Add like as 👍 emoji
+                    if (postLikes[post.id] && postLikes[post.id] > 0) {
+                      allReactions.push({ emoji: '👍', count: postLikes[post.id] });
+                    }
+                    
+                    // Add emoji reactions
+                    if (postReactions[post.id]) {
+                      postReactions[post.id].forEach(reaction => {
+                        const existing = allReactions.find(r => r.emoji === reaction.emoji);
+                        if (existing) {
+                          existing.count += reaction.count;
+                        } else {
+                          allReactions.push({ ...reaction });
+                        }
+                      });
+                    }
+                    
+                    if (allReactions.length === 0) return null;
+                    
+                    // Sort by count (descending) and take top 3
+                    const topReactions = allReactions
+                      .sort((a, b) => b.count - a.count)
+                      .slice(0, 3);
+                    
+                    // Calculate total count
+                    const totalCount = allReactions.reduce((sum, r) => sum + r.count, 0);
+                    
+                    return (
+                      <div 
+                        className="flex items-center gap-1.5 mb-2 text-xs text-gray-600 cursor-pointer hover:underline"
+                        onClick={() => loadReactionsModal(post.id)}
+                      >
+                        {/* Top 3 reactions stacked */}
+                        <div className="flex items-center" style={{ marginRight: '4px' }}>
+                          {topReactions.map((reaction, idx) => (
+                            <span
+                              key={idx}
+                              className="text-lg leading-none inline-block"
+                              style={{
+                                marginLeft: idx > 0 ? '-6px' : '0',
+                                zIndex: topReactions.length - idx,
+                                position: 'relative',
+                                filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))'
+                              }}
+                              title={`${reaction.emoji} ${reaction.count}`}
+                            >
+                              {reaction.emoji}
+                            </span>
+                          ))}
+                        </div>
+                        {/* Total count */}
+                        <span className="text-xs font-medium text-gray-600">
+                          {totalCount}
+                        </span>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Action Bar */}
+                  <div className="border-t border-gray-100 pt-2 mt-2">
+                    <div className="flex items-center justify-start gap-6">
+                      {/* Like Button with Long Press */}
+                      <div 
+                        className="relative"
+                        onMouseEnter={() => {
+                          if (emojiPickerHideTimer) {
+                            clearTimeout(emojiPickerHideTimer)
+                            setEmojiPickerHideTimer(null)
+                          }
+                          setShowEmojiPicker(post.id)
+                        }}
+                        onMouseLeave={() => {
+                          const timer = setTimeout(() => {
+                            setShowEmojiPicker(null)
+                          }, 250)
+                          setEmojiPickerHideTimer(timer)
+                        }}
+                      >
+                        <button
+                          onClick={(e) => {
+                            handleLikePost(post.id, e);
+                          }}
+                          onMouseDown={(e) => handleLongPressStart(post.id, e)}
+                          onMouseUp={handleLongPressEnd}
+                          onTouchStart={(e) => handleLongPressStart(post.id, e)}
+                          onTouchEnd={handleLongPressEnd}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                            userPostReactions[post.id] 
+                              ? 'text-blue-600 bg-blue-50' 
+                              : 'text-gray-500 hover:bg-gray-100'
+                          }`}
+                          title="Like"
+                        >
+                          {(() => {
+                            const currentReaction = userPostReactions[post.id];
+                            // Show emoji if there's a reaction, otherwise show 👍 as default
+                            if (currentReaction) {
+                              return <span className="text-xl">{currentReaction}</span>;
+                            }
+                            return <span className="text-xl">👍</span>;
+                          })()}
+                          {(() => {
+                            const currentReaction = userPostReactions[post.id];
+                            if (currentReaction) {
+                              // Show emoji reaction count
+                              const reactionData = postReactions[post.id]?.find(r => r.emoji === currentReaction);
+                              return reactionData && reactionData.count > 0 ? (
+                                <span className="text-xs font-medium">{reactionData.count}</span>
+                              ) : null;
+                            }
+                            // Show 👍 count if exists
+                            const likeReaction = postReactions[post.id]?.find(r => r.emoji === '👍');
+                            return likeReaction && likeReaction.count > 0 ? (
+                              <span className="text-xs font-medium">{likeReaction.count}</span>
+                            ) : null;
+                          })()}
+                        </button>
+
+                        {/* Emoji Picker Overlay */}
+                        {showEmojiPicker === post.id && (
+                          <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50">
+                            {EMOJI_REACTIONS.map((reaction) => {
+                              const isSelected = userPostReactions[post.id] === reaction.emoji;
+                              return (
+                                <button
+                                  key={reaction.emoji}
+                                  onClick={(e) => {
+                                    handleEmojiReaction(post.id, reaction.emoji, e);
+                                  }}
+                                  onMouseDown={(e) => e.stopPropagation()}
+                                  className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                                    isSelected ? 'bg-blue-50 scale-110' : ''
+                                  }`}
+                                  title={reaction.label}
+                                >
+                                  <span className="text-xl">{reaction.emoji}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Comments Button */}
+                      <button
+                        onClick={(e) => {
+                          toggleComments(post.id, e);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                          openComments[post.id] 
+                            ? 'text-green-600 bg-green-50' 
+                            : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                        title="Comments"
+                      >
+                        <MessageSquare className="w-5 h-5" />
+                        {(() => {
+                          const postComments = comments[post.id];
+                          let commentCount = 0;
+                          if (postComments !== undefined) {
+                            const topLevelCount = postComments.filter(c => !c.parent_reply_id).length;
+                            const countReplies = (commentList: Comment[]): number => {
+                              let count = 0;
+                              commentList.forEach(comment => {
+                                if (comment.replies && comment.replies.length > 0) {
+                                  count += comment.replies.length;
+                                  count += countReplies(comment.replies);
+                                }
+                              });
+                              return count;
+                            };
+                            const repliesCount = countReplies(postComments);
+                            commentCount = topLevelCount + repliesCount;
+                          } else {
+                            commentCount = post.replies_count || 0;
+                          }
+                          return commentCount > 0 ? (
+                            <span className="text-xs font-medium">{commentCount}</span>
+                          ) : null;
+                        })()}
+                      </button>
+
+                      {/* Repost Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRepost(post.id);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
+                          repostedPosts.includes(post.id) 
+                            ? 'text-green-600 bg-green-50 hover:bg-green-100' 
+                            : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                        title="Repost"
+                      >
+                        <Repeat2 className={`w-5 h-5 ${repostedPosts.includes(post.id) ? 'fill-current' : ''}`} />
+                        {repostCounts[post.id] > 0 && (
+                          <span className="text-xs font-medium">{repostCounts[post.id]}</span>
+                        )}
+                      </button>
+
+                      {/* Quote Button */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuote(post);
+                        }}
+                        className="px-3 py-1.5 rounded-full transition-colors text-gray-500 hover:bg-gray-100"
+                        title="Quote"
+                      >
+                        <Quote className="w-5 h-5" />
+                      </button>
+
+                      {/* Bookmark Button */}
+                      <button
+                        onClick={() => handleBookmarkPost(post.id)}
+                        className={`px-3 py-1.5 rounded-full transition-colors ${
+                          bookmarkedPosts.includes(post.id) 
+                            ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' 
+                            : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                        title={bookmarkedPosts.includes(post.id) ? 'Saved' : 'Save post'}
+                        aria-label={bookmarkedPosts.includes(post.id) ? 'Unsave post' : 'Save post'}
+                      >
+                        <Bookmark className={`w-5 h-5 ${bookmarkedPosts.includes(post.id) ? 'fill-current' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Inline Comments Section */}
+                  {openComments[post.id] && (
+                    <div className="mt-3 border-t border-gray-100 pt-3">
+                      {/* Add Comment */}
+                      <div className="mb-4">
+                        <div className="flex gap-2">
+                          <Avatar src={currentUserProfile?.avatar_url} name={currentUserProfile?.full_name} className="w-6 h-6 flex-shrink-0" useInlineSize={false} />
+                          <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 rounded-full focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+                            <textarea
+                              value={newComments[post.id] || ''}
+                              onChange={(e) => {
+                                setNewComments(prev => ({ ...prev, [post.id]: e.target.value }));
+                                e.target.style.height = 'auto';
+                                e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                              }}
+                              placeholder="Write a comment..."
+                              className="flex-1 resize-none border-none outline-none text-sm py-0.5"
+                              rows={1}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault()
+                                  addComment(post.id)
+                                }
+                              }}
+                              style={{ maxHeight: '80px', minHeight: '20px', height: '20px' }}
+                            />
+                            <button
+                              onClick={() => addComment(post.id)}
+                              disabled={!newComments[post.id]?.trim()}
+                              className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                              title="Post comment"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Comments List */}
+                      {comments[post.id] && comments[post.id].length > 0 && (
+                        <div className="space-y-4">
+                          {comments[post.id].map(comment => (
+                            <div key={comment.id} className="flex gap-3 items-start">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  viewUserProfile(comment.user_id || getUserId(comment.user));
+                                }}
+                                className="flex-shrink-0 self-start hover:opacity-80 transition-opacity cursor-pointer"
+                              >
+                                <Avatar
+                                  src={comment.user?.avatar_url}
+                                  name={comment.user?.full_name || 'User'}
+                                  className="w-8 h-8"
+                                  useInlineSize={false}
+                                />
+                              </button>
+                              <div className="flex-1">
+                                <div className="bg-gray-50 rounded-lg px-3 py-2">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      viewUserProfile(comment.user_id || getUserId(comment.user));
+                                    }}
+                                    className="font-semibold text-sm text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                  >
+                                    {comment.user?.full_name || 'User'}
+                                  </button>
+                                  <p className="text-gray-700 text-sm mt-1">{comment.content}</p>
+                                </div>
+                                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                  <span>{formatTime(comment.created_at)}</span>
+                                  <button
+                                    onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
+                                    className="hover:text-blue-600 font-medium"
+                                  >
+                                    Reply
+                                  </button>
+                                </div>
+
+                                {/* Reply Input */}
+                                {replyingTo[comment.id] && (
+                                  <div className="mt-2 ml-4">
+                                    <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+                                      <textarea
+                                        value={replyContents[comment.id] || ''}
+                                        onChange={(e) => {
+                                          setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }));
+                                          e.target.style.height = 'auto';
+                                          e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                                        }}
+                                        placeholder="Write a reply..."
+                                        className="flex-1 resize-none border-none outline-none text-sm py-1"
+                                        rows={1}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault()
+                                            // Add reply logic here
+                                            setReplyingTo(prev => ({ ...prev, [comment.id]: false }))
+                                            setReplyContents(prev => ({ ...prev, [comment.id]: '' }))
+                                          }
+                                        }}
+                                        style={{ maxHeight: '80px', minHeight: '20px', height: '20px' }}
+                                      />
+                                      <button
+                                        onClick={async () => {
+                                          if (!currentUserForPosts || !replyContents[comment.id]?.trim()) return
+                                          try {
+                                            const { data, error } = await supabase
+                                              .from('post_comments')
+                                              .insert({
+                                                post_id: post.id,
+                                                user_id: currentUserForPosts.id,
+                                                content: replyContents[comment.id].trim(),
+                                                parent_reply_id: comment.id
+                                              })
+                                              .select(`
+                                                *,
+                                                user:profiles!user_id(*)
+                                              `)
+                                              .single()
+
+                                            if (error) throw error
+
+                                            setComments(prev => {
+                                              const postComments = prev[post.id] || []
+                                              const updateComment = (comments: Comment[]): Comment[] => {
+                                                return comments.map(c => {
+                                                  if (c.id === comment.id) {
+                                                    return { ...c, replies: [...(c.replies || []), data] }
+                                                  }
+                                                  if (c.replies && c.replies.length > 0) {
+                                                    return { ...c, replies: updateComment(c.replies) }
+                                                  }
+                                                  return c
+                                                })
+                                              }
+                                              return { ...prev, [post.id]: updateComment(postComments) }
+                                            })
+                                            setReplyingTo(prev => ({ ...prev, [comment.id]: false }))
+                                            setReplyContents(prev => ({ ...prev, [comment.id]: '' }))
+                                            setUserPosts(prev => prev.map(p => 
+                                              p.id === post.id 
+                                                ? { ...p, replies_count: (p.replies_count || 0) + 1 }
+                                                : p
+                                            ))
+                                          } catch (err) {
+                                            console.error('Error adding reply:', err)
+                                          }
+                                        }}
+                                        disabled={!replyContents[comment.id]?.trim()}
+                                        className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                                      >
+                                        <Send className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Replies */}
+                                {comment.replies && comment.replies.length > 0 && (
+                                  <div className="mt-2 ml-4 space-y-2">
+                                    {comment.replies.map((reply: any) => (
+                                      <div key={reply.id} className="flex gap-2 items-start">
+                                        <Avatar
+                                          src={reply.user?.avatar_url}
+                                          name={reply.user?.full_name || 'User'}
+                                          className="w-6 h-6"
+                                          useInlineSize={false}
+                                        />
+                                        <div className="flex-1">
+                                          <div className="bg-gray-50 rounded-lg px-2 py-1.5">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                viewUserProfile(reply.user_id || getUserId(reply.user));
+                                              }}
+                                              className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                            >
+                                              {reply.user?.full_name || 'User'}
+                                            </button>
+                                            <p className="text-gray-700 text-xs mt-0.5">{reply.content}</p>
+                                          </div>
+                                          <div className="text-xs text-gray-500 mt-1">
+                                            {formatTime(reply.created_at)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+            {hasMorePosts && !loadingPosts && (
+              <div className="flex justify-center py-4">
+                <button
+                  onClick={() => {
+                    const nextPage = postsPage + 1
+                    loadUserPosts(nextPage, false)
+                    setPostsPage(nextPage)
+                  }}
+                  className="px-4 py-2 text-sm text-blue-600 hover:text-blue-700 border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+                >
+                  Load More
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Activities Tab */}
         {activeTab === 'activities' && (
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className={`grid grid-cols-1 lg:grid-cols-4 gap-6 ${isTabSticky ? 'md:col-span-9' : ''}`}>
             {/* Left Sidebar - Filters */}
             <div className="lg:col-span-1">
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sticky top-24">
@@ -8112,6 +10166,54 @@ function ProfileDetailPage({
 
               {/* Profile Details */}
               <div className="space-y-4">
+                {/* Mutual Connections */}
+                {currentUserId && selectedUserProfile?.id && selectedUserProfile.id !== currentUserId && (
+                  loadingMutualConnections ? (
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                      <span>Loading mutual connections...</span>
+                    </div>
+                  ) : mutualConnections.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Users className="w-4 h-4 text-gray-600" />
+                      <h5 className="text-sm font-semibold text-gray-900">
+                        {mutualConnections.length} {mutualConnections.length === 1 ? 'mutual connection' : 'mutual connections'}
+                      </h5>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {mutualConnections.slice(0, 6).map((mutual: Profile) => (
+                        <button
+                          key={mutual.id}
+                          onClick={() => {
+                            setSelectedUserProfile(null)
+                            const event = new CustomEvent('viewUserProfile', { detail: { userId: mutual.id } })
+                            window.dispatchEvent(event)
+                          }}
+                          className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+                          title={mutual.full_name}
+                        >
+                          <Avatar 
+                            src={mutual.avatar_url} 
+                            name={mutual.full_name} 
+                            className="w-6 h-6 flex-shrink-0" 
+                            useInlineSize={false} 
+                          />
+                          <span className="text-xs font-medium text-gray-700 group-hover:text-blue-600 transition-colors truncate max-w-[120px]">
+                            {mutual.full_name}
+                          </span>
+                        </button>
+                      ))}
+                      {mutualConnections.length > 6 && (
+                        <span className="text-xs text-gray-500 px-2 py-1.5">
+                          +{mutualConnections.length - 6} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  )
+                )}
+
                 {selectedUserProfile.specialties && selectedUserProfile.specialties.length > 0 && (
                   <div>
                     <h5 className="text-sm font-medium text-gray-700 mb-2">Specialties</h5>
@@ -8138,6 +10240,154 @@ function ProfileDetailPage({
                   </div>
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactions Modal */}
+      {reactionsModalOpen && reactionsModalPostId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={() => {
+          setReactionsModalOpen(false)
+          setReactionsModalPostId(null)
+        }}>
+          <div className="bg-white rounded-xl w-full max-w-lg max-h-[70vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-gray-900">Reactions</h2>
+              <button 
+                onClick={() => {
+                  setReactionsModalOpen(false)
+                  setReactionsModalPostId(null)
+                }}
+                className="text-gray-400 hover:text-gray-600 rounded-full p-1.5 hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="border-b px-4 flex items-center gap-0.5 overflow-x-auto">
+              <button
+                onClick={() => setReactionsModalActiveTab('ALL')}
+                className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                  reactionsModalActiveTab === 'ALL'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                <span className="mr-1.5">All</span>
+                <span className="text-gray-500 text-xs">
+                  {reactionsModalData.reduce((sum, r) => sum + r.users.length, 0)}
+                </span>
+              </button>
+              {reactionsModalData.map((reaction) => {
+                const reactionType = reaction.emoji === '👍' ? 'LIKE' : 
+                  reaction.emoji === '❤️' ? 'EMPATHY' :
+                  reaction.emoji === '💡' ? 'INTEREST' :
+                  reaction.emoji === '😂' ? 'HAHA' :
+                  reaction.emoji === '😮' ? 'WOW' :
+                  reaction.emoji === '😢' ? 'SAD' : 'OTHER';
+                return (
+                  <button
+                    key={reaction.emoji}
+                    onClick={() => setReactionsModalActiveTab(reactionType)}
+                    className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                      reactionsModalActiveTab === reactionType
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    <span className="text-base">{reaction.emoji}</span>
+                    <span className="text-xs">{reaction.users.length}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {loadingReactionsModal ? (
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                </div>
+              ) : (() => {
+                let usersToShow: { user: Profile; reaction_type: string }[] = [];
+                
+                if (reactionsModalActiveTab === 'ALL') {
+                  // Combine all users
+                  usersToShow = reactionsModalData.flatMap(r => r.users);
+                } else {
+                  // Filter by selected reaction type
+                  const selectedReaction = reactionsModalData.find(r => {
+                    const reactionType = r.emoji === '👍' ? 'LIKE' : 
+                      r.emoji === '❤️' ? 'EMPATHY' :
+                      r.emoji === '💡' ? 'INTEREST' :
+                      r.emoji === '😂' ? 'HAHA' :
+                      r.emoji === '😮' ? 'WOW' :
+                      r.emoji === '😢' ? 'SAD' : 'OTHER';
+                    return reactionType === reactionsModalActiveTab;
+                  });
+                  usersToShow = selectedReaction?.users || [];
+                }
+
+                if (usersToShow.length === 0) {
+                  return (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No reactions found</p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <ul className="space-y-1">
+                    {usersToShow.map((item, idx) => {
+                      const reactionData = reactionsModalData.find(r => 
+                        r.users.some(u => u.user.id === item.user.id && u.reaction_type === item.reaction_type)
+                      );
+                      const reactionEmoji = reactionData?.emoji || '👍';
+                      
+                      return (
+                        <li key={`${item.user.id}-${idx}`} className="py-2 border-b border-gray-100 last:border-0">
+                          <button
+                            onClick={() => {
+                              setSelectedUserProfile(null);
+                              const event = new CustomEvent('viewUserProfile', { detail: { userId: item.user.id } });
+                              window.dispatchEvent(event);
+                            }}
+                            className="flex items-center gap-2.5 w-full text-left hover:bg-gray-50 px-2 py-1.5 rounded-lg transition-colors"
+                          >
+                            <div className="relative">
+                              <Avatar 
+                                src={item.user.avatar_url} 
+                                name={item.user.full_name} 
+                                className="w-10 h-10" 
+                                useInlineSize={false} 
+                              />
+                              <span 
+                                className="absolute -bottom-0.5 -right-0.5 text-base bg-white rounded-full p-0.5"
+                                style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}
+                              >
+                                {reactionEmoji}
+                              </span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 truncate">
+                                {item.user.full_name}
+                              </div>
+                              {item.user.profession && (
+                                <div className="text-xs text-gray-600 truncate">
+                                  {item.user.profession}
+                                </div>
+                              )}
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -8181,11 +10431,21 @@ function CommunityComponent({
   })
   const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
+  const [modalMutualConnections, setModalMutualConnections] = useState<Profile[]>([])
+  const [loadingModalMutualConnections, setLoadingModalMutualConnections] = useState(false)
+  const [reactionsModalOpen, setReactionsModalOpen] = useState(false)
+  const [reactionsModalData, setReactionsModalData] = useState<{ emoji: string; users: { user: Profile; reaction_type: string }[] }[]>([])
+  const [reactionsModalActiveTab, setReactionsModalActiveTab] = useState<string>('ALL')
+  const [reactionsModalPostId, setReactionsModalPostId] = useState<string | null>(null)
+  const [loadingReactionsModal, setLoadingReactionsModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showVisibilityDropdown, setShowVisibilityDropdown] = useState(false)
   const [commentLikes, setCommentLikes] = useState<Record<string, number>>({});
   const [commentFavorites, setCommentFavorites] = useState<Record<string, boolean>>({});
-  const [userReactions, setUserReactions] = useState<Record<string, 'like' | 'favorite' | null>>({});
+  const [userReactions, setUserReactions] = useState<Record<string, string | null>>({});
+  const [commentReactions, setCommentReactions] = useState<Record<string, { emoji: string; count: number }[]>>({});
+  const [showCommentEmojiPicker, setShowCommentEmojiPicker] = useState<string | null>(null);
+  const [commentEmojiPickerHideTimer, setCommentEmojiPickerHideTimer] = useState<NodeJS.Timeout | null>(null);
   const [activeCommentMenu, setActiveCommentMenu] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState<string>('');
@@ -8364,9 +10624,17 @@ function CommunityComponent({
 
   // Listen for openUserProfileModal events
   useEffect(() => {
-    const handleOpenUserProfileModal = (event: Event) => {
+    const handleOpenUserProfileModal = async (event: Event) => {
       const customEvent = event as CustomEvent
-      setSelectedUserProfile(customEvent.detail.profile)
+      const profileData = customEvent.detail.profile
+      setSelectedUserProfile(profileData)
+      
+      // Load mutual connections for modal
+      if (user?.id && profileData?.id && user.id !== profileData.id) {
+        loadModalMutualConnections(profileData.id)
+      } else {
+        setModalMutualConnections([])
+      }
     }
 
     window.addEventListener('openUserProfileModal', handleOpenUserProfileModal)
@@ -8374,7 +10642,7 @@ function CommunityComponent({
     return () => {
       window.removeEventListener('openUserProfileModal', handleOpenUserProfileModal)
     }
-  }, [])
+  }, [user?.id])
 
   // Listen for notification events to open posts
   useEffect(() => {
@@ -8624,6 +10892,122 @@ function CommunityComponent({
     if (data) setUserProfile(data)
   }
 
+  const loadReactionsModal = async (postId: string) => {
+    setReactionsModalPostId(postId)
+    setReactionsModalOpen(true)
+    setLoadingReactionsModal(true)
+    setReactionsModalActiveTab('ALL')
+    
+    try {
+      // Fetch all reactions for this post
+      const { data: reactions, error } = await supabase
+        .from('post_reactions')
+        .select('user_id, reaction_type, profiles!post_reactions_user_id_fkey(*)')
+        .eq('post_id', postId)
+      
+      if (error) throw error
+      
+      // Group reactions by type
+      const reactionsByType: Record<string, { user: Profile; reaction_type: string }[]> = {}
+      
+      if (reactions) {
+        reactions.forEach((reaction: any) => {
+          const reactionType = reaction.reaction_type === 'like' ? '👍' : reaction.reaction_type
+          if (!reactionsByType[reactionType]) {
+            reactionsByType[reactionType] = []
+          }
+          if (reaction.profiles) {
+            reactionsByType[reactionType].push({
+              user: reaction.profiles as Profile,
+              reaction_type: reaction.reaction_type
+            })
+          }
+        })
+      }
+      
+      // Convert to array format
+      const reactionsArray = Object.entries(reactionsByType).map(([emoji, users]) => ({
+        emoji,
+        users
+      }))
+      
+      setReactionsModalData(reactionsArray)
+    } catch (err) {
+      console.error('Error loading reactions:', err)
+      setReactionsModalData([])
+    } finally {
+      setLoadingReactionsModal(false)
+    }
+  }
+
+  const loadModalMutualConnections = async (profileUserId: string) => {
+    if (!user?.id || !profileUserId || user.id === profileUserId) {
+      setModalMutualConnections([])
+      return
+    }
+    
+    setLoadingModalMutualConnections(true)
+    try {
+      // Get current user's connections
+      const { data: currentUserConnections } = await supabase
+        .from('connections')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
+        .eq('status', 'accepted')
+      
+      // Get profile user's connections
+      const { data: profileUserConnections } = await supabase
+        .from('connections')
+        .select('sender_id, receiver_id')
+        .or(`sender_id.eq.${profileUserId},receiver_id.eq.${profileUserId}`)
+        .eq('status', 'accepted')
+      
+      if (!currentUserConnections || !profileUserConnections) {
+        setModalMutualConnections([])
+        setLoadingModalMutualConnections(false)
+        return
+      }
+      
+      // Extract connection IDs
+      const currentUserConnectionIds = new Set(
+        currentUserConnections.map(c => 
+          c.sender_id === user.id ? c.receiver_id : c.sender_id
+        )
+      )
+      
+      const profileUserConnectionIds = new Set(
+        profileUserConnections.map(c => 
+          c.sender_id === profileUserId ? c.receiver_id : c.sender_id
+        )
+      )
+      
+      // Find mutual connections
+      const mutualIds = Array.from(currentUserConnectionIds).filter(id => 
+        profileUserConnectionIds.has(id)
+      )
+      
+      if (mutualIds.length === 0) {
+        setModalMutualConnections([])
+        setLoadingModalMutualConnections(false)
+        return
+      }
+      
+      // Load mutual connection profiles
+      const { data: mutualProfiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, profession, specialties, languages, city, county')
+        .in('id', mutualIds)
+        .limit(10)
+      
+      setModalMutualConnections((mutualProfiles || []) as Profile[])
+    } catch (err) {
+      console.error('Error loading modal mutual connections:', err)
+      setModalMutualConnections([])
+    } finally {
+      setLoadingModalMutualConnections(false)
+    }
+  }
+
   const loadConnections = async () => {
     if (!user?.id) return
     const { data } = await supabase
@@ -8653,7 +11037,28 @@ function CommunityComponent({
           .map((c: any) => (c.sender_id === user.id ? c.receiver_id : c.sender_id))
       )
 
-      // 3) Filter out already-connected candidates and blocked users (both directions)
+      // 2.5) Build set of users with pending connection requests (both sent and received)
+      const pendingRequestIds = new Set<string>()
+      // Get sent requests
+      const { data: sentRequests } = await supabase
+        .from('connections')
+        .select('receiver_id')
+        .eq('sender_id', user.id)
+        .eq('status', 'pending')
+      if (sentRequests) {
+        sentRequests.forEach(req => pendingRequestIds.add(req.receiver_id))
+      }
+      // Get received requests
+      const { data: receivedRequests } = await supabase
+        .from('connections')
+        .select('sender_id')
+        .eq('receiver_id', user.id)
+        .eq('status', 'pending')
+      if (receivedRequests) {
+        receivedRequests.forEach(req => pendingRequestIds.add(req.sender_id))
+      }
+
+      // 3) Filter out already-connected candidates, pending requests, and blocked users (both directions)
       // Get users I blocked
       const { data: settings } = await supabase
         .from('user_settings')
@@ -8674,6 +11079,7 @@ function CommunityComponent({
       
       const pool = candidates.filter(c => 
         !currentConnectionIds.has(c.id) && 
+        !pendingRequestIds.has(c.id) &&
         !allHiddenIds.includes(c.id)
       )
       if (pool.length === 0) {
@@ -9290,19 +11696,28 @@ function CommunityComponent({
     return true;
   };
 
-  // Yorum beğenme - Güncellenmiş versiyon
+  // Yorum beğenme - Now uses 👍 emoji reaction as default
   const handleLikeComment = async (commentId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) return;
 
-    console.log('Like clicked - User:', user.id, 'Comment:', commentId);
     const currentReaction = userReactions[commentId];
-    const currentLikes = commentLikes[commentId] || 0;
+    const likeEmoji = '👍';
     
     try {
-      if (currentReaction === 'like') {
-        // OPTIMISTIC UPDATE: Hemen state'i güncelle
-        setCommentLikes(prev => ({ ...prev, [commentId]: Math.max(0, currentLikes - 1) }));
+      if (currentReaction === 'like' || currentReaction === likeEmoji) {
+        // Remove 👍 reaction
+        setCommentReactions(prev => {
+          const current = prev[commentId] || [];
+          return {
+            ...prev,
+            [commentId]: current.map(r => 
+              r.emoji === likeEmoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+            ).filter(r => r.count > 0)
+          };
+        });
+        // Update commentLikes for backward compatibility
+        setCommentLikes(prev => ({ ...prev, [commentId]: Math.max(0, (prev[commentId] || 0) - 1) }));
         setUserReactions(prev => ({ ...prev, [commentId]: null }));
 
         // Veritabanı işlemi
@@ -9311,82 +11726,134 @@ function CommunityComponent({
           .delete()
           .eq('comment_id', commentId)
           .eq('user_id', user.id)
-          .eq('reaction_type', 'like');
+          .in('reaction_type', ['like', likeEmoji]);
 
         if (error) {
-          // Hata olursa geri al - AMA real-time gelirse çakışma olmaz çünkü kendi aksiyonumuzu filtreliyoruz
-          setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
-          setUserReactions(prev => ({ ...prev, [commentId]: 'like' }));
+          // Hata olursa geri al
+          const reactionData = commentReactions[commentId]?.find(r => r.emoji === likeEmoji);
+          setCommentReactions(prev => {
+            const current = prev[commentId] || [];
+            return {
+              ...prev,
+              [commentId]: [...current, { emoji: likeEmoji, count: (reactionData?.count || 0) + 1 }]
+            };
+          });
+          setUserReactions(prev => ({ ...prev, [commentId]: currentReaction }));
           throw error;
         }
 
       } else {
-        // OPTIMISTIC UPDATE: Hemen state'i güncelle
-        setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes + 1 }));
-        
+        // Add 👍 reaction
+        setCommentReactions(prev => {
+          const current = prev[commentId] || [];
+          const existing = current.find(r => r.emoji === likeEmoji);
+          if (existing) {
+            return {
+              ...prev,
+              [commentId]: current.map(r => 
+                r.emoji === likeEmoji ? { ...r, count: r.count + 1 } : r
+              )
+            };
+          } else {
+            return {
+              ...prev,
+              [commentId]: [...current, { emoji: likeEmoji, count: 1 }]
+            };
+          }
+        });
+        // Update commentLikes for backward compatibility (👍 is treated as like)
+        setCommentLikes(prev => ({ ...prev, [commentId]: (prev[commentId] || 0) + 1 }));
 
-        setUserReactions(prev => ({ ...prev, [commentId]: 'like' }));
+        if (currentReaction && currentReaction !== 'like' && currentReaction !== likeEmoji) {
+          // Remove old emoji reaction
+          setCommentReactions(prev => {
+            const current = prev[commentId] || [];
+            return {
+              ...prev,
+              [commentId]: current.map(r => 
+                r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+              ).filter(r => r.count > 0)
+            };
+          });
+        }
 
-        // Like ekle
+        setUserReactions(prev => ({ ...prev, [commentId]: likeEmoji }));
+
+        // Remove old reaction if exists
+        await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+
+        // Add 👍 reaction
         const { error } = await supabase
           .from('comment_reactions')
           .upsert({
             comment_id: commentId,
             user_id: user.id,
-            reaction_type: 'like'
+            reaction_type: likeEmoji
+          }, {
+            onConflict: 'user_id,comment_id,reaction_type'
           });
 
         if (error) {
           // Hata olursa geri al
-          setCommentLikes(prev => ({ ...prev, [commentId]: currentLikes }));
+          setCommentReactions(prev => {
+            const current = prev[commentId] || [];
+            return {
+              ...prev,
+              [commentId]: current.map(r => 
+                r.emoji === likeEmoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+              ).filter(r => r.count > 0)
+            };
+          });
           setUserReactions(prev => ({ ...prev, [commentId]: currentReaction }));
           throw error;
         }
 
         // Create notification for comment owner
-        // Find comment in state to get owner
-        let commentOwnerId: string | null = null
-        let postIdForComment: string | null = null
-        for (const postId in comments) {
-          const findComment = (commentList: Comment[]): Comment | null => {
-            for (const comment of commentList) {
-              if (comment.id === commentId) {
-                return comment
-              }
-              if (comment.replies) {
-                const found = findComment(comment.replies)
-                if (found) return found
-              }
-            }
-            return null
-          }
-          const foundComment = findComment(comments[postId])
-          if (foundComment) {
-            commentOwnerId = foundComment.user_id
-            postIdForComment = postId
-            break
-          }
-        }
+        // Get comment from database to ensure we have the owner
+        const { data: commentData } = await supabase
+          .from('post_comments')
+          .select('user_id, post_id')
+          .eq('id', commentId)
+          .single()
 
-        if (commentOwnerId && commentOwnerId !== user.id && postIdForComment) {
-          // Check user notification settings
-          const { data: settings } = await supabase
-            .from('user_settings')
-            .select('push_comments')
-            .eq('id', commentOwnerId)
+        if (commentData && commentData.user_id !== user.id) {
+          // Get current user profile for notification
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
             .single()
 
-          if (settings?.push_comments !== false) {
-            await supabase
+          // Check user notification settings
+          const { data: settings, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('push_comments')
+            .eq('id', commentData.user_id)
+            .maybeSingle()
+
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          // If no settings found or push_comments is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_comments !== false) {
+            const { error: notifError } = await supabase
               .from('notifications')
               .insert({
-                user_id: commentOwnerId,
+                user_id: commentData.user_id,
                 title: 'New like on your comment',
                 message: `${userProfile?.full_name || 'Someone'} liked your comment`,
                 type: 'comment_reaction',
                 related_entity_type: 'comment',
                 related_entity_id: commentId
               })
+            
+            if (notifError) {
+              console.error('Error creating comment like notification:', notifError)
+            } else {
+              console.log('Comment like notification created successfully for user:', commentData.user_id)
+            }
           }
         }
       }
@@ -9395,6 +11862,134 @@ function CommunityComponent({
     }
   };
 
+
+  // Yorum emoji reaksiyon
+  const handleEmojiReactionComment = async (commentId: string, emoji: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+
+    const currentReaction = userReactions[commentId];
+
+    try {
+      if (currentReaction === emoji) {
+        // Remove emoji reaction
+        setCommentReactions(prev => {
+          const current = prev[commentId] || [];
+          return {
+            ...prev,
+            [commentId]: current.map(r => 
+              r.emoji === emoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+            ).filter(r => r.count > 0)
+          };
+        });
+        setUserReactions(prev => ({ ...prev, [commentId]: null }));
+        await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+      } else {
+        // Add emoji reaction
+        setCommentReactions(prev => {
+          const current = prev[commentId] || [];
+          const existing = current.find(r => r.emoji === emoji);
+          if (existing) {
+            return {
+              ...prev,
+              [commentId]: current.map(r => 
+                r.emoji === emoji ? { ...r, count: r.count + 1 } : r
+              )
+            };
+          } else {
+            return {
+              ...prev,
+              [commentId]: [...current, { emoji, count: 1 }]
+            };
+          }
+        });
+
+        if (currentReaction && currentReaction !== emoji) {
+          // Remove old reaction
+          setCommentReactions(prev => {
+            const current = prev[commentId] || [];
+            return {
+              ...prev,
+              [commentId]: current.map(r => 
+                r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+              ).filter(r => r.count > 0)
+            };
+          });
+        }
+
+        setUserReactions(prev => ({ ...prev, [commentId]: emoji }));
+
+        // Remove old reaction if exists
+        await supabase
+          .from('comment_reactions')
+          .delete()
+          .eq('comment_id', commentId)
+          .eq('user_id', user.id);
+
+        // Add new reaction
+        await supabase
+          .from('comment_reactions')
+          .upsert({
+            comment_id: commentId,
+            user_id: user.id,
+            reaction_type: emoji
+          }, {
+            onConflict: 'user_id,comment_id,reaction_type'
+          });
+
+        // Create notification for comment owner
+        // Get comment from database to ensure we have the owner
+        const { data: commentData } = await supabase
+          .from('post_comments')
+          .select('user_id, post_id')
+          .eq('id', commentId)
+          .single()
+
+        if (commentData && commentData.user_id !== user.id) {
+          // Get current user profile for notification
+          const { data: userProfile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', user.id)
+            .single()
+
+          // Check user notification settings
+          const { data: settings, error: settingsError } = await supabase
+            .from('user_settings')
+            .select('push_comments')
+            .eq('id', commentData.user_id)
+            .maybeSingle()
+
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          // If no settings found or push_comments is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_comments !== false) {
+            const { error: notifError } = await supabase
+              .from('notifications')
+              .insert({
+                user_id: commentData.user_id,
+                title: 'New reaction on your comment',
+                message: `${userProfile?.full_name || 'Someone'} reacted ${emoji} to your comment`,
+                type: 'comment_reaction',
+                related_entity_type: 'comment',
+                related_entity_id: commentId
+              })
+            
+            if (notifError) {
+              console.error('Error creating comment emoji reaction notification:', notifError)
+            } else {
+              console.log('Comment emoji reaction notification created successfully for user:', commentData.user_id)
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error updating comment emoji reaction:', err);
+    }
+  };
 
   // Yorum favorileme - Güncellenmiş versiyon
   const handleFavoriteComment = async (commentId: string, e: React.MouseEvent) => {
@@ -9430,6 +12025,8 @@ function CommunityComponent({
             comment_id: commentId,
             user_id: user.id,
             reaction_type: 'favorite'
+          }, {
+            onConflict: 'user_id,comment_id,reaction_type'
           });
 
         if (error) {
@@ -9686,16 +12283,18 @@ function CommunityComponent({
   const handleCommentReactionRealtime = async (payload: any) => {
     const { eventType, new: newRow, old: oldRow } = payload;
     
-    console.log('Real-time reaction event:', eventType, 'User:', newRow?.user_id, 'Current user:', user?.id);
+    console.log('Real-time reaction event:', eventType, 'User:', newRow?.user_id || oldRow?.user_id, 'Current user:', user?.id);
 
-    // Kendi aksiyonlarımızı filtrele
-    if (newRow && newRow.user_id === user?.id) {
+    const isOwnAction = (newRow?.user_id === user?.id) || (oldRow?.user_id === user?.id);
+    
+    // Kendi aksiyonlarımızı filtrele (optimistic update zaten yapıldı)
+    if (isOwnAction) {
       console.log('FILTERED: Ignoring own action in real-time');
       return;
     }
   
     if (eventType === 'INSERT') {
-      const { comment_id, reaction_type, user_id } = newRow;
+      const { comment_id, reaction_type } = newRow;
       
       // Like/dislike sayılarını güncelle
       if (reaction_type === 'like') {
@@ -9710,21 +12309,8 @@ function CommunityComponent({
         }));
       }
       
-      // Kullanıcı reaksiyonunu güncelle (sadece başka kullanıcılar için)
-      if (user_id === user?.id) {
-        setUserReactions(prev => ({ 
-          ...prev, 
-          [comment_id]: reaction_type 
-        }));
-      }
-      
     } else if (eventType === 'DELETE') {
-      const { comment_id, reaction_type, user_id } = oldRow;
-      
-      // Kendi aksiyonumuzu filtrele
-      if (user_id === user?.id) {
-        return;
-      }
+      const { comment_id, reaction_type } = oldRow;
       
       // Like/dislike sayılarını güncelle
       if (reaction_type === 'like') {
@@ -9740,19 +12326,19 @@ function CommunityComponent({
       }
       
     } else if (eventType === 'UPDATE') {
-      const { comment_id, reaction_type, user_id } = newRow;
+      const { comment_id, reaction_type } = newRow;
       const oldReactionType = oldRow.reaction_type;
-      
-      // Kendi aksiyonumuzu filtrele
-      if (user_id === user?.id) {
-        return;
-      }
       
       // Eski reaksiyonu azalt
       if (oldReactionType === 'like') {
         setCommentLikes(prev => ({ 
           ...prev, 
           [comment_id]: Math.max(0, (prev[comment_id] || 1) - 1) 
+        }));
+      } else if (oldReactionType === 'favorite') {
+        setCommentFavorites(prev => ({ 
+          ...prev, 
+          [comment_id]: false 
         }));
       }
       
@@ -9761,6 +12347,11 @@ function CommunityComponent({
         setCommentLikes(prev => ({ 
           ...prev, 
           [comment_id]: (prev[comment_id] || 0) + 1 
+        }));
+      } else if (reaction_type === 'favorite') {
+        setCommentFavorites(prev => ({ 
+          ...prev, 
+          [comment_id]: true 
         }));
       }
     }
@@ -9957,6 +12548,26 @@ function CommunityComponent({
       const from = page * POSTS_PER_PAGE
       const to = from + POSTS_PER_PAGE - 1
 
+      // Get connected user IDs (including current user)
+      const connectedUserIds = new Set<string>()
+      if (user?.id) {
+        connectedUserIds.add(user.id) // Include current user's own posts
+      }
+      
+      // Add all connected users
+      connections.forEach((conn: any) => {
+        if (conn.status === 'accepted') {
+          if (conn.sender_id === user?.id) {
+            connectedUserIds.add(conn.receiver_id)
+          } else if (conn.receiver_id === user?.id) {
+            connectedUserIds.add(conn.sender_id)
+          }
+        }
+      })
+
+      // Convert to array for the query
+      const allowedUserIds = Array.from(connectedUserIds)
+
       let query = supabase
         .from('posts')
         .select(`
@@ -9965,6 +12576,23 @@ function CommunityComponent({
         `, { count: 'exact' })
         .order('created_at', { ascending: false })
         .range(from, to)
+
+      // Filter to only show posts from connected users (and current user)
+      if (allowedUserIds.length > 0) {
+        query = query.in('user_id', allowedUserIds)
+      } else {
+        // If no connections, only show current user's posts
+        if (user?.id) {
+          query = query.eq('user_id', user.id)
+        } else {
+          // If no user, return empty
+          if (reset) setLoading(false)
+          else setLoadingMorePosts(false)
+          setPosts([])
+          setHasMorePosts(false)
+          return
+        }
+      }
 
       // Apply filters
       if (feedFilters.professions.length > 0) {
@@ -10022,17 +12650,53 @@ function CommunityComponent({
 
       const postsWithDetails = await Promise.all(
         (data || []).map(async (post) => {
+          // If this is a repost, load the original post data
+          let originalPost = null
+          if (post.post_metadata?.reposted_post_id) {
+            const { data: originalPostData } = await supabase
+              .from('posts')
+              .select(`
+                *,
+                user:profiles!user_id (id, full_name, profession, avatar_url, specialties, languages)
+              `)
+              .eq('id', post.post_metadata.reposted_post_id)
+              .single()
+            
+            if (originalPostData) {
+              originalPost = {
+                ...originalPostData,
+                user: originalPostData.user || {
+                  id: originalPostData.user_id,
+                  full_name: 'Unknown User',
+                  profession: ''
+                }
+              }
+            }
+          }
+
+          // Use original post ID for reactions/comments if this is a repost
+          // This is the ID we use to query the database
+          const postIdForReactions = post.post_metadata?.reposted_post_id || post.id
+          
+          // This is the ID we use in state (must match render logic: displayPost?.id || post.id)
+          // In render: const displayPost = isRepost ? post.original_post : post
+          // So: displayPost?.id || post.id = (isRepost ? originalPost.id : post.id) || post.id
+          // For reposts: originalPost.id (which equals postIdForReactions)
+          // For normal posts: post.id (which equals postIdForReactions)
+          // So we can use postIdForReactions, but let's be explicit to match render exactly
+          const stateKey = originalPost ? originalPost.id : post.id
+
           // Count all comments (including nested replies) for this post
           const { count: commentsCount } = await supabase
             .from('post_comments')
             .select('*', { count: 'exact', head: true })
-            .eq('post_id', post.id)
+            .eq('post_id', postIdForReactions)
 
           // Load reaction counts
           const { data: reactions } = await supabase
             .from('post_reactions')
             .select('reaction_type')
-            .eq('post_id', post.id)
+            .eq('post_id', postIdForReactions)
           
           let likesCount = 0
           const emojiReactions: Record<string, number> = {}
@@ -10055,25 +12719,25 @@ function CommunityComponent({
             }
           }))
 
-          // Set reaction counts
+          // Set reaction counts using stateKey (matches render logic)
           if (likesCount > 0) {
-            setPostLikes(prev => ({ ...prev, [post.id]: likesCount }))
+            setPostLikes(prev => ({ ...prev, [stateKey]: likesCount }))
           }
           if (Object.keys(emojiReactions).length > 0) {
             setPostReactions(prev => ({
               ...prev,
-              [post.id]: Object.entries(emojiReactions).map(([emoji, count]) => ({ emoji, count }))
+              [stateKey]: Object.entries(emojiReactions).map(([emoji, count]) => ({ emoji, count }))
             }))
           }
 
-          // Load repost count and check if current user reposted
+          // Load repost count and check if current user reposted (use original post ID if repost)
           const { count: repostCount } = await supabase
             .from('posts')
             .select('*', { count: 'exact', head: true })
-            .eq('post_metadata->>reposted_post_id', post.id)
+            .eq('post_metadata->>reposted_post_id', postIdForReactions)
 
           if (repostCount !== null && repostCount > 0) {
-            setRepostCounts(prev => ({ ...prev, [post.id]: repostCount }))
+            setRepostCounts(prev => ({ ...prev, [stateKey]: repostCount }))
           }
 
           // Check if current user reposted this post
@@ -10082,28 +12746,31 @@ function CommunityComponent({
               .from('posts')
               .select('id')
               .eq('user_id', user.id)
-              .eq('post_metadata->>reposted_post_id', post.id)
+              .eq('post_metadata->>reposted_post_id', postIdForReactions)
               .maybeSingle()
 
             if (userRepost) {
               setRepostedPosts(prev => {
-                if (!prev.includes(post.id)) {
-                  return [...prev, post.id]
+                if (!prev.includes(stateKey)) {
+                  return [...prev, stateKey]
                 }
                 return prev
               })
             }
 
             // Check if current user reacted to this post
+            // Use postIdForReactions to check the database (original post ID if repost)
+            // But save to state using stateKey (matches render logic)
             const { data: userReaction } = await supabase
               .from('post_reactions')
               .select('reaction_type')
-              .eq('post_id', post.id)
+              .eq('post_id', postIdForReactions)
               .eq('user_id', user.id)
               .maybeSingle()
 
             if (userReaction) {
-              setUserPostReactions(prev => ({ ...prev, [post.id]: userReaction.reaction_type }))
+              // Use stateKey which matches render logic: displayPost?.id || post.id
+              setUserPostReactions(prev => ({ ...prev, [stateKey]: userReaction.reaction_type }))
             }
           }
 
@@ -10116,7 +12783,8 @@ function CommunityComponent({
               id: post.user_id 
             },
             replies_count: commentsCount || 0,
-            post_metadata: post.post_metadata || {}
+            post_metadata: post.post_metadata || {},
+            original_post: originalPost
           }
         })
       )
@@ -10221,19 +12889,83 @@ function CommunityComponent({
         return
       }
   
-      // Build comment tree recursively
-      const buildCommentTree = (comments: any[], parentId: string | null = null): Comment[] => {
-        return comments
-          .filter(comment => {
-            if (parentId === null) {
-              return !comment.parent_reply_id
+      // Load comment reactions (likes and favorites) for all comments FIRST
+      // We need this data to sort favorites to the top
+      let favoritesMap: Record<string, boolean> = {}
+      let userReactionsMap: Record<string, string | null> = {}
+      const reactionsByComment: Record<string, { emoji: string; count: number }[]> = {}
+
+      if (user && allComments && allComments.length > 0) {
+        const commentIds = allComments.map(c => c.id)
+        
+        // Load all reactions for these comments
+        const { data: reactions, error: reactionsError } = await supabase
+          .from('comment_reactions')
+          .select('comment_id, reaction_type, user_id')
+          .in('comment_id', commentIds)
+
+        if (!reactionsError && reactions) {
+          // Group reactions by comment and type
+          let likesCountMap: Record<string, number> = {};
+          reactions.forEach(reaction => {
+            if (!reactionsByComment[reaction.comment_id]) {
+              reactionsByComment[reaction.comment_id] = [];
             }
-            return comment.parent_reply_id === parentId
+            const existing = reactionsByComment[reaction.comment_id].find(r => r.emoji === reaction.reaction_type);
+            if (existing) {
+              existing.count++;
+            } else {
+              reactionsByComment[reaction.comment_id].push({ emoji: reaction.reaction_type, count: 1 });
+            }
+
+            // Count 'like' reactions for backward compatibility
+            if (reaction.reaction_type === 'like') {
+              likesCountMap[reaction.comment_id] = (likesCountMap[reaction.comment_id] || 0) + 1;
+            }
+
+            if (reaction.reaction_type === 'favorite') {
+              favoritesMap[reaction.comment_id] = true
+            }
+
+            // Track current user's reactions
+            if (reaction.user_id === user.id) {
+              userReactionsMap[reaction.comment_id] = reaction.reaction_type
+            }
           })
-          .map(comment => ({
-              ...comment,
-            replies: buildCommentTree(comments, comment.id)
-          }))
+
+          // Update state with loaded reactions
+          setCommentReactions(prev => ({ ...prev, ...reactionsByComment }))
+          setCommentLikes(prev => ({ ...prev, ...likesCountMap }))
+          setCommentFavorites(prev => ({ ...prev, ...favoritesMap }))
+          setUserReactions(prev => ({ ...prev, ...userReactionsMap }))
+        }
+      }
+
+      // Build comment tree recursively, with favorites sorted to the top
+      const buildCommentTree = (comments: any[], parentId: string | null = null): Comment[] => {
+        const filtered = comments.filter(comment => {
+          if (parentId === null) {
+            return !comment.parent_reply_id
+          }
+          return comment.parent_reply_id === parentId
+        })
+        
+        // Sort: favorites first, then by created_at
+        const sorted = filtered.sort((a, b) => {
+          const aIsFavorite = favoritesMap[a.id] || false
+          const bIsFavorite = favoritesMap[b.id] || false
+          
+          if (aIsFavorite && !bIsFavorite) return -1
+          if (!aIsFavorite && bIsFavorite) return 1
+          
+          // If both are favorites or both are not, sort by created_at
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        })
+        
+        return sorted.map(comment => ({
+          ...comment,
+          replies: buildCommentTree(comments, comment.id)
+        }))
       }
   
       const commentsTree = buildCommentTree(allComments || [])
@@ -10520,17 +13252,26 @@ function CommunityComponent({
     }
   }
 
-  // Handle like/dislike
+  // Handle like/dislike - Now uses 👍 emoji reaction as default
   const handleLikePost = async (postId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) return;
 
     const currentReaction = userPostReactions[postId];
+    const likeEmoji = '👍';
 
     try {
-      if (currentReaction === 'like') {
-        // Remove like
-        setPostLikes(prev => ({ ...prev, [postId]: Math.max(0, (prev[postId] || 0) - 1) }));
+      if (currentReaction === likeEmoji) {
+        // Remove 👍 reaction
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          return {
+            ...prev,
+            [postId]: current.map(r => 
+              r.emoji === likeEmoji ? { ...r, count: Math.max(0, r.count - 1) } : r
+            ).filter(r => r.count > 0)
+          };
+        });
         setUserPostReactions(prev => ({ ...prev, [postId]: null }));
         // Persist removal
         await supabase
@@ -10541,11 +13282,27 @@ function CommunityComponent({
         
 
       } else {
-        // Add like, remove old reaction if exists
-        setPostLikes(prev => ({ ...prev, [postId]: (prev[postId] || 0) + 1 }));
+        // Add 👍 reaction, remove old reaction if exists
+        setPostReactions(prev => {
+          const current = prev[postId] || [];
+          const existing = current.find(r => r.emoji === likeEmoji);
+          if (existing) {
+            return {
+              ...prev,
+              [postId]: current.map(r => 
+                r.emoji === likeEmoji ? { ...r, count: r.count + 1 } : r
+              )
+            };
+          } else {
+            return {
+              ...prev,
+              [postId]: [...current, { emoji: likeEmoji, count: 1 }]
+            };
+          }
+        });
 
-        if (currentReaction && currentReaction !== 'like') {
-          // Remove emoji reaction
+        if (currentReaction && currentReaction !== likeEmoji) {
+          // Remove old emoji reaction
           setPostReactions(prev => {
             const current = prev[postId] || [];
             return {
@@ -10564,15 +13321,15 @@ function CommunityComponent({
           .eq('post_id', postId)
           .eq('user_id', user.id);
 
-        setUserPostReactions(prev => ({ ...prev, [postId]: 'like' }));
+        setUserPostReactions(prev => ({ ...prev, [postId]: likeEmoji }));
 
-        // Persist like
+        // Persist 👍 reaction
         await supabase
           .from('post_reactions')
           .upsert({
             post_id: postId,
             user_id: user.id,
-            reaction_type: 'like'
+            reaction_type: likeEmoji
           }, { onConflict: 'post_id,user_id' });
 
         // Create notification for post owner
@@ -10589,13 +13346,15 @@ function CommunityComponent({
             .from('user_settings')
             .select('push_post_reactions')
             .eq('id', post.user_id)
-            .single()
+            .maybeSingle()
 
-          if (settingsError) {
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          if (settingsError && settingsError.code !== 'PGRST116') {
             console.error('Error fetching user settings:', settingsError)
           }
 
-          if (!settingsError && settings?.push_post_reactions !== false) {
+          // If no settings found or push_post_reactions is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_post_reactions !== false) {
             const { error: notifError } = await supabase
               .from('notifications')
               .insert({
@@ -10714,13 +13473,15 @@ function CommunityComponent({
             .from('user_settings')
             .select('push_post_reactions')
             .eq('id', post.user_id)
-            .single()
+            .maybeSingle()
 
-          if (settingsError) {
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          if (settingsError && settingsError.code !== 'PGRST116') {
             console.error('Error fetching user settings for emoji reaction:', settingsError)
           }
 
-          if (!settingsError && settings?.push_post_reactions !== false) {
+          // If no settings found or push_post_reactions is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_post_reactions !== false) {
             const { error: notifError } = await supabase
               .from('notifications')
               .insert({
@@ -10941,13 +13702,15 @@ function CommunityComponent({
             .from('user_settings')
             .select('push_comments')
             .eq('id', post.user_id)
-            .single()
+            .maybeSingle()
 
-          if (settingsError) {
+          // PGRST116 means no record found, which is fine - use default (enabled)
+          if (settingsError && settingsError.code !== 'PGRST116') {
             console.error('Error fetching user settings for comment notification:', settingsError)
           }
 
-          if (!settingsError && settings?.push_comments !== false) {
+          // If no settings found or push_comments is not false, send notification
+          if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_comments !== false) {
             const { error: notifError } = await supabase
               .from('notifications')
               .insert({
@@ -10993,13 +13756,15 @@ function CommunityComponent({
           }
 
           if (parentCommentOwnerId && parentCommentOwnerId !== user.id) {
-            const { data: settings } = await supabase
+            const { data: settings, error: settingsError } = await supabase
               .from('user_settings')
               .select('push_comments')
               .eq('id', parentCommentOwnerId)
-              .single()
+              .maybeSingle()
 
-            if (settings?.push_comments !== false) {
+            // PGRST116 means no record found, which is fine - use default (enabled)
+            // If no settings found or push_comments is not false, send notification
+            if ((!settingsError || settingsError.code === 'PGRST116') && settings?.push_comments !== false) {
               const { error: notifError } = await supabase
                 .from('notifications')
                 .insert({
@@ -11143,7 +13908,7 @@ function CommunityComponent({
     if (user) {
       loadPosts(0, true)
     }
-  }, [feedFilters, user?.id])
+  }, [feedFilters, user?.id, connections])
 
   const clearAllFilters = () => {
     setFeedFilters({
@@ -11960,30 +14725,57 @@ function CommunityComponent({
               <PostSkeleton />
             </>
           ) : (
-            filteredPosts.map(post => (
+            filteredPosts.map(post => {
+              const isRepost = post.post_metadata?.is_repost && post.original_post
+              const displayPost = isRepost ? post.original_post : post
+              const reposter = isRepost ? post.user : null
+              const originalAuthor = displayPost?.user
+              
+              return (
           <div 
             key={post.id} 
             className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            {/* Repost Header - LinkedIn style */}
+            {isRepost && reposter && (
+              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
+                <Avatar 
+                  src={reposter.avatar_url} 
+                  name={getUserDisplayName(reposter)} 
+                  className="w-6 h-6" 
+                  useInlineSize={false} 
+                />
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); viewUserProfile(reposter.id || getUserId(reposter)); }}
+                    className="font-medium hover:text-blue-600 transition-colors"
+                  >
+                    {getUserDisplayName(reposter)}
+                  </button>
+                  <span>reposted this</span>
+                </div>
+              </div>
+            )}
+
             {/* Post Header with Menu */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <button
-                    onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
+                    onClick={(e) => { e.stopPropagation(); viewUserProfile(displayPost?.user_id || getUserId(originalAuthor)); }}
                     className="flex-shrink-0 hover:opacity-80 transition-opacity cursor-pointer"
                   >
-                    <Avatar src={post.user?.avatar_url} name={getUserDisplayName(post.user)} className="w-8 h-8" useInlineSize={false} />
+                    <Avatar src={originalAuthor?.avatar_url} name={getUserDisplayName(originalAuthor)} className="w-8 h-8" useInlineSize={false} />
                   </button>
                   <div>
                     <button
-                      onClick={(e) => { e.stopPropagation(); viewUserProfile(post.user_id || getUserId(post.user)); }}
+                      onClick={(e) => { e.stopPropagation(); viewUserProfile(displayPost?.user_id || getUserId(originalAuthor)); }}
                       className="text-sm font-semibold text-gray-900 hover:text-blue-600 transition-colors cursor-pointer text-left"
                     >
-                      {getUserDisplayName(post.user)}
+                      {getUserDisplayName(originalAuthor)}
                     </button>
                     <p className="text-xs text-gray-500">
-                      {getUserProfession(post.user)} • {formatTime(post.created_at)}
-                      {post.updated_at && post.updated_at !== post.created_at && (
+                      {getUserProfession(originalAuthor)} • {formatTime(displayPost?.created_at || post.created_at)}
+                      {displayPost?.updated_at && displayPost.updated_at !== displayPost.created_at && (
                         <span className="text-gray-400"> (edited)</span>
                       )}
                     </p>
@@ -11991,7 +14783,7 @@ function CommunityComponent({
                 </div>
                 
                 {/* Post Metadata */}
-                {renderPostMetadata(post)}
+                {displayPost && renderPostMetadata(displayPost)}
                 
                 {/* Post Settings Indicators */}
                 <div className="flex flex-wrap gap-2 text-[10px] text-gray-500 mb-2">
@@ -12122,51 +14914,54 @@ function CommunityComponent({
             </div>
 
             {/* Post Content with See More/Less */}
-            <div className="group relative text-gray-700 mb-3 text-sm leading-relaxed">
-              {(() => {
-                const textContent = post.content.replace(/<[^>]*>/g, '')
-                const contentLength = textContent.length
-                return (
-                  <>
-                    {contentLength > 300 && (
-                      <>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                          className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
-                        >
-                          See less
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                          className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
-                        >
-                          See more
-                        </button>
-                      </>
-                    )}
+            {displayPost && (
+              <div className="group relative text-gray-700 mb-3 text-sm leading-relaxed">
+                {(() => {
+                  const postContent = displayPost.content || ''
+                  const textContent = postContent.replace(/<[^>]*>/g, '')
+                  const contentLength = textContent.length
+                  return (
+                    <>
+                      {contentLength > 300 && (
+                        <>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                            className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
+                          >
+                            See less
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
+                            className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
+                          >
+                            See more
+                          </button>
+                        </>
+                      )}
 
-                    <div 
-                      className={`
-                        ${expandedPosts[post.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
-                        rich-text-content
-                      `}
-                      dangerouslySetInnerHTML={{ __html: post.content }}
-                    />
+                      <div 
+                        className={`
+                          ${expandedPosts[post.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                          rich-text-content
+                        `}
+                        dangerouslySetInnerHTML={{ __html: postContent }}
+                      />
 
-                    {!expandedPosts[post.id] && contentLength > 300 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
-                    )}
-                  </>
-                )
-              })()}
-            </div>
+                      {!expandedPosts[post.id] && contentLength > 300 && (
+                        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+            )}
 
             {/* Quoted Post */}
-            {post.post_metadata?.quoted_post_data && (
+            {displayPost?.post_metadata?.quoted_post_data && (
               <button
                 onClick={async (e) => {
                   e.stopPropagation()
-                  const quotedPostId = post.post_metadata?.quoted_post_data?.id
+                  const quotedPostId = displayPost.post_metadata?.quoted_post_data?.id
                   if (!quotedPostId) return
 
                   // Find post in current posts
@@ -12201,32 +14996,32 @@ function CommunityComponent({
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Avatar 
-                    src={post.post_metadata.quoted_post_data.user?.avatar_url} 
-                    name={post.post_metadata.quoted_post_data.user?.full_name || 'Unknown'} 
+                    src={displayPost.post_metadata.quoted_post_data.user?.avatar_url} 
+                    name={displayPost.post_metadata.quoted_post_data.user?.full_name || 'Unknown'} 
                     className="w-6 h-6" 
                     useInlineSize={false} 
                   />
                   <div>
                     <p className="text-xs font-semibold text-gray-900">
-                      {post.post_metadata.quoted_post_data.user?.full_name || 'Unknown User'}
+                      {displayPost.post_metadata.quoted_post_data.user?.full_name || 'Unknown User'}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {post.post_metadata.quoted_post_data.user?.profession || ''}
+                      {displayPost.post_metadata.quoted_post_data.user?.profession || ''}
                     </p>
                   </div>
                 </div>
                 <div 
                   className="text-sm text-gray-700 line-clamp-4 rich-text-content pointer-events-none"
-                  dangerouslySetInnerHTML={{ __html: post.post_metadata.quoted_post_data.content }}
+                  dangerouslySetInnerHTML={{ __html: displayPost.post_metadata.quoted_post_data.content }}
                 />
               </button>
             )}
 
             {/* Attachments */}
-            {post.post_metadata?.attachments && post.post_metadata.attachments.length > 0 && (
+            {displayPost?.post_metadata?.attachments && displayPost.post_metadata.attachments.length > 0 && (
               <div className="mb-4">
                 <div className="flex flex-wrap gap-2">
-                  {post.post_metadata.attachments.map((attachment: string, idx: number) => {
+                  {displayPost.post_metadata.attachments.map((attachment: string, idx: number) => {
                     const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment)
                     return isImage ? (
                       <img
@@ -12258,22 +15053,70 @@ function CommunityComponent({
             )}
 
             {/* Reaction Summary */}
-            {(postReactions[post.id]?.length > 0 || (postLikes[post.id] && postLikes[post.id] > 0)) && (
-              <div className="flex items-center gap-2 mb-2 text-xs text-gray-500">
-                {postReactions[post.id]?.map((reaction, idx) => (
-                  <span key={idx} className="flex items-center gap-0.5">
-                    <span className="text-base">{reaction.emoji}</span>
-                    <span>{reaction.count}</span>
+            {(() => {
+              const postIdForReactions = displayPost?.id || post.id;
+              const allReactions: { emoji: string; count: number }[] = [];
+              
+              // Add like as 👍 emoji
+              if (postLikes[postIdForReactions] && postLikes[postIdForReactions] > 0) {
+                allReactions.push({ emoji: '👍', count: postLikes[postIdForReactions] });
+              }
+              
+              // Add emoji reactions
+              if (postReactions[postIdForReactions]) {
+                postReactions[postIdForReactions].forEach(reaction => {
+                  const existing = allReactions.find(r => r.emoji === reaction.emoji);
+                  if (existing) {
+                    existing.count += reaction.count;
+                  } else {
+                    allReactions.push({ ...reaction });
+                  }
+                });
+              }
+              
+              if (allReactions.length === 0) return null;
+              
+              // Sort by count (descending) and take top 3
+              const topReactions = allReactions
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 3);
+              
+              // Calculate total count
+              const totalCount = allReactions.reduce((sum, r) => sum + r.count, 0);
+              
+              return (
+                <div 
+                  className="flex items-center gap-1.5 mb-2 text-xs text-gray-600 cursor-pointer hover:underline"
+                  onClick={() => {
+                    const postIdForReactions = displayPost?.id || post.id;
+                    loadReactionsModal(postIdForReactions);
+                  }}
+                >
+                  {/* Top 3 reactions stacked */}
+                  <div className="flex items-center" style={{ marginRight: '4px' }}>
+                    {topReactions.map((reaction, idx) => (
+                      <span
+                        key={idx}
+                        className="text-lg leading-none inline-block"
+                        style={{
+                          marginLeft: idx > 0 ? '-6px' : '0',
+                          zIndex: topReactions.length - idx,
+                          position: 'relative',
+                          filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))'
+                        }}
+                        title={`${reaction.emoji} ${reaction.count}`}
+                      >
+                        {reaction.emoji}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Total count */}
+                  <span className="text-xs font-medium text-gray-600">
+                    {totalCount}
                   </span>
-                ))}
-                {(postLikes[post.id] || 0) > 0 && (
-                  <span className="flex items-center gap-0.5">
-                    <ThumbsUp className="w-3.5 h-3.5 text-blue-600" />
-                    {postLikes[post.id]}
-                  </span>
-                )}
-              </div>
-            )}
+                </div>
+              );
+            })()}
 
             {/* Action Bar */}
             <div className="border-t border-gray-100 pt-2 mt-2">
@@ -12291,49 +15134,86 @@ function CommunityComponent({
                   onMouseLeave={() => {
                     const timer = setTimeout(() => {
                       setShowEmojiPicker(null)
-                    }, 1000)
+                    }, 250)
                     setEmojiPickerHideTimer(timer)
                   }}
                 >
                   <button
                     onClick={(e) => {
                       haptic.like();
-                      handleLikePost(post.id, e);
+                      const postIdForReactions = displayPost?.id || post.id;
+                      handleLikePost(postIdForReactions, e);
                     }}
-                    onMouseDown={(e) => handleLongPressStart(post.id, e)}
+                    onMouseDown={(e) => {
+                      const postIdForReactions = displayPost?.id || post.id;
+                      handleLongPressStart(postIdForReactions, e);
+                    }}
                     onMouseUp={handleLongPressEnd}
-                    onTouchStart={(e) => handleLongPressStart(post.id, e)}
+                    onTouchStart={(e) => {
+                      const postIdForReactions = displayPost?.id || post.id;
+                      handleLongPressStart(postIdForReactions, e);
+                    }}
                     onTouchEnd={handleLongPressEnd}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
-                      userPostReactions[post.id] 
+                      (() => {
+                        const postIdForReactions = displayPost?.id || post.id;
+                        return userPostReactions[postIdForReactions];
+                      })()
                         ? 'text-blue-600 bg-blue-50' 
                         : 'text-gray-500 hover:bg-gray-100'
                     }`}
                     title="Like"
                   >
-                    <ThumbsUp className="w-5 h-5" />
-                    {postLikes[post.id] > 0 && (
-                      <span className="text-xs font-medium">{postLikes[post.id]}</span>
-                    )}
+                    {(() => {
+                      const postIdForReactions = displayPost?.id || post.id;
+                      const currentReaction = userPostReactions[postIdForReactions];
+                      // Show emoji if there's a reaction, otherwise show 👍 as default
+                      if (currentReaction) {
+                        return <span className="text-xl">{currentReaction}</span>;
+                      }
+                      return <span className="text-xl">👍</span>;
+                    })()}
+                    {(() => {
+                      const postIdForReactions = displayPost?.id || post.id;
+                      const currentReaction = userPostReactions[postIdForReactions];
+                      if (currentReaction) {
+                        // Show emoji reaction count
+                        const reactionData = postReactions[postIdForReactions]?.find(r => r.emoji === currentReaction);
+                        return reactionData && reactionData.count > 0 ? (
+                          <span className="text-xs font-medium">{reactionData.count}</span>
+                        ) : null;
+                      }
+                      // Show 👍 count if exists
+                      const likeReaction = postReactions[postIdForReactions]?.find(r => r.emoji === '👍');
+                      return likeReaction && likeReaction.count > 0 ? (
+                        <span className="text-xs font-medium">{likeReaction.count}</span>
+                      ) : null;
+                    })()}
                   </button>
 
                   {/* Emoji Picker Overlay */}
                   {showEmojiPicker === post.id && (
-                    <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-3 py-2 flex gap-2 z-50">
-                      {EMOJI_REACTIONS.map((reaction) => (
-                        <button
-                          key={reaction.emoji}
-                          onClick={(e) => {
-                            haptic.like();
-                            handleEmojiReaction(post.id, reaction.emoji, e);
-                          }}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          className="text-2xl hover:scale-125 transition-transform p-2 min-w-[44px] min-h-[44px] flex items-center justify-center"
-                          title={reaction.label}
-                        >
-                          {reaction.emoji}
-                        </button>
-                      ))}
+                    <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50">
+                      {EMOJI_REACTIONS.map((reaction) => {
+                        const postIdForReactions = displayPost?.id || post.id;
+                        const isSelected = userPostReactions[postIdForReactions] === reaction.emoji;
+                        return (
+                          <button
+                            key={reaction.emoji}
+                            onClick={(e) => {
+                              haptic.like();
+                              handleEmojiReaction(postIdForReactions, reaction.emoji, e);
+                            }}
+                            onMouseDown={(e) => e.stopPropagation()}
+                            className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                              isSelected ? 'bg-blue-50 scale-110' : ''
+                            }`}
+                            title={reaction.label}
+                          >
+                            <span className="text-xl">{reaction.emoji}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -12342,7 +15222,8 @@ function CommunityComponent({
                 <button
                   onClick={(e) => {
                     haptic.select();
-                    toggleComments(post.id, e);
+                    const postIdForComments = displayPost?.id || post.id;
+                    toggleComments(postIdForComments, e);
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
                     openComments[post.id] 
@@ -12354,7 +15235,8 @@ function CommunityComponent({
                   <MessageSquare className="w-5 h-5" />
                   {(() => {
                     // If comments are loaded, use actual count
-                    const postComments = comments[post.id];
+                    const postIdForComments = displayPost?.id || post.id;
+                    const postComments = comments[postIdForComments];
                     let commentCount = 0;
                     if (postComments !== undefined) {
                       // Count all top-level comments (not replies)
@@ -12373,7 +15255,7 @@ function CommunityComponent({
                       const repliesCount = countReplies(postComments);
                       commentCount = topLevelCount + repliesCount;
                     } else {
-                      commentCount = post.replies_count || 0;
+                      commentCount = displayPost?.replies_count || post.replies_count || 0;
                     }
                     return commentCount > 0 ? (
                       <span className="text-xs font-medium">{commentCount}</span>
@@ -12385,26 +15267,38 @@ function CommunityComponent({
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleRepost(post.id);
+                    const postIdToRepost = displayPost?.id || post.id;
+                    handleRepost(postIdToRepost);
                   }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-colors ${
-                    repostedPosts.includes(post.id) 
+                    (() => {
+                      const postIdToRepost = displayPost?.id || post.id;
+                      return repostedPosts.includes(postIdToRepost);
+                    })()
                       ? 'text-green-600 bg-green-50 hover:bg-green-100' 
                       : 'text-gray-500 hover:bg-gray-100'
                   }`}
                   title="Repost"
                 >
-                  <Repeat2 className={`w-5 h-5 ${repostedPosts.includes(post.id) ? 'fill-current' : ''}`} />
-                  {repostCounts[post.id] > 0 && (
-                    <span className="text-xs font-medium">{repostCounts[post.id]}</span>
-                  )}
+                  <Repeat2 className={`w-5 h-5 ${(() => {
+                    const postIdToRepost = displayPost?.id || post.id;
+                    return repostedPosts.includes(postIdToRepost);
+                  })() ? 'fill-current' : ''}`} />
+                  {(() => {
+                    const postIdToRepost = displayPost?.id || post.id;
+                    return repostCounts[postIdToRepost] > 0 ? (
+                      <span className="text-xs font-medium">{repostCounts[postIdToRepost]}</span>
+                    ) : null;
+                  })()}
                 </button>
 
                 {/* Quote Button */}
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleQuote(post);
+                    if (displayPost) {
+                      handleQuote(displayPost);
+                    }
                   }}
                   className="px-3 py-1.5 rounded-full transition-colors text-gray-500 hover:bg-gray-100"
                   title="Quote"
@@ -12414,16 +15308,31 @@ function CommunityComponent({
 
                 {/* Bookmark Button */}
                 <button
-                  onClick={() => handleBookmarkPost(post.id)}
+                  onClick={() => {
+                    const postIdToBookmark = displayPost?.id || post.id;
+                    handleBookmarkPost(postIdToBookmark);
+                  }}
                   className={`px-3 py-1.5 rounded-full transition-colors ${
-                    bookmarkedPosts.includes(post.id) 
+                    (() => {
+                      const postIdToBookmark = displayPost?.id || post.id;
+                      return bookmarkedPosts.includes(postIdToBookmark);
+                    })()
                       ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' 
                       : 'text-gray-500 hover:bg-gray-100'
                   }`}
-                  title={bookmarkedPosts.includes(post.id) ? 'Saved' : 'Save post'}
-                  aria-label={bookmarkedPosts.includes(post.id) ? 'Unsave post' : 'Save post'}
+                  title={(() => {
+                    const postIdToBookmark = displayPost?.id || post.id;
+                    return bookmarkedPosts.includes(postIdToBookmark) ? 'Saved' : 'Save post';
+                  })()}
+                  aria-label={(() => {
+                    const postIdToBookmark = displayPost?.id || post.id;
+                    return bookmarkedPosts.includes(postIdToBookmark) ? 'Unsave post' : 'Save post';
+                  })()}
                 >
-                  <Bookmark className={`w-5 h-5 ${bookmarkedPosts.includes(post.id) ? 'fill-current' : ''}`} />
+                  <Bookmark className={`w-5 h-5 ${(() => {
+                    const postIdToBookmark = displayPost?.id || post.id;
+                    return bookmarkedPosts.includes(postIdToBookmark);
+                  })() ? 'fill-current' : ''}`} />
                 </button>
               </div>
             </div>
@@ -12451,14 +15360,18 @@ function CommunityComponent({
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' && !e.shiftKey) {
                               e.preventDefault()
-                              addComment(post.id)
+                              const postIdForComments = displayPost?.id || post.id;
+                              addComment(postIdForComments)
                             }
                             // Shift+Enter allows new line (default behavior)
                           }}
                           style={{ maxHeight: '80px', minHeight: '20px', height: '20px' }}
                         />
                         <button
-                          onClick={() => addComment(post.id)}
+                          onClick={() => {
+                            const postIdForComments = displayPost?.id || post.id;
+                            addComment(postIdForComments)
+                          }}
                           disabled={!newComments[post.id]?.trim()}
                           className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                           title="Post comment"
@@ -12471,9 +15384,14 @@ function CommunityComponent({
                 )}
 
                 {/* Comments List */}
-                {comments[post.id] && comments[post.id].length > 0 && (
+                {(() => {
+                  const postIdForComments = displayPost?.id || post.id;
+                  if (!comments[postIdForComments] || comments[postIdForComments].length === 0) {
+                    return null;
+                  }
+                  return (
                   <div className="space-y-4">
-                    {comments[post.id].map(comment => (
+                    {comments[postIdForComments].map(comment => (
                       <div key={comment.id} data-comment-id={comment.id} className="flex gap-3 items-start">
                         <button
                           onClick={(e) => {
@@ -12549,7 +15467,10 @@ function CommunityComponent({
                                 />
                                 <div className="flex gap-2">
                                   <button
-                                    onClick={() => handleEditComment(comment.id, post.id)}
+                                    onClick={() => {
+                                      const postIdForComments = displayPost?.id || post.id;
+                                      handleEditComment(comment.id, postIdForComments)
+                                    }}
                                     disabled={!editCommentContent.trim()}
                                     className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300"
                                     title="Save"
@@ -12579,12 +15500,114 @@ function CommunityComponent({
                                 <span className="ml-1 text-gray-400">(edited)</span>
                               )}
                             </span>
+                            <div className="relative">
+                              <button
+                                onMouseEnter={() => {
+                                  if (commentEmojiPickerHideTimer) {
+                                    clearTimeout(commentEmojiPickerHideTimer)
+                                    setCommentEmojiPickerHideTimer(null)
+                                  }
+                                  setShowCommentEmojiPicker(comment.id)
+                                }}
+                                onMouseLeave={() => {
+                                  const timer = setTimeout(() => {
+                                    setShowCommentEmojiPicker(null)
+                                  }, 250)
+                                  setCommentEmojiPickerHideTimer(timer)
+                                }}
+                                onClick={(e) => handleLikeComment(comment.id, e)}
+                                className={`flex items-center gap-1 hover:text-blue-600 font-medium ${
+                                  (userReactions[comment.id] === 'like' || userReactions[comment.id] === '👍') ? 'text-blue-600' : ''
+                                }`}
+                                title="Like comment"
+                              >
+                                {(() => {
+                                  const currentReaction = userReactions[comment.id];
+                                  if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                    return <span className="text-base">{currentReaction}</span>;
+                                  }
+                                  return <span className="text-base">👍</span>;
+                                })()}
+                                {(() => {
+                                  const currentReaction = userReactions[comment.id];
+                                  if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                    const reactionData = commentReactions[comment.id]?.find(r => r.emoji === currentReaction);
+                                    return reactionData && reactionData.count > 0 ? (
+                                      <span className="text-xs">{reactionData.count}</span>
+                                    ) : null;
+                                  }
+                                  const likeReaction = commentReactions[comment.id]?.find(r => r.emoji === '👍');
+                                  return likeReaction && likeReaction.count > 0 ? (
+                                    <span className="text-xs">{likeReaction.count}</span>
+                                  ) : null;
+                                })()}
+                              </button>
+                              {/* Comment Emoji Picker Overlay */}
+                              {showCommentEmojiPicker === comment.id && (
+                                <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50" onMouseEnter={() => {
+                                  if (commentEmojiPickerHideTimer) {
+                                    clearTimeout(commentEmojiPickerHideTimer)
+                                    setCommentEmojiPickerHideTimer(null)
+                                  }
+                                  setShowCommentEmojiPicker(comment.id)
+                                }} onMouseLeave={() => {
+                                  const timer = setTimeout(() => {
+                                    setShowCommentEmojiPicker(null)
+                                  }, 250)
+                                  setCommentEmojiPickerHideTimer(timer)
+                                }}>
+                                  {EMOJI_REACTIONS.map((reaction) => {
+                                    const isSelected = userReactions[comment.id] === reaction.emoji;
+                                    return (
+                                      <button
+                                        key={reaction.emoji}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEmojiReactionComment(comment.id, reaction.emoji, e);
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                                          isSelected ? 'bg-blue-50 scale-110' : ''
+                                        }`}
+                                        title={reaction.label}
+                                      >
+                                        <span className="text-xl">{reaction.emoji}</span>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                            {post.user_id === user?.id && (
+                              <button
+                                onClick={(e) => handleFavoriteComment(comment.id, e)}
+                                className={`flex items-center gap-1 hover:text-amber-600 font-medium ${
+                                  commentFavorites[comment.id] ? 'text-amber-600' : ''
+                                }`}
+                                title="Favorite comment"
+                              >
+                                <Star className={`w-3 h-3 ${commentFavorites[comment.id] ? 'fill-current' : ''}`} />
+                              </button>
+                            )}
                             <button
                               onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
                               className="hover:text-blue-600 font-medium"
                             >
                               Reply
                             </button>
+                            {!isCommentOwner(comment) && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReportingCommentId(comment.id);
+                                  setReportModalOpen(true);
+                                }}
+                                className="hover:text-red-600 font-medium flex items-center gap-1"
+                                title="Report comment"
+                              >
+                                <Flag className="w-3 h-3" />
+                              </button>
+                            )}
                           </div>
 
                           {/* Reply Input */}
@@ -12605,13 +15628,17 @@ function CommunityComponent({
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter' && !e.shiftKey) {
                                       e.preventDefault()
-                                      addComment(post.id, comment.id)
+                                      const postIdForComments = displayPost?.id || post.id;
+                                      addComment(postIdForComments, comment.id)
                                     }
                                   }}
                                   style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
                                 />
                                 <button
-                                  onClick={() => addComment(post.id, comment.id)}
+                                  onClick={() => {
+                                    const postIdForComments = displayPost?.id || post.id;
+                                    addComment(postIdForComments, comment.id)
+                                  }}
                                   disabled={!replyContents[comment.id]?.trim()}
                                   className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                                   title="Send reply"
@@ -12732,19 +15759,121 @@ function CommunityComponent({
                                           <p className="text-gray-700 text-xs mt-1">{reply.content}</p>
                                           )}
                                         </div>
-                                        <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                          <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
                                           <span>
                                             {formatTime(reply.created_at)}
                                             {reply.updated_at && reply.updated_at !== reply.created_at && (
                                               <span className="ml-1 text-gray-400">(edited)</span>
                                             )}
                                           </span>
+                                          <div className="relative">
+                                            <button
+                                              onMouseEnter={() => {
+                                                if (commentEmojiPickerHideTimer) {
+                                                  clearTimeout(commentEmojiPickerHideTimer)
+                                                  setCommentEmojiPickerHideTimer(null)
+                                                }
+                                                setShowCommentEmojiPicker(reply.id)
+                                              }}
+                                              onMouseLeave={() => {
+                                                const timer = setTimeout(() => {
+                                                  setShowCommentEmojiPicker(null)
+                                                }, 250)
+                                                setCommentEmojiPickerHideTimer(timer)
+                                              }}
+                                              onClick={(e) => handleLikeComment(reply.id, e)}
+                                              className={`flex items-center gap-1 hover:text-blue-600 font-medium ${
+                                                (userReactions[reply.id] === 'like' || userReactions[reply.id] === '👍') ? 'text-blue-600' : ''
+                                              }`}
+                                              title="Like comment"
+                                            >
+                                              {(() => {
+                                                const currentReaction = userReactions[reply.id];
+                                                if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                                  return <span className="text-base">{currentReaction}</span>;
+                                                }
+                                                return <span className="text-base">👍</span>;
+                                              })()}
+                                              {(() => {
+                                                const currentReaction = userReactions[reply.id];
+                                                if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                                  const reactionData = commentReactions[reply.id]?.find(r => r.emoji === currentReaction);
+                                                  return reactionData && reactionData.count > 0 ? (
+                                                    <span className="text-xs">{reactionData.count}</span>
+                                                  ) : null;
+                                                }
+                                                const likeReaction = commentReactions[reply.id]?.find(r => r.emoji === '👍');
+                                                return likeReaction && likeReaction.count > 0 ? (
+                                                  <span className="text-xs">{likeReaction.count}</span>
+                                                ) : null;
+                                              })()}
+                                            </button>
+                                            {/* Comment Emoji Picker Overlay */}
+                                            {showCommentEmojiPicker === reply.id && (
+                                              <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50" onMouseEnter={() => {
+                                                if (commentEmojiPickerHideTimer) {
+                                                  clearTimeout(commentEmojiPickerHideTimer)
+                                                  setCommentEmojiPickerHideTimer(null)
+                                                }
+                                                setShowCommentEmojiPicker(reply.id)
+                                              }} onMouseLeave={() => {
+                                                const timer = setTimeout(() => {
+                                                  setShowCommentEmojiPicker(null)
+                                                }, 250)
+                                                setCommentEmojiPickerHideTimer(timer)
+                                              }}>
+                                                {EMOJI_REACTIONS.map((reaction) => {
+                                                  const isSelected = userReactions[reply.id] === reaction.emoji;
+                                                  return (
+                                                    <button
+                                                      key={reaction.emoji}
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleEmojiReactionComment(reply.id, reaction.emoji, e);
+                                                      }}
+                                                      onMouseDown={(e) => e.stopPropagation()}
+                                                      className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                                                        isSelected ? 'bg-blue-50 scale-110' : ''
+                                                      }`}
+                                                      title={reaction.label}
+                                                    >
+                                                      <span className="text-xl">{reaction.emoji}</span>
+                                                    </button>
+                                                  );
+                                                })}
+                                              </div>
+                                            )}
+                                          </div>
+                                          {post.user_id === user?.id && (
+                                            <button
+                                              onClick={(e) => handleFavoriteComment(reply.id, e)}
+                                              className={`flex items-center gap-1 hover:text-amber-600 font-medium ${
+                                                commentFavorites[reply.id] ? 'text-amber-600' : ''
+                                              }`}
+                                              title="Favorite comment"
+                                            >
+                                              <Star className={`w-3 h-3 ${commentFavorites[reply.id] ? 'fill-current' : ''}`} />
+                                            </button>
+                                          )}
                                           <button
                                             onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: !prev[reply.id] }))}
                                             className="hover:text-blue-600 font-medium"
                                           >
                                             Reply
                                           </button>
+                                          {!isCommentOwner(reply) && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setReportingCommentId(reply.id);
+                                                setReportModalOpen(true);
+                                              }}
+                                              className="hover:text-red-600 font-medium flex items-center gap-1"
+                                              title="Report comment"
+                                            >
+                                              <Flag className="w-3 h-3" />
+                                            </button>
+                                          )}
                                         </div>
 
                                         {/* Reply to Reply Input */}
@@ -12765,13 +15894,17 @@ function CommunityComponent({
                                                 onKeyDown={(e) => {
                                                   if (e.key === 'Enter' && !e.shiftKey) {
                                                     e.preventDefault()
-                                                    addComment(post.id, reply.id)
+                                                    const postIdForComments = displayPost?.id || post.id;
+                                                    addComment(postIdForComments, reply.id)
                                                   }
                                                 }}
                                                 style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
                                               />
                                               <button
-                                                onClick={() => addComment(post.id, reply.id)}
+                                                onClick={() => {
+                                                  const postIdForComments = displayPost?.id || post.id;
+                                                  addComment(postIdForComments, reply.id)
+                                                }}
                                                 disabled={!replyContents[reply.id]?.trim()}
                                                 className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                                                 title="Send reply"
@@ -12892,12 +16025,116 @@ function CommunityComponent({
                                                         <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
                                                         )}
                                                       </div>
-                                                      <span className="text-xs text-gray-500 ml-2">
-                                                        {formatTime(nestedReply.created_at)}
-                                                        {nestedReply.updated_at && nestedReply.updated_at !== nestedReply.created_at && (
-                                                          <span className="ml-1 text-gray-400">(edited)</span>
+                                                      <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                                        <span>
+                                                          {formatTime(nestedReply.created_at)}
+                                                          {nestedReply.updated_at && nestedReply.updated_at !== nestedReply.created_at && (
+                                                            <span className="ml-1 text-gray-400">(edited)</span>
+                                                          )}
+                                                        </span>
+                                                        <div className="relative">
+                                                          <button
+                                                            onMouseEnter={() => {
+                                                              if (commentEmojiPickerHideTimer) {
+                                                                clearTimeout(commentEmojiPickerHideTimer)
+                                                                setCommentEmojiPickerHideTimer(null)
+                                                              }
+                                                              setShowCommentEmojiPicker(nestedReply.id)
+                                                            }}
+                                                            onMouseLeave={() => {
+                                                              const timer = setTimeout(() => {
+                                                                setShowCommentEmojiPicker(null)
+                                                              }, 250)
+                                                              setCommentEmojiPickerHideTimer(timer)
+                                                            }}
+                                                            onClick={(e) => handleLikeComment(nestedReply.id, e)}
+                                                            className={`flex items-center gap-1 hover:text-blue-600 font-medium ${
+                                                              (userReactions[nestedReply.id] === 'like' || userReactions[nestedReply.id] === '👍') ? 'text-blue-600' : ''
+                                                            }`}
+                                                            title="Like comment"
+                                                          >
+                                                            {(() => {
+                                                              const currentReaction = userReactions[nestedReply.id];
+                                                              if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                                                return <span className="text-base">{currentReaction}</span>;
+                                                              }
+                                                              return <span className="text-base">👍</span>;
+                                                            })()}
+                                                            {(() => {
+                                                              const currentReaction = userReactions[nestedReply.id];
+                                                              if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                                                const reactionData = commentReactions[nestedReply.id]?.find(r => r.emoji === currentReaction);
+                                                                return reactionData && reactionData.count > 0 ? (
+                                                                  <span className="text-xs">{reactionData.count}</span>
+                                                                ) : null;
+                                                              }
+                                                              const likeReaction = commentReactions[nestedReply.id]?.find(r => r.emoji === '👍');
+                                                              return likeReaction && likeReaction.count > 0 ? (
+                                                                <span className="text-xs">{likeReaction.count}</span>
+                                                              ) : null;
+                                                            })()}
+                                                          </button>
+                                                          {/* Comment Emoji Picker Overlay */}
+                                                          {showCommentEmojiPicker === nestedReply.id && (
+                                                            <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50" onMouseEnter={() => {
+                                                              if (commentEmojiPickerHideTimer) {
+                                                                clearTimeout(commentEmojiPickerHideTimer)
+                                                                setCommentEmojiPickerHideTimer(null)
+                                                              }
+                                                              setShowCommentEmojiPicker(nestedReply.id)
+                                                            }} onMouseLeave={() => {
+                                                              const timer = setTimeout(() => {
+                                                                setShowCommentEmojiPicker(null)
+                                                              }, 250)
+                                                              setCommentEmojiPickerHideTimer(timer)
+                                                            }}>
+                                                              {EMOJI_REACTIONS.map((reaction) => {
+                                                                const isSelected = userReactions[nestedReply.id] === reaction.emoji;
+                                                                return (
+                                                                  <button
+                                                                    key={reaction.emoji}
+                                                                    onClick={(e) => {
+                                                                      e.stopPropagation();
+                                                                      handleEmojiReactionComment(nestedReply.id, reaction.emoji, e);
+                                                                    }}
+                                                                    onMouseDown={(e) => e.stopPropagation()}
+                                                                    className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                                                                      isSelected ? 'bg-blue-50 scale-110' : ''
+                                                                    }`}
+                                                                    title={reaction.label}
+                                                                  >
+                                                                    <span className="text-xl">{reaction.emoji}</span>
+                                                                  </button>
+                                                                );
+                                                              })}
+                                                            </div>
+                                                          )}
+                                                        </div>
+                                                        {post.user_id === user?.id && (
+                                                          <button
+                                                            onClick={(e) => handleFavoriteComment(nestedReply.id, e)}
+                                                            className={`flex items-center gap-1 hover:text-amber-600 font-medium ${
+                                                              commentFavorites[nestedReply.id] ? 'text-amber-600' : ''
+                                                            }`}
+                                                            title="Favorite comment"
+                                                          >
+                                                            <Star className={`w-3 h-3 ${commentFavorites[nestedReply.id] ? 'fill-current' : ''}`} />
+                                                          </button>
                                                         )}
-                                                      </span>
+                                                        {!isCommentOwner(nestedReply) && (
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation();
+                                                              setReportingCommentId(nestedReply.id);
+                                                              setReportModalOpen(true);
+                                                            }}
+                                                            className="hover:text-red-600 font-medium flex items-center gap-1"
+                                                            title="Report comment"
+                                                          >
+                                                            <Flag className="w-3 h-3" />
+                                                          </button>
+                                                        )}
+                                                      </div>
                                                     </div>
                                                   </div>
                                                 ))}
@@ -12916,15 +16153,23 @@ function CommunityComponent({
                       </div>
                     ))}
                   </div>
-                )}
-
-                {comments[post.id] && comments[post.id].length === 0 && (
-                  <p className="text-center text-gray-500 text-sm py-4">No comments yet. Be the first to comment!</p>
-                )}
+                  );
+                })()}
+                
+                {(() => {
+                  const postIdForComments = displayPost?.id || post.id;
+                  if (comments[postIdForComments] && comments[postIdForComments].length === 0) {
+                    return (
+                      <p className="text-center text-gray-500 text-sm py-4">No comments yet. Be the first to comment!</p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
           </div>
-        ))
+            )
+            })
           )}
           
           {/* Infinite Scroll Trigger */}
@@ -14249,6 +17494,54 @@ function CommunityComponent({
 
             {/* Profile Details */}
             <div className="space-y-4">
+              {/* Mutual Connections */}
+              {user?.id && selectedUserProfile?.id && selectedUserProfile.id !== user.id && (
+                loadingModalMutualConnections ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-blue-600 rounded-full"></div>
+                    <span>Loading mutual connections...</span>
+                  </div>
+                ) : modalMutualConnections.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users className="w-4 h-4 text-gray-600" />
+                    <h5 className="text-sm font-semibold text-gray-900">
+                      {modalMutualConnections.length} {modalMutualConnections.length === 1 ? 'mutual connection' : 'mutual connections'}
+                    </h5>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {modalMutualConnections.slice(0, 6).map((mutual: Profile) => (
+                      <button
+                        key={mutual.id}
+                        onClick={() => {
+                          setSelectedUserProfile(null)
+                          const event = new CustomEvent('viewUserProfile', { detail: { userId: mutual.id } })
+                          window.dispatchEvent(event)
+                        }}
+                        className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors group"
+                        title={mutual.full_name}
+                      >
+                        <Avatar 
+                          src={mutual.avatar_url} 
+                          name={mutual.full_name} 
+                          className="w-6 h-6 flex-shrink-0" 
+                          useInlineSize={false} 
+                        />
+                        <span className="text-xs font-medium text-gray-700 group-hover:text-blue-600 transition-colors truncate max-w-[120px]">
+                          {mutual.full_name}
+                        </span>
+                      </button>
+                    ))}
+                    {modalMutualConnections.length > 6 && (
+                      <span className="text-xs text-gray-500 px-2 py-1.5">
+                        +{modalMutualConnections.length - 6} more
+                      </span>
+                    )}
+                  </div>
+                </div>
+                )
+              )}
+
               {selectedUserProfile.specialties && selectedUserProfile.specialties.length > 0 && (
                 <div>
                   <h5 className="text-sm font-medium text-gray-700 mb-2">Specialties</h5>
@@ -14290,16 +17583,16 @@ function CommunityComponent({
 
     {/* Post Detail Modal */}
     {selectedPost && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4">
-        <div className="bg-white md:rounded-2xl w-full h-full md:h-auto md:max-w-4xl md:max-h-[90vh] overflow-y-auto modal-scroll-container">
-          <div className="p-6">
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 md:p-4" onClick={() => setSelectedPost(null)}>
+        <div className="bg-white md:rounded-xl w-full h-full md:h-auto md:max-w-2xl md:max-h-[85vh] overflow-y-auto modal-scroll-container shadow-2xl" onClick={(e) => e.stopPropagation()}>
+          <div className="p-4 md:p-5">
             {/* Post Header */}
-            <div className="flex items-center gap-3 mb-4 relative">
+            <div className="flex items-center gap-2.5 mb-3 relative pb-3 border-b border-gray-100">
               <button 
                 onClick={() => setSelectedPost(null)} 
                 className="absolute top-0 right-0 text-gray-400 hover:text-gray-600 transition-colors z-10"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
               <button
                 onClick={() => {
@@ -14312,25 +17605,25 @@ function CommunityComponent({
                   <img
                     src={selectedPost.user.avatar_url}
                     alt={getUserDisplayName(selectedPost.user)}
-                    className="w-12 h-12 rounded-full object-cover"
+                    className="w-9 h-9 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold hover:bg-blue-700 transition-colors">
+                  <div className="w-9 h-9 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold text-sm hover:bg-blue-700 transition-colors">
                 {getUserDisplayName(selectedPost.user)?.charAt(0) || 'U'}
                   </div>
                 )}
               </button>
-              <div>
+              <div className="flex-1 min-w-0">
                 <button
                   onClick={() => {
                     viewUserProfile(selectedPost.user_id || getUserId(selectedPost.user))
                     setSelectedPost(null)
                   }}
-                  className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-lg"
+                  className="font-semibold text-gray-900 hover:text-blue-600 transition-colors text-sm block truncate"
                 >
                   {getUserDisplayName(selectedPost.user)}
                 </button>
-                <p className="text-sm text-gray-600">
+                <p className="text-xs text-gray-500 truncate">
                   {getUserProfession(selectedPost.user)} • {formatTime(selectedPost.created_at)}
                   {selectedPost.updated_at && selectedPost.updated_at !== selectedPost.created_at && (
                     <span className="text-gray-400"> (edited)</span>
@@ -14339,116 +17632,49 @@ function CommunityComponent({
               </div>
             </div>
 
-            {/* Post Title */}
-            {selectedPost.title && (
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">{selectedPost.title}</h2>
-            )}
-
-            {/* Post Metadata */}
-            {renderPostMetadata(selectedPost)}
-
-            {/* Post Settings Indicators */}
-            <div className="flex flex-wrap gap-3 text-xs text-gray-500 my-4">
-              {postSettings[selectedPost.id]?.comments_disabled && (
-                <span className="flex items-center gap-1 bg-red-50 text-red-700 px-2 py-1 rounded-full">
-                  <MessageSquare className="w-3 h-3" />
-                  Comments disabled
-                </span>
-              )}
-              {postSettings[selectedPost.id]?.muted && (
-                <span className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-full">
-                  <Bell className="w-3 h-3" />
-                  Notifications muted
-                </span>
-              )}
-              {followingPosts.includes(selectedPost.id) && (
-                <span className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                  <Bell className="w-3 h-3" />
-                  Following
-                </span>
-              )}
-            </div>
-
-            {/* Post Content with See More/Less */}
-            <div className="group relative text-gray-700 mb-6 text-lg leading-relaxed">
-              {(() => {
-                const textContent = selectedPost.content.replace(/<[^>]*>/g, '')
-                const contentLength = textContent.length
-                return (
-                  <>
-                    {contentLength > 300 && (
-                      <>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(selectedPost.id); }}
-                          className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[selectedPost.id] ? 'block' : 'hidden'}`}
-                        >
-                          See less
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleExpandPost(selectedPost.id); }}
-                          className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[selectedPost.id] ? 'hidden' : 'block'}`}
-                        >
-                          See more
-                        </button>
-                      </>
-                    )}
-
-                    <div 
-                      className={`
-                        ${expandedPosts[selectedPost.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
-                        rich-text-content
-                      `}
-                      dangerouslySetInnerHTML={{ __html: selectedPost.content }}
-                    />
-
-                    {!expandedPosts[selectedPost.id] && contentLength > 300 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
-                    )}
-                  </>
-                )
-              })()}
-            </div>
-
-            {/* Attachments */}
-            {selectedPost.post_metadata?.attachments && selectedPost.post_metadata.attachments.length > 0 && (
-              <div className="mb-6">
-                <h5 className="text-sm font-medium text-gray-700 mb-2">Attachments:</h5>
-                <div className="flex flex-wrap gap-2">
-                  {selectedPost.post_metadata.attachments.map((attachment: string, index: number) => (
-                    <a 
-                      key={index}
-                      href={attachment}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-sm text-blue-600 hover:text-blue-700 underline"
-                    >
-                      Attachment {index + 1}
-                    </a>
-                  ))}
-                </div>
+            {/* Post Metadata - Compact */}
+            {selectedPost.post_metadata && (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {selectedPost.post_metadata.content_type && (
+                  <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                    {selectedPost.post_metadata.content_type}
+                  </span>
+                )}
+                {selectedPost.post_metadata.audience_level && (
+                  <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                    {selectedPost.post_metadata.audience_level}
+                  </span>
+                )}
+                {(selectedPost.post_metadata.professions || []).slice(0, 2).map(profession => (
+                  <span key={profession} className="bg-orange-100 text-orange-800 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                    {profession}
+                  </span>
+                ))}
+                {(selectedPost.post_metadata.clinical_areas || []).slice(0, 2).map(area => (
+                  <span key={area} className="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-[10px] font-medium">
+                    {area}
+                  </span>
+                ))}
               </div>
             )}
 
-            {/* Co-authors */}
-            {selectedPost.post_metadata?.co_authors && selectedPost.post_metadata.co_authors.length > 0 && (
-              <div className="mb-6">
-                <h5 className="text-sm font-medium text-gray-700 mb-1">Co-authors:</h5>
-                <p className="text-sm text-gray-600">{selectedPost.post_metadata.co_authors.join(', ')}</p>
-              </div>
-            )}
+            {/* Post Content - Compact */}
+            <div className="text-gray-700 mb-4 text-sm leading-relaxed">
+              <div 
+                className="rich-text-content"
+                dangerouslySetInnerHTML={{ __html: selectedPost.content }}
+              />
+            </div>
 
-            {/* Comments Section */}
-            <div className="border-t border-gray-200 pt-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center text-sm text-gray-500">
-                  <MessageSquare className="w-4 h-4 mr-1" />
+            {/* Comments Section - Compact */}
+            <div className="border-t border-gray-100 pt-3 mt-3">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center text-xs text-gray-500">
+                  <MessageSquare className="w-3.5 h-3.5 mr-1" />
                   {(() => {
-                    // If comments are loaded, use actual count
                     const postComments = comments[selectedPost.id];
                     if (postComments !== undefined) {
-                      // Count all top-level comments (not replies)
                       const topLevelCount = postComments.filter(c => !c.parent_reply_id).length;
-                      // Count all replies recursively
                       const countReplies = (commentList: Comment[]): number => {
                         let count = 0;
                         commentList.forEach(comment => {
@@ -14462,646 +17688,378 @@ function CommunityComponent({
                       const repliesCount = countReplies(postComments);
                       return topLevelCount + repliesCount;
                     }
-                    // Otherwise use replies_count from post
                     return selectedPost.replies_count || 0;
                   })()} comments
                 </div>
               </div>
 
-              {/* Comment Input */}
+              {/* Comment Input - Compact */}
               {user && !postSettings[selectedPost.id]?.comments_disabled && (
-                <div className="mb-4">
+                <div className="mb-3">
                   <div className="flex gap-2 items-center">
-                    <div className="w-7 h-7 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-semibold text-xs flex-shrink-0">
-                      {userProfile?.full_name?.charAt(0) || 'U'}
-                    </div>
-                    <div className="flex-1 flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-                  <textarea
-                    placeholder="Add a comment..."
-                    value={newComments[selectedPost.id] || ''}
+                    <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-6 h-6 flex-shrink-0" useInlineSize={false} />
+                    <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 rounded-full focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+                      <textarea
+                        placeholder="Add a comment..."
+                        value={newComments[selectedPost.id] || ''}
                         onChange={(e) => {
                           setNewComments(prev => ({ ...prev, [selectedPost.id]: e.target.value }));
-                          // Auto-resize textarea
                           e.target.style.height = 'auto';
-                          e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
+                          e.target.style.height = `${Math.min(e.target.scrollHeight, 60)}px`;
                         }}
-                        className="flex-1 resize-none border-none outline-none text-sm py-1"
+                        className="flex-1 resize-none border-none outline-none text-xs py-0.5"
                         rows={1}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault()
                             addComment(selectedPost.id)
                           }
-                          // Shift+Enter allows new line (default behavior)
                         }}
-                        style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
+                        style={{ maxHeight: '60px', minHeight: '20px', height: '20px' }}
                       />
-                    <button
-                      onClick={() => addComment(selectedPost.id)}
-                      disabled={!newComments[selectedPost.id]?.trim()}
-                        className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                      <button
+                        onClick={() => addComment(selectedPost.id)}
+                        disabled={!newComments[selectedPost.id]?.trim()}
+                        className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
                         title="Post comment"
-                    >
-                        <Send className="w-4 h-4" />
-                    </button>
+                      >
+                        <Send className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
                 </div>
               )}
 
               {postSettings[selectedPost.id]?.comments_disabled && (
-                <div className="text-center py-6 text-gray-500 bg-gray-50 rounded-lg">
-                  <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="font-medium">Comments are disabled for this post</p>
-                  <p className="text-sm mt-1">The post owner has turned off comments</p>
+                <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
+                  <MessageSquare className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
+                  <p className="text-xs font-medium">Comments disabled</p>
                 </div>
               )}
 
               {!postSettings[selectedPost.id]?.comments_disabled && (
-                <div className="space-y-4">
-                  {(comments[selectedPost.id] || []).map(comment => (
-                    <div key={comment.id} data-comment-id={comment.id} className="flex gap-3 items-start">
-                      {/* Kullanıcı Avatarı */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          viewUserProfile(comment.user_id || getUserId(comment.user));
-                        }}
-                        className="flex-shrink-0 self-start hover:opacity-80 transition-opacity"
-                      >
-                        {comment.user?.avatar_url ? (
-                          <img
-                            src={comment.user.avatar_url}
-                            alt={getUserDisplayName(comment.user)}
-                            className="w-8 h-8 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white text-sm font-bold">
-                        {getUserDisplayName(comment.user)?.charAt(0) || 'U'}
+                <div className="space-y-3">
+                  {comments[selectedPost.id] && comments[selectedPost.id].length > 0 ? (
+                    comments[selectedPost.id].map(comment => (
+                      <div key={comment.id} className="flex gap-2 items-start">
+                        <Avatar
+                          src={comment.user?.avatar_url}
+                          name={comment.user?.full_name || 'User'}
+                          className="w-6 h-6 flex-shrink-0"
+                          useInlineSize={false}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewUserProfile(comment.user_id || getUserId(comment.user));
+                              }}
+                              className="font-medium text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
+                            >
+                              {getUserDisplayName(comment.user)}
+                            </button>
+                            <p className="text-xs text-gray-700 mt-0.5">{comment.content}</p>
                           </div>
-                        )}
-                      </button>
-                      
-                      <div className="flex-1">
-                        {/* Yorum İçeriği */}
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
+                          <div className="flex items-center gap-2 mt-1 text-[10px] text-gray-500">
+                            <span>{formatTime(comment.created_at)}</span>
+                            <div className="relative">
                               <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  viewUserProfile(comment.user_id || getUserId(comment.user));
+                                onMouseEnter={() => {
+                                  if (commentEmojiPickerHideTimer) {
+                                    clearTimeout(commentEmojiPickerHideTimer)
+                                    setCommentEmojiPickerHideTimer(null)
+                                  }
+                                  setShowCommentEmojiPicker(comment.id)
                                 }}
-                                className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                onMouseLeave={() => {
+                                  const timer = setTimeout(() => {
+                                    setShowCommentEmojiPicker(null)
+                                  }, 250)
+                                  setCommentEmojiPickerHideTimer(timer)
+                                }}
+                                onClick={(e) => handleLikeComment(comment.id, e)}
+                                className={`flex items-center gap-0.5 hover:text-blue-600 font-medium ${
+                                  (userReactions[comment.id] === 'like' || userReactions[comment.id] === '👍') ? 'text-blue-600' : ''
+                                }`}
+                                title="Like comment"
                               >
-                                {getUserDisplayName(comment.user)}
+                                {(() => {
+                                  const currentReaction = userReactions[comment.id];
+                                  if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                    return <span className="text-sm">{currentReaction}</span>;
+                                  }
+                                  return <span className="text-sm">👍</span>;
+                                })()}
+                                {(() => {
+                                  const currentReaction = userReactions[comment.id];
+                                  if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                    const reactionData = commentReactions[comment.id]?.find(r => r.emoji === currentReaction);
+                                    return reactionData && reactionData.count > 0 ? (
+                                      <span className="text-[9px]">{reactionData.count}</span>
+                                    ) : null;
+                                  }
+                                  const likeReaction = commentReactions[comment.id]?.find(r => r.emoji === '👍');
+                                  return likeReaction && likeReaction.count > 0 ? (
+                                    <span className="text-[9px]">{likeReaction.count}</span>
+                                  ) : null;
+                                })()}
                               </button>
-                              <p className="text-xs text-gray-500">
-                                {getUserProfession(comment.user)}
-                              </p>
-                            </div>
-                            
-                            <div className="flex items-center gap-2">
-                              <span className="text-xs text-gray-500">
-                                {formatTime(comment.created_at)}
-                                {comment.updated_at && comment.updated_at !== comment.created_at && (
-                                  <span className="ml-1 text-gray-400">(edited)</span>
-                                )}
-                              </span>
-                              
-                              {/* Yorum Menüsü */}
-                              <div className="relative">
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveCommentMenu(activeCommentMenu === comment.id ? null : comment.id);
-                                  }}
-                                  className="flex items-center justify-center w-6 h-6 rounded-full hover:bg-gray-200 transition-colors"
-                                >
-                                  <MoreHorizontal className="w-4 h-4 text-gray-500" />
-                                </button>
-
-                                {activeCommentMenu === comment.id && (
-                                  <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-2">
-                                    {isCommentOwner(comment) ? (
-                                      <>
-                                        <button
-                                          onClick={(e) => handleCommentMenuAction('edit', comment.id, e)}
-                                          className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                        >
-                                          <Edit2 className="w-4 h-4 mr-3 text-blue-600" />
-                                          Edit Comment
-                                        </button>
-                                        <button
-                                          onClick={(e) => handleCommentMenuAction('delete', comment.id, e)}
-                                          className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                        >
-                                          <Trash2 className="w-4 h-4 mr-3" />
-                                          Delete Comment
-                                        </button>
-                                      </>
-                                    ) : (
+                              {/* Comment Emoji Picker Overlay */}
+                              {showCommentEmojiPicker === comment.id && (
+                                <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50" onMouseEnter={() => {
+                                  if (commentEmojiPickerHideTimer) {
+                                    clearTimeout(commentEmojiPickerHideTimer)
+                                    setCommentEmojiPickerHideTimer(null)
+                                  }
+                                  setShowCommentEmojiPicker(comment.id)
+                                }} onMouseLeave={() => {
+                                  const timer = setTimeout(() => {
+                                    setShowCommentEmojiPicker(null)
+                                  }, 250)
+                                  setCommentEmojiPickerHideTimer(timer)
+                                }}>
+                                  {EMOJI_REACTIONS.map((reaction) => {
+                                    const isSelected = userReactions[comment.id] === reaction.emoji;
+                                    return (
                                       <button
-                                        onClick={(e) => handleCommentMenuAction('report', comment.id, e)}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                        key={reaction.emoji}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleEmojiReactionComment(comment.id, reaction.emoji, e);
+                                        }}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                                          isSelected ? 'bg-blue-50 scale-110' : ''
+                                        }`}
+                                        title={reaction.label}
                                       >
-                                        <Flag className="w-4 h-4 mr-3 text-orange-600" />
-                                        Report Comment
+                                        <span className="text-xl">{reaction.emoji}</span>
                                       </button>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          
-                          {editingCommentId === comment.id ? (
-                            <div className="mt-2 space-y-2">
-                              <textarea
-                                value={editCommentContent}
-                                onChange={(e) => setEditCommentContent(e.target.value)}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                rows={3}
-                                autoFocus
-                              />
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => handleEditComment(comment.id, selectedPost.id)}
-                                  disabled={!editCommentContent.trim()}
-                                  className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                                  title="Save"
-                                >
-                                  <Check className="w-4 h-4" />
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    setEditingCommentId(null);
-                                    setEditCommentContent('');
-                                  }}
-                                  className="flex items-center justify-center w-8 h-8 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-                                  title="Cancel"
-                                >
-                                  <X className="w-4 h-4" />
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                          <p className="text-gray-700 mt-2">{comment.content}</p>
-                          )}
-
-                          {/* Yorum Etkileşim Butonları */}
-                          <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-200">
-                            {/* Beğenme Butonu */}
+                            {selectedPost.user_id === user?.id && (
+                              <button
+                                onClick={(e) => handleFavoriteComment(comment.id, e)}
+                                className={`flex items-center gap-0.5 hover:text-amber-600 font-medium ${
+                                  commentFavorites[comment.id] ? 'text-amber-600' : ''
+                                }`}
+                                title="Favorite comment"
+                              >
+                                <Star className={`w-2.5 h-2.5 ${commentFavorites[comment.id] ? 'fill-current' : ''}`} />
+                              </button>
+                            )}
                             <button
-                              onClick={(e) => handleLikeComment(comment.id, e)}
-                              className={`flex items-center gap-1 text-xs ${
-                                userReactions[comment.id] === 'like' 
-                                  ? 'text-blue-600 font-medium' 
-                                  : 'text-gray-500 hover:text-blue-600'
-                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setReplyingTo(prev => ({ ...prev, [comment.id]: !prev[comment.id] }));
+                              }}
+                              className="hover:text-blue-600"
                             >
-                              <ThumbsUp className="w-4 h-4" />
-                              <span>{commentLikes[comment.id] || 0}</span>
+                              Reply
                             </button>
-
-                            {/* Favori Butonu */}
-                            <button
-                              onClick={(e) => handleFavoriteComment(comment.id, e)}
-                              className={`flex items-center gap-1 text-xs ${
-                                commentFavorites[comment.id] 
-                                  ? 'text-yellow-500 font-medium' 
-                                  : 'text-gray-500 hover:text-yellow-500'
-                              }`}
-                            >
-                              <Star className="w-4 h-4" fill={commentFavorites[comment.id] ? "currentColor" : "none"} />
-                            </button>
-
-                            {/* Reply Butonu */}
-                            {user && !postSettings[selectedPost.id]?.comments_disabled && (
+                            {comment.user_id !== user?.id && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setReplyingTo(prev => ({ 
-                                    ...prev, 
-                                    [comment.id]: !prev[comment.id] 
-                                  }));
+                                  setReportingCommentId(comment.id);
+                                  setReportModalOpen(true);
                                 }}
-                                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                                className="hover:text-red-600 font-medium flex items-center gap-0.5"
+                                title="Report comment"
                               >
-                                {replyingTo[comment.id] ? (
-                                  <X className="w-4 h-4" />
-                                ) : (
-                                  <MessageSquare className="w-4 h-4" />
-                                )}
+                                <Flag className="w-2.5 h-2.5" />
                               </button>
                             )}
                           </div>
-                        </div>
-
-                        {/* Reply Formu */}
-                        {replyingTo[comment.id] && user && !postSettings[selectedPost.id]?.comments_disabled && (
-                          <div className="ml-4 mt-3">
-                            <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-                            <textarea
-                              placeholder="Write a reply..."
-                              value={replyContents[comment.id] || ''}
-                                onChange={(e) => {
-                                  setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }));
-                                  // Auto-resize textarea
-                                  e.target.style.height = 'auto';
-                                  e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
-                                }}
-                                className="flex-1 resize-none border-none outline-none text-sm py-1"
-                                rows={1}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault()
-                                    addComment(selectedPost.id, comment.id)
-                                  }
-                                }}
-                                style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
-                              />
-                              <button
-                                onClick={() => addComment(selectedPost.id, comment.id)}
-                                disabled={!replyContents[comment.id]?.trim()}
-                                className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                                title="Send reply"
-                              >
-                                <Send className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Yanıtlar (Replies) */}
-                        {comment.replies && comment.replies.length > 0 && (
-                            <div className="ml-4 mt-3 space-y-3">
-                              {comment.replies.map((reply: any) => (
-                               <div key={reply.id} data-comment-id={reply.id} className="flex gap-2">
-                                {/* Yanıt Kullanıcı Avatarı */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    viewUserProfile(reply.user_id || getUserId(reply.user));
+                          
+                          {/* Reply Input - Compact */}
+                          {replyingTo[comment.id] && user && (
+                            <div className="mt-2 ml-2">
+                              <div className="flex items-center gap-1.5 px-2 py-1 border border-gray-200 rounded-lg">
+                                <textarea
+                                  placeholder="Write a reply..."
+                                  value={replyContents[comment.id] || ''}
+                                  onChange={(e) => {
+                                    setReplyContents(prev => ({ ...prev, [comment.id]: e.target.value }));
+                                    e.target.style.height = 'auto';
+                                    e.target.style.height = `${Math.min(e.target.scrollHeight, 50)}px`;
                                   }}
-                                  className="flex-shrink-0 hover:opacity-80 transition-opacity"
+                                  className="flex-1 resize-none border-none outline-none text-xs py-0.5"
+                                  rows={1}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                      e.preventDefault()
+                                      addComment(selectedPost.id, comment.id)
+                                    }
+                                  }}
+                                  style={{ maxHeight: '50px', minHeight: '18px', height: '18px' }}
+                                />
+                                <button
+                                  onClick={() => addComment(selectedPost.id, comment.id)}
+                                  disabled={!replyContents[comment.id]?.trim()}
+                                  className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 transition-colors flex-shrink-0"
                                 >
-                                  {reply.user?.avatar_url ? (
-                                    <img
-                                      src={reply.user.avatar_url}
-                                      alt={getUserDisplayName(reply.user)}
-                                      className="w-6 h-6 rounded-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-6 h-6 bg-gradient-to-br from-green-500 to-teal-600 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                                  {getUserDisplayName(reply.user)?.charAt(0) || 'U'}
-                                    </div>
-                                  )}
+                                  <Send className="w-2.5 h-2.5" />
                                 </button>
-                                
-                                <div className="flex-1">
-                                  <div className="bg-green-50 rounded-lg p-3">
-                                    <div className="flex justify-between items-start mb-1">
-                                      <div>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            viewUserProfile(reply.user_id || getUserId(reply.user));
-                                          }}
-                                          className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-sm text-left"
-                                        >
-                                          {getUserDisplayName(reply.user)}
-                                        </button>
-                                        <p className="text-xs text-gray-500">
-                                          {getUserProfession(reply.user)}
-                                        </p>
-                                      </div>
-                                      
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-500">
-                                          {formatTime(reply.created_at)}
-                                          {reply.updated_at && reply.updated_at !== reply.created_at && (
-                                            <span className="ml-1 text-gray-400">(edited)</span>
-                                          )}
-                                        </span>
-                                        
-                                        {/* Yanıt Menüsü */}
-                                        <div className="relative">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setActiveCommentMenu(activeCommentMenu === reply.id ? null : reply.id);
-                                            }}
-                                            className="flex items-center justify-center w-5 h-5 rounded-full hover:bg-gray-200 transition-colors"
-                                          >
-                                            <MoreHorizontal className="w-3 h-3 text-gray-500" />
-                                          </button>
+                              </div>
+                            </div>
+                          )}
 
-                                          {activeCommentMenu === reply.id && (
-                                            <div className="absolute right-0 top-6 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-10 py-1">
-                                              {isCommentOwner(reply) ? (
-                                                <>
-                                                  <button
-                                                    onClick={(e) => handleCommentMenuAction('edit', reply.id, e)}
-                                                    className="flex items-center w-full px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                                                  >
-                                                    <Edit2 className="w-3 h-3 mr-2 text-blue-600" />
-                                                    Edit
-                                                  </button>
-                                                  <button
-                                                    onClick={(e) => handleCommentMenuAction('delete', reply.id, e)}
-                                                    className="flex items-center w-full px-3 py-1 text-xs text-red-600 hover:bg-red-50"
-                                                  >
-                                                    <Trash2 className="w-3 h-3 mr-2" />
-                                                    Delete
-                                                  </button>
-                                                </>
-                                              ) : (
-                                                <button
-                                                  onClick={(e) => handleCommentMenuAction('report', reply.id, e)}
-                                                  className="flex items-center w-full px-3 py-1 text-xs text-gray-700 hover:bg-gray-50"
-                                                  >
-                                                  <Flag className="w-3 h-3 mr-2 text-orange-600" />
-                                                  Report
-                                                </button>
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
-                                    {editingCommentId === reply.id ? (
-                                      <div className="mt-2 space-y-2">
-                                        <textarea
-                                          value={editCommentContent}
-                                          onChange={(e) => setEditCommentContent(e.target.value)}
-                                          className="w-full px-3 py-2 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                          rows={2}
-                                          autoFocus
-                                        />
-                                        <div className="flex gap-2">
-                                          <button
-                                            onClick={() => {
-                                              // Find postId for this reply
-                                              for (const postId in comments) {
-                                                const found = comments[postId].flatMap(c => c.replies || []).find(r => r.id === reply.id);
-                                                if (found) {
-                                                  handleEditComment(reply.id, postId);
-                                                  return;
-                                                }
-                                              }
-                                            }}
-                                            disabled={!editCommentContent.trim()}
-                                            className="px-3 py-1 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 disabled:bg-gray-300 transition-colors"
-                                          >
-                                            Save
-                                          </button>
-                                          <button
-                                            onClick={() => {
-                                              setEditingCommentId(null);
-                                              setEditCommentContent('');
-                                            }}
-                                            className="px-3 py-1 bg-gray-200 text-gray-700 text-xs rounded-lg hover:bg-gray-300 transition-colors"
-                                          >
-                                            Cancel
-                                          </button>
-                                        </div>
-                                      </div>
-                                    ) : (
-                                    <p className="text-gray-700 text-sm mt-1">{reply.content}</p>
-                                    )}
-                                    
-                                    {/* Yanıt Etkileşim Butonları */}
-                                    <div className="flex items-center gap-3 mt-2 pt-2 border-t border-green-100">
+                          {/* Replies - Compact */}
+                          {comment.replies && comment.replies.length > 0 && (
+                            <div className="ml-3 mt-2 space-y-2">
+                              {comment.replies.map((reply: any) => (
+                               <div key={reply.id} className="flex gap-1.5 items-start">
+                                <Avatar
+                                  src={reply.user?.avatar_url}
+                                  name={reply.user?.full_name || 'User'}
+                                  className="w-5 h-5 flex-shrink-0"
+                                  useInlineSize={false}
+                                />
+                                <div className="flex-1 min-w-0">
+                                  <div className="bg-gray-50 rounded-lg px-2 py-1">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        viewUserProfile(reply.user_id || getUserId(reply.user));
+                                      }}
+                                      className="font-medium text-[10px] text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                    >
+                                      {getUserDisplayName(reply.user)}
+                                    </button>
+                                    <p className="text-[10px] text-gray-700 mt-0.5">{reply.content}</p>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 mt-0.5 text-[9px] text-gray-500">
+                                    <span>{formatTime(reply.created_at)}</span>
+                                    <div className="relative">
                                       <button
+                                        onMouseEnter={() => {
+                                          if (commentEmojiPickerHideTimer) {
+                                            clearTimeout(commentEmojiPickerHideTimer)
+                                            setCommentEmojiPickerHideTimer(null)
+                                          }
+                                          setShowCommentEmojiPicker(reply.id)
+                                        }}
+                                        onMouseLeave={() => {
+                                          const timer = setTimeout(() => {
+                                            setShowCommentEmojiPicker(null)
+                                          }, 250)
+                                          setCommentEmojiPickerHideTimer(timer)
+                                        }}
                                         onClick={(e) => handleLikeComment(reply.id, e)}
-                                        className={`flex items-center gap-1 text-xs ${
-                                          userReactions[reply.id] === 'like' 
-                                            ? 'text-blue-600' 
-                                            : 'text-gray-500 hover:text-blue-600'
+                                        className={`flex items-center gap-0.5 hover:text-blue-600 font-medium ${
+                                          (userReactions[reply.id] === 'like' || userReactions[reply.id] === '👍') ? 'text-blue-600' : ''
                                         }`}
+                                        title="Like comment"
                                       >
-                                        <ThumbsUp className="w-3 h-3" />
-                                        <span>{commentLikes[reply.id] || 0}</span>
+                                        {(() => {
+                                          const currentReaction = userReactions[reply.id];
+                                          if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                            return <span className="text-sm">{currentReaction}</span>;
+                                          }
+                                          return <span className="text-sm">👍</span>;
+                                        })()}
+                                        {(() => {
+                                          const currentReaction = userReactions[reply.id];
+                                          if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
+                                            const reactionData = commentReactions[reply.id]?.find(r => r.emoji === currentReaction);
+                                            return reactionData && reactionData.count > 0 ? (
+                                              <span className="text-[9px]">{reactionData.count}</span>
+                                            ) : null;
+                                          }
+                                          const likeReaction = commentReactions[reply.id]?.find(r => r.emoji === '👍');
+                                          return likeReaction && likeReaction.count > 0 ? (
+                                            <span className="text-[9px]">{likeReaction.count}</span>
+                                          ) : null;
+                                        })()}
                                       </button>
-
-                                      <button
-                                        onClick={(e) => handleFavoriteComment(reply.id, e)}
-                                        className={`text-xs ${
-                                          commentFavorites[reply.id] 
-                                            ? 'text-yellow-500' 
-                                            : 'text-gray-500 hover:text-yellow-500'
-                                        }`}
-                                      >
-                                        <Star className="w-3 h-3" fill={commentFavorites[reply.id] ? "currentColor" : "none"} />
-                                      </button>
-
-                                      {/* Yanıtlara Yanıt Butonu */}
-                                      {user && !postSettings[selectedPost.id]?.comments_disabled && (
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setReplyingTo(prev => ({ 
-                                              ...prev, 
-                                              [reply.id]: !prev[reply.id] 
-                                            }));
-                                          }}
-                                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                                        >
-                                          {replyingTo[reply.id] ? (
-                                            <X className="w-4 h-4" />
-                                          ) : (
-                                            <MessageSquare className="w-4 h-4" />
-                                          )}
-                                        </button>
+                                      {/* Comment Emoji Picker Overlay */}
+                                      {showCommentEmojiPicker === reply.id && (
+                                        <div className="absolute bottom-full left-0 mb-2 bg-white rounded-full shadow-xl border border-gray-200 px-2 py-1.5 flex gap-1.5 z-50" onMouseEnter={() => {
+                                          if (commentEmojiPickerHideTimer) {
+                                            clearTimeout(commentEmojiPickerHideTimer)
+                                            setCommentEmojiPickerHideTimer(null)
+                                          }
+                                          setShowCommentEmojiPicker(reply.id)
+                                        }} onMouseLeave={() => {
+                                          const timer = setTimeout(() => {
+                                            setShowCommentEmojiPicker(null)
+                                          }, 250)
+                                          setCommentEmojiPickerHideTimer(timer)
+                                        }}>
+                                          {EMOJI_REACTIONS.map((reaction) => {
+                                            const isSelected = userReactions[reply.id] === reaction.emoji;
+                                            return (
+                                              <button
+                                                key={reaction.emoji}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleEmojiReactionComment(reply.id, reaction.emoji, e);
+                                                }}
+                                                onMouseDown={(e) => e.stopPropagation()}
+                                                className={`relative hover:scale-125 transition-transform p-1.5 min-w-[36px] min-h-[36px] flex items-center justify-center rounded-full ${
+                                                  isSelected ? 'bg-blue-50 scale-110' : ''
+                                                }`}
+                                                title={reaction.label}
+                                              >
+                                                <span className="text-xl">{reaction.emoji}</span>
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
                                       )}
                                     </div>
+                                    {selectedPost.user_id === user?.id && (
+                                      <button
+                                        onClick={(e) => handleFavoriteComment(reply.id, e)}
+                                        className={`flex items-center gap-0.5 hover:text-amber-600 font-medium ${
+                                          commentFavorites[reply.id] ? 'text-amber-600' : ''
+                                        }`}
+                                        title="Favorite comment"
+                                      >
+                                        <Star className={`w-2 h-2 ${commentFavorites[reply.id] ? 'fill-current' : ''}`} />
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReplyingTo(prev => ({ ...prev, [reply.id]: !prev[reply.id] }));
+                                      }}
+                                      className="hover:text-blue-600"
+                                    >
+                                      Reply
+                                    </button>
+                                    {reply.user_id !== user?.id && (
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setReportingCommentId(reply.id);
+                                          setReportModalOpen(true);
+                                        }}
+                                        className="hover:text-red-600 font-medium flex items-center gap-0.5"
+                                        title="Report comment"
+                                      >
+                                        <Flag className="w-2 h-2" />
+                                      </button>
+                                    )}
                                   </div>
-
-                                  {/* Yanıtlara Yanıt Formu */}
-                                  {replyingTo[reply.id] && user && !postSettings[selectedPost.id]?.comments_disabled && (
-                                    <div className="ml-4 mt-3">
-                                      <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
-                                      <textarea
-                                        placeholder="Write a reply..."
-                                        value={replyContents[reply.id] || ''}
-                                          onChange={(e) => {
-                                            setReplyContents(prev => ({ ...prev, [reply.id]: e.target.value }));
-                                            // Auto-resize textarea
-                                            e.target.style.height = 'auto';
-                                            e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
-                                          }}
-                                          className="flex-1 resize-none border-none outline-none text-sm py-1"
-                                          rows={1}
-                                          onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                              e.preventDefault()
-                                              addComment(selectedPost.id, reply.id)
-                                            }
-                                          }}
-                                          style={{ maxHeight: '80px', minHeight: '24px', height: '24px' }}
-                                        />
-                                        <button
-                                          onClick={() => addComment(selectedPost.id, reply.id)}
-                                          disabled={!replyContents[reply.id]?.trim()}
-                                          className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex-shrink-0"
-                                          title="Send reply"
-                                        >
-                                          <Send className="w-4 h-4" />
-                                        </button>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {/* Nested Yanıtlar (Yanıtların Yanıtları) */}
-                                  {reply.replies && reply.replies.length > 0 && (
-                                      <div className="ml-4 mt-3 space-y-3">
-                                        {reply.replies.map((nestedReply: any) => (
-                                         <div key={nestedReply.id} data-comment-id={nestedReply.id} className="flex gap-2 items-start">
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
-                                            }}
-                                            className="flex-shrink-0 self-start hover:opacity-80 transition-opacity"
-                                          >
-                                            {nestedReply.user?.avatar_url ? (
-                                              <img
-                                                src={nestedReply.user.avatar_url}
-                                                alt={getUserDisplayName(nestedReply.user)}
-                                                className="w-5 h-5 rounded-full object-cover"
-                                              />
-                                            ) : (
-                                              <div className="w-5 h-5 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                                            {getUserDisplayName(nestedReply.user)?.charAt(0) || 'U'}
-                                              </div>
-                                            )}
-                                          </button>
-                                          <div className="flex-1">
-                                            <div className="bg-orange-50 rounded-lg p-2">
-                                              <div className="flex justify-between items-start mb-1">
-                                                <div>
-                                                  <button
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
-                                                    }}
-                                                    className="font-medium text-gray-900 hover:text-blue-600 transition-colors text-xs text-left"
-                                                  >
-                                                    {getUserDisplayName(nestedReply.user)}
-                                                  </button>
-                                                  <p className="text-xs text-gray-500">
-                                                    {getUserProfession(nestedReply.user)}
-                                                  </p>
-                                                </div>
-                                                <span className="text-xs text-gray-500">
-                                                  {formatTime(nestedReply.created_at)}
-                                                  {nestedReply.updated_at && nestedReply.updated_at !== nestedReply.created_at && (
-                                                    <span className="ml-1 text-gray-400">(edited)</span>
-                                                  )}
-                                                </span>
-                                              </div>
-                                              {editingCommentId === nestedReply.id ? (
-                                                <div className="mt-2 space-y-2">
-                                                  <textarea
-                                                    value={editCommentContent}
-                                                    onChange={(e) => setEditCommentContent(e.target.value)}
-                                                    className="w-full px-2 py-1 border border-gray-300 rounded-lg resize-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
-                                                    rows={2}
-                                                    autoFocus
-                                                  />
-                                                  <div className="flex gap-2">
-                                                    <button
-                                                      onClick={() => {
-                                                        for (const postId in comments) {
-                                                          const findInNested = (comments: Comment[]): Comment | null => {
-                                                            for (const c of comments) {
-                                                              if (c.replies) {
-                                                                for (const r of c.replies) {
-                                                                  if (r.replies) {
-                                                                    const found = r.replies.find(nr => nr.id === nestedReply.id);
-                                                                    if (found) return found;
-                                                                  }
-                                                                }
-                                                              }
-                                                            }
-                                                            return null;
-                                                          };
-                                                          const found = findInNested(comments[postId] || []);
-                                                          if (found) {
-                                                            handleEditComment(nestedReply.id, postId);
-                                                            return;
-                                                          }
-                                                        }
-                                                      }}
-                                                      disabled={!editCommentContent.trim()}
-                                                      className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:bg-gray-300"
-                                                      title="Save"
-                                                    >
-                                                      <Check className="w-3 h-3" />
-                                                    </button>
-                                                    <button
-                                                      onClick={() => {
-                                                        setEditingCommentId(null);
-                                                        setEditCommentContent('');
-                                                      }}
-                                                      className="flex items-center justify-center w-6 h-6 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-                                                      title="Cancel"
-                                                    >
-                                                      <X className="w-3 h-3" />
-                                                    </button>
-                                                  </div>
-                                                </div>
-                                              ) : (
-                                              <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
-                                              )}
-                                              
-                                              {/* Nested Yanıt Etkileşim Butonları */}
-                                              <div className="flex items-center gap-3 mt-2 pt-2 border-t border-orange-100">
-                                                <button
-                                                  onClick={(e) => handleLikeComment(nestedReply.id, e)}
-                                                  className={`flex items-center gap-1 text-xs ${
-                                                    userReactions[nestedReply.id] === 'like' 
-                                                      ? 'text-blue-600' 
-                                                      : 'text-gray-500 hover:text-blue-600'
-                                                  }`}
-                                                >
-                                                  <ThumbsUp className="w-3 h-3" />
-                                                  <span>{commentLikes[nestedReply.id] || 0}</span>
-                                                </button>
-
-                                                <button
-                                                  onClick={(e) => handleFavoriteComment(nestedReply.id, e)}
-                                                  className={`text-xs ${
-                                                    commentFavorites[nestedReply.id] 
-                                                      ? 'text-yellow-500' 
-                                                      : 'text-gray-500 hover:text-yellow-500'
-                                                  }`}
-                                                >
-                                                  <Star className="w-3 h-3" fill={commentFavorites[nestedReply.id] ? "currentColor" : "none"} />
-                                                </button>
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
                                 </div>
                               </div>
-                            ))}
-                          </div>
-                        )}
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
-
-                  {(comments[selectedPost.id] || []).length === 0 && (
-                    <div className="text-center py-6 text-gray-500">
-                      <MessageSquare className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                      <p>No comments yet</p>
-                      <p className="text-sm mt-1">Be the first to comment!</p>
+                    ))
+                  ) : (
+                    <div className="text-center py-4 text-gray-500">
+                      <MessageSquare className="w-6 h-6 mx-auto mb-1.5 text-gray-300" />
+                      <p className="text-xs">No comments yet</p>
+                      <p className="text-[10px] mt-0.5">Be the first to comment!</p>
                     </div>
                   )}
                 </div>
@@ -15185,6 +18143,154 @@ function CommunityComponent({
             >
               Submit Report
             </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Reactions Modal */}
+    {reactionsModalOpen && reactionsModalPostId && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={() => {
+        setReactionsModalOpen(false)
+        setReactionsModalPostId(null)
+      }}>
+        <div className="bg-white rounded-xl w-full max-w-lg max-h-[70vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+          {/* Header */}
+          <div className="px-4 py-3 border-b flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">Reactions</h2>
+            <button 
+              onClick={() => {
+                setReactionsModalOpen(false)
+                setReactionsModalPostId(null)
+              }}
+              className="text-gray-400 hover:text-gray-600 rounded-full p-1.5 hover:bg-gray-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="border-b px-4 flex items-center gap-0.5 overflow-x-auto">
+            <button
+              onClick={() => setReactionsModalActiveTab('ALL')}
+              className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                reactionsModalActiveTab === 'ALL'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span className="mr-1.5">All</span>
+              <span className="text-gray-500 text-xs">
+                {reactionsModalData.reduce((sum, r) => sum + r.users.length, 0)}
+              </span>
+            </button>
+            {reactionsModalData.map((reaction) => {
+              const reactionType = reaction.emoji === '👍' ? 'LIKE' : 
+                reaction.emoji === '❤️' ? 'EMPATHY' :
+                reaction.emoji === '💡' ? 'INTEREST' :
+                reaction.emoji === '😂' ? 'HAHA' :
+                reaction.emoji === '😮' ? 'WOW' :
+                reaction.emoji === '😢' ? 'SAD' : 'OTHER';
+              return (
+                <button
+                  key={reaction.emoji}
+                  onClick={() => setReactionsModalActiveTab(reactionType)}
+                  className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                    reactionsModalActiveTab === reactionType
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="text-base">{reaction.emoji}</span>
+                  <span className="text-xs">{reaction.users.length}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {loadingReactionsModal ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+              </div>
+            ) : (() => {
+              let usersToShow: { user: Profile; reaction_type: string }[] = [];
+              
+              if (reactionsModalActiveTab === 'ALL') {
+                // Combine all users
+                usersToShow = reactionsModalData.flatMap(r => r.users);
+              } else {
+                // Filter by selected reaction type
+                const selectedReaction = reactionsModalData.find(r => {
+                  const reactionType = r.emoji === '👍' ? 'LIKE' : 
+                    r.emoji === '❤️' ? 'EMPATHY' :
+                    r.emoji === '💡' ? 'INTEREST' :
+                    r.emoji === '😂' ? 'HAHA' :
+                    r.emoji === '😮' ? 'WOW' :
+                    r.emoji === '😢' ? 'SAD' : 'OTHER';
+                  return reactionType === reactionsModalActiveTab;
+                });
+                usersToShow = selectedReaction?.users || [];
+              }
+
+              if (usersToShow.length === 0) {
+                return (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No reactions found</p>
+                  </div>
+                );
+              }
+
+              return (
+                <ul className="space-y-1">
+                  {usersToShow.map((item, idx) => {
+                    const reactionData = reactionsModalData.find(r => 
+                      r.users.some(u => u.user.id === item.user.id && u.reaction_type === item.reaction_type)
+                    );
+                    const reactionEmoji = reactionData?.emoji || '👍';
+                    
+                    return (
+                      <li key={`${item.user.id}-${idx}`} className="py-2 border-b border-gray-100 last:border-0">
+                        <button
+                          onClick={() => {
+                            setSelectedUserProfile(null);
+                            const event = new CustomEvent('viewUserProfile', { detail: { userId: item.user.id } });
+                            window.dispatchEvent(event);
+                          }}
+                          className="flex items-center gap-2.5 w-full text-left hover:bg-gray-50 px-2 py-1.5 rounded-lg transition-colors"
+                        >
+                          <div className="relative">
+                            <Avatar 
+                              src={item.user.avatar_url} 
+                              name={item.user.full_name} 
+                              className="w-10 h-10" 
+                              useInlineSize={false} 
+                            />
+                            <span 
+                              className="absolute -bottom-0.5 -right-0.5 text-base bg-white rounded-full p-0.5"
+                              style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}
+                            >
+                              {reactionEmoji}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-sm text-gray-900 truncate">
+                              {item.user.full_name}
+                            </div>
+                            {item.user.profession && (
+                              <div className="text-xs text-gray-600 truncate">
+                                {item.user.profession}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
           </div>
         </div>
       </div>
