@@ -9,6 +9,7 @@ interface AnimatedButtonProps {
   variant?: 'primary' | 'secondary' | 'danger'
   type?: 'button' | 'submit' | 'reset'
   'aria-label'?: string
+  title?: string
 }
 
 const AnimatedButton: React.FC<AnimatedButtonProps> = ({
@@ -18,7 +19,8 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
   className = '',
   variant = 'primary',
   type = 'button',
-  'aria-label': ariaLabel
+  'aria-label': ariaLabel,
+  title
 }) => {
   const baseClasses = `
     relative overflow-hidden
@@ -44,6 +46,7 @@ const AnimatedButton: React.FC<AnimatedButtonProps> = ({
       whileTap={!disabled ? { scale: 0.95 } : {}}
       transition={{ duration: 0.15 }}
       aria-label={ariaLabel}
+      title={title}
     >
       <span className="relative z-10">{children}</span>
     </motion.button>

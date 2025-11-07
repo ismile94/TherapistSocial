@@ -39,6 +39,7 @@ export const SwipeableConversationItem: React.FC<SwipeableConversationItemProps>
   isSelected,
   isStarred,
   isMuted,
+  isArchived,
   formatTime,
   onClick,
   onSwipeLeft,

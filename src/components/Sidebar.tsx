@@ -49,12 +49,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   ]
 
   return (
-    <div className="w-80 bg-white shadow-sm border-r p-6 overflow-y-auto">
-      <h2 className="text-xl font-bold text-gray-900 mb-6">Find Therapists</h2>
+    <div className="w-full md:w-80 bg-white shadow-sm md:border-r p-3 sm:p-4 md:p-6 overflow-y-auto">
+      <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-4 sm:mb-6">Find Therapists</h2>
 
       {/* 🔍 Search */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
+      <div className="mb-4 sm:mb-6">
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Search</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
@@ -62,19 +62,19 @@ const Sidebar: React.FC<SidebarProps> = ({
             placeholder="Search by name, city..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            className="w-full pl-9 sm:pl-10 pr-4 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
 
       {/* 🧑‍⚕️ Profession Filter */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Profession</label>
+      <div className="mb-4 sm:mb-6">
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Profession</label>
         <div className="relative">
           <button
             type="button"
             onClick={() => setIsProfessionOpen(!isProfessionOpen)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-left flex items-center justify-between"
+            className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-left flex items-center justify-between"
           >
             <span className="text-gray-700">
               {selectedProfessions.length === 0
@@ -105,7 +105,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className="mr-2"
                   />
-                  <span className="text-sm text-gray-700">{profession}</span>
+                  <span className="text-xs sm:text-sm text-gray-700">{profession}</span>
                 </label>
               ))}
             </div>
@@ -136,13 +136,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* 🌍 Languages Filter */}
-      <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-2">Languages Spoken</label>
+      <div className="mb-4 sm:mb-6">
+        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">Languages Spoken</label>
         <div className="relative">
           <button
             type="button"
             onClick={() => setIsLanguagesOpen(!isLanguagesOpen)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-left flex items-center justify-between"
+            className="w-full px-3 py-2 text-sm sm:text-base border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-left flex items-center justify-between"
           >
             <span className="text-gray-700">
               {selectedLanguages.length === 0
@@ -173,7 +173,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className="mr-2"
                   />
-                  <span className="text-sm text-gray-700">{language}</span>
+                  <span className="text-xs sm:text-sm text-gray-700">{language}</span>
                 </label>
               ))}
             </div>

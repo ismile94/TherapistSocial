@@ -82,6 +82,7 @@ interface CommunityPost {
   title: string
   content: string
   post_metadata: PostMetadata
+  shared_post_id?: string | null
   user?: Profile
   replies_count?: number
   likes_count?: number
@@ -432,60 +433,74 @@ function AccountDropdown({
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center justify-center w-10 h-10 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
+        className="flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 transition-colors overflow-hidden"
         aria-label="Account"
       >
-        <User className="w-5 h-5" />
+        {currentUser ? (
+          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-sm">
+            {currentUser.email?.charAt(0).toUpperCase() || 'U'}
+          </div>
+        ) : (
+          <User className="w-5 h-5 text-gray-600" />
+        )}
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+        <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 animate-slideDown">
           {currentUser ? (
             <>
-              <button
-                onClick={() => {
-                  onProfileClick()
-                  setIsOpen(false)
-                }}
-                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <User className="w-4 h-4 mr-2" />
-                Profile
-              </button>
-              {/* Network option removed from Account menu; now inline in header */}
-              <button
-                onClick={() => {
-                  onSettingsClick()
-                  setIsOpen(false)
-                }}
-                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Settings & Privacy
-              </button>
-              <div className="border-t border-gray-100 my-1"></div>
-              <button
-                onClick={() => {
-                  onSignOut()
-                  setIsOpen(false)
-                }}
-                className="flex items-center w-full px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
-              >
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Sign Out
-              </button>
+              {/* User info header */}
+              <div className="px-3 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
+                    {currentUser.email?.charAt(0).toUpperCase() || 'U'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{currentUser.email}</p>
+                    <p className="text-xs text-gray-500">View your profile</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Menu items */}
+              <div className="py-1">
+                <button
+                  onClick={() => {
+                    onProfileClick()
+                    setIsOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-gray-50 flex items-center text-sm text-gray-700 transition-colors"
+                >
+                  <User className="mr-3 w-4 h-4 text-gray-500" />
+                  My Profile
+                </button>
+                <button
+                  onClick={() => {
+                    onSettingsClick()
+                    setIsOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-gray-50 flex items-center text-sm text-gray-700 transition-colors"
+                >
+                  <Settings className="mr-3 w-4 h-4 text-gray-500" />
+                  Settings & Privacy
+                </button>
+              </div>
+              
+              <div className="border-t border-gray-200 py-1">
+                <button
+                  onClick={() => {
+                    onSignOut()
+                    setIsOpen(false)
+                  }}
+                  className="w-full text-left px-3 py-2.5 hover:bg-red-50 flex items-center text-sm text-red-600 transition-colors"
+                >
+                  <LogOut className="mr-3 w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
             </>
           ) : (
-            <button
-              onClick={() => {
-                onProfileClick()
-                setIsOpen(false)
-              }}
-              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-            >
-              <User className="w-4 h-4 mr-2" />
-              Sign In
-            </button>
+            <div className="px-4 py-3 text-sm text-gray-700">Not signed in</div>
           )}
         </div>
       )}
@@ -1326,19 +1341,34 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-6xl h-[80vh] overflow-hidden flex relative">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl w-full max-w-6xl h-[90vh] sm:h-[80vh] overflow-hidden flex flex-col sm:flex-row relative">
         {/* Close Button - Top Right */}
         <button 
           onClick={onClose} 
-          className="absolute top-4 right-4 z-20 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-1.5 sm:p-2 transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
 
-        {/* Sidebar */}
-        <div className="w-64 bg-gray-50 border-r h-full overflow-y-auto">
-          <nav className="p-6 space-y-1">
+        {/* Mobile Section Selector */}
+        <div className="sm:hidden bg-gray-50 border-b p-3">
+          <select
+            value={activeSection}
+            onChange={(e) => setActiveSection(e.target.value as any)}
+            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 bg-white"
+          >
+            {sections.map((section) => (
+              <option key={section.id} value={section.id}>
+                {section.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Sidebar - Desktop Only */}
+        <div className="hidden sm:block w-56 md:w-64 bg-gray-50 border-r h-full overflow-y-auto flex-shrink-0">
+          <nav className="p-4 md:p-6 space-y-1">
             {sections.map((section) => {
               const Icon = section.icon
               return (
@@ -1360,7 +1390,7 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 h-full overflow-y-auto p-8">
+        <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 md:p-8">
           {activeSection === 'account' && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold text-gray-900">Account Preferences</h3>
@@ -3592,13 +3622,18 @@ function AppInner() {
     <div className="h-screen flex flex-col">
       <ConnectionStatusBanner status={connectionStatus} />
       {/* Header */}
-      <header className="bg-white shadow-sm sticky top-0 z-50">
-        <div className="w-full max-w-7xl mx-auto flex items-center gap-4 px-4 py-3">
-          <div className="flex items-center pr-2">
-          <h1 className="text-2xl font-bold text-gray-900">UK Therapist Network</h1>
-        </div>
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div className="w-full max-w-7xl mx-auto flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2">
+          {/* Logo - Compact on mobile */}
+          <div className="flex items-center flex-shrink-0">
+            <div className="w-8 h-8 md:w-9 md:h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full md:rounded-lg flex items-center justify-center">
+              <Users className="w-5 h-5 md:w-5 md:h-5 text-white" />
+            </div>
+            <h1 className="hidden md:block ml-2 text-xl font-bold text-gray-900">TherapySocial</h1>
+          </div>
 
-          <div className="flex-1 px-2">
+          {/* Search - Hidden on mobile, icon button instead */}
+          <div className="flex-1 hidden md:block px-2">
             <div className="max-w-2xl">
               <GlobalSearch
                 blockedUserIds={allHiddenUserIds}
@@ -3623,34 +3658,47 @@ function AppInner() {
           </div>
         </div>
         
-          <nav className="flex items-center space-x-3 text-gray-600 pl-2">
+          {/* Mobile Search Icon */}
+          <button 
+            onClick={() => {
+              // TODO: Open search modal for mobile
+              const searchInput = document.querySelector('input[aria-label="Global search"]') as HTMLInputElement;
+              if (searchInput) searchInput.focus();
+            }}
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 transition-colors"
+          >
+            <Search className="w-5 h-5 text-gray-600" />
+          </button>
+          
+          <div className="flex-1 md:hidden"></div>
+        
+          <nav className="flex items-center space-x-1 md:space-x-2">
           {/* Home Button */}
           <button
             onClick={() => {
               setActiveView('community')
               setSelectedProfileId(null)
             }}
-            className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
+            className={`hidden md:flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-full transition-all ${
               activeView === 'community' && !selectedProfileId
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                ? 'bg-blue-50 text-blue-600'
+                : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             <IoHome className="w-5 h-5" />
           </button>
         
-          {/* Network Button (Visible only if logged in) */}
+          {/* Network Button */}
           {currentUser && (
-            <div className="relative">
+            <div className="relative hidden md:block">
               <button
                 onClick={() => setIsConnectionsOpen(true)}
-                className="flex items-center justify-center w-10 h-10 bg-green-600 text-white rounded-full hover:bg-green-700 transition-colors"
+                className="flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-full text-gray-600 hover:bg-gray-100 transition-colors relative"
                 aria-label="Network"
               >
                 <UserPlus className="w-5 h-5" />
-                {/* Connection requests badge */}
                 {connectionRequests.length > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center pointer-events-none z-10">
+                  <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-semibold">
                     {connectionRequests.length > 9 ? '9+' : connectionRequests.length}
                   </span>
                 )}
@@ -3664,25 +3712,24 @@ function AppInner() {
               setActiveView('map')
               setSelectedProfileId(null)
             }}
-            className={`flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all ${
+            className={`hidden md:flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-full transition-all ${
               activeView === 'map' && !selectedProfileId
-                ? 'bg-blue-100 text-blue-700'
-                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                ? 'bg-blue-50 text-blue-600'
+                : 'text-gray-600 hover:bg-gray-100'
             }`}
           >
             <MapPin className="w-5 h-5" />
           </button>
         
           {/* Messages */}
-          <div className="relative" ref={messagesDropdownRef}>
+          <div className="relative hidden md:block" ref={messagesDropdownRef}>
             <button 
               onClick={() => setShowMessagesDropdown(!showMessagesDropdown)}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100 relative"
+              className="flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 transition-colors relative"
             >
               <MessageCircle className="w-5 h-5" />
-              {/* Badge Messages butonunun üzerinde */}
               {unreadMessagesCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center pointer-events-none z-10">
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-semibold">
                   {unreadMessagesCount > 9 ? '9+' : unreadMessagesCount}
                 </span>
               )}
@@ -3690,10 +3737,10 @@ function AppInner() {
             
             {/* Messages Dropdown */}
             {showMessagesDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[70vh] overflow-hidden flex flex-col animate-slideDown">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
-                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                    <MessageCircle className="w-5 h-5 text-blue-600" />
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[70vh] overflow-hidden flex flex-col animate-slideDown">
+                <div className="p-3 sm:p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-blue-50 to-indigo-50">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm sm:text-base">
+                    <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
                     Messages
                   </h3>
                   <button
@@ -3731,12 +3778,11 @@ function AppInner() {
           <div className="relative">
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
-              className="flex items-center justify-center w-10 h-10 rounded-full text-xs sm:text-sm font-medium transition-all text-gray-600 hover:text-blue-700 hover:bg-blue-100 relative"
+              className="flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 transition-colors relative"
             >
               <Bell className="w-5 h-5" />
-              {/* Badge Notifications butonunun üzerinde */}
               {unreadNotificationsCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center pointer-events-none z-10">
+                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[10px] rounded-full min-w-[18px] h-[18px] flex items-center justify-center font-semibold">
                   {unreadNotificationsCount > 9 ? '9+' : unreadNotificationsCount}
                 </span>
               )}
@@ -3744,10 +3790,10 @@ function AppInner() {
             
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[80vh] overflow-hidden flex flex-col animate-slideDown">
-                <div className="p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
-                  <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                    <Bell className="w-5 h-5 text-purple-600" />
+              <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[80vh] overflow-hidden flex flex-col animate-slideDown">
+                <div className="p-3 sm:p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
+                  <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm sm:text-base">
+                    <Bell className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
                     Notifications
                   </h3>
                   {unreadNotificationsCount > 0 && (
@@ -6316,6 +6362,7 @@ function ProfileDetailPage({
   const [postReactions, setPostReactions] = useState<Record<string, { emoji: string; count: number }[]>>({})
   const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({})
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({})
+  const [expandedMetadata, setExpandedMetadata] = useState<Record<string, boolean>>({})
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
   const [comments, setComments] = useState<{ [postId: string]: Comment[] }>({})
   const [newComments, setNewComments] = useState<{ [postId: string]: string }>({})
@@ -7116,43 +7163,75 @@ function ProfileDetailPage({
 
   const renderPostMetadata = (post: CommunityPost) => {
     const metadata = post.post_metadata || {}
+    const isExpanded = expandedMetadata[post.id] || false
+    
+    // Collect all badges
+    const allBadges: JSX.Element[] = []
+    
+    if (metadata.content_type) {
+      allBadges.push(
+        <span key="content_type" className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          {metadata.content_type}
+        </span>
+      )
+    }
+    
+    if (metadata.audience_level) {
+      allBadges.push(
+        <span key="audience_level" className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          {metadata.audience_level}
+        </span>
+      )
+    }
+    
+    if (metadata.language && metadata.language !== 'English') {
+      allBadges.push(
+        <span key="language" className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          {metadata.language}
+        </span>
+      )
+    }
+    
+    allBadges.push(...(metadata.professions || []).map((profession: string, idx: number) => (
+      <span key={`profession-${idx}`} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+        {profession}
+      </span>
+    )))
+    
+    allBadges.push(...(metadata.clinical_areas || []).map((area: string, idx: number) => (
+      <span key={`clinical-${idx}`} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+        {area}
+      </span>
+    )))
+    
+    allBadges.push(...(metadata.tags || []).map((tag: string, idx: number) => (
+      <span key={`tag-${idx}`} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+        #{tag}
+      </span>
+    )))
+    
+    if (allBadges.length === 0) return null
+    
+    const hasMultipleBadges = allBadges.length > 3
+    
     return (
-      <div className="flex flex-wrap gap-2 mt-3">
-        {metadata.content_type && (
-          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-            {metadata.content_type}
-          </span>
-        )}
-        {metadata.audience_level && (
-          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-            {metadata.audience_level}
-          </span>
-        )}
-        {metadata.language && metadata.language !== 'English' && (
-          <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
-            {metadata.language}
-          </span>
-        )}
-        {(metadata.professions || []).slice(0, 2).map(profession => (
-          <span key={profession} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
-            {profession}
-          </span>
-        ))}
-        {(metadata.clinical_areas || []).slice(0, 2).map(area => (
-          <span key={area} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
-            {area}
-          </span>
-        ))}
-        {(metadata.tags || []).slice(0, 3).map(tag => (
-          <span key={tag} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
-            #{tag}
-          </span>
-        ))}
-        {(metadata.professions || []).length > 2 && (
-          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
-            +{(metadata.professions || []).length - 2} more
-          </span>
-        )}
+      <div className="mt-3">
+        <div className={`flex gap-2 items-center ${isExpanded ? 'flex-wrap' : 'overflow-x-auto scrollbar-hide'}`}>
+          <div className={`flex gap-2 items-center ${isExpanded ? 'flex-wrap' : ''}`}>
+            {isExpanded ? allBadges : allBadges.slice(0, 3)}
+          </div>
+          {hasMultipleBadges && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setExpandedMetadata(prev => ({ ...prev, [post.id]: !prev[post.id] }))
+              }}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap flex-shrink-0"
+            >
+              {isExpanded ? '−' : `+${allBadges.length - 3}`}
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -7941,7 +8020,7 @@ function ProfileDetailPage({
 
         {profile.contact_email && (
           <a 
-            href={`mailto:${profile.contact_email}?subject=Contact from UK Therapist Network&body=Hello ${profile.full_name}, I found your profile on UK Therapist Network and would like to get in touch.`}
+            href={`mailto:${profile.contact_email}?subject=Contact from TherapySocial&body=Hello ${profile.full_name}, I found your profile on TherapySocial and would like to get in touch.`}
             className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 font-medium transition-colors"
             title="Email"
           >
@@ -9056,7 +9135,7 @@ function ProfileDetailPage({
 
         {/* Posts Tab */}
         {activeTab === 'posts' && (
-          <div className={`space-y-4 ${isTabSticky ? 'md:col-span-9' : ''}`}>
+          <div className={`space-y-3 ${isTabSticky ? 'md:col-span-9' : ''}`}>
             {loadingPosts && userPosts.length === 0 ? (
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -9070,10 +9149,10 @@ function ProfileDetailPage({
               userPosts.map(post => (
                 <div 
                   key={post.id} 
-                  className="bg-white rounded-xl p-4 shadow-sm border border-gray-100"
+                  className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100"
                 >
                   {/* Post Header with Menu */}
-                  <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-start justify-between mb-2">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <button
@@ -9122,7 +9201,7 @@ function ProfileDetailPage({
                         </button>
 
                         {activeMenuPost === post.id && (
-                          <div className="absolute right-0 top-10 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1">
+                          <div className="absolute right-0 top-10 w-12 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1">
                             <button
                               onClick={async (e) => {
                                 e.stopPropagation();
@@ -9138,7 +9217,7 @@ function ProfileDetailPage({
                                 }
                                 setActiveMenuPost(null)
                               }}
-                              className="flex items-center justify-center w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                              className="flex items-center justify-center w-full px-2 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                               title="Share Post"
                             >
                               <Download className="w-4 h-4 text-blue-600" />
@@ -9150,7 +9229,7 @@ function ProfileDetailPage({
                   </div>
 
                   {/* Post Content with See More/Less */}
-                  <div className="group relative text-gray-700 mb-3 text-sm leading-relaxed">
+                  <div className="group relative text-gray-700 mb-2 text-sm leading-relaxed">
                     {(() => {
                       const textContent = post.content.replace(/<[^>]*>/g, '')
                       const contentLength = textContent.length
@@ -9322,7 +9401,7 @@ function ProfileDetailPage({
                   })()}
 
                   {/* Action Bar */}
-                  <div className="border-t border-gray-100 pt-2 mt-2">
+                  <div className="border-t border-gray-100 pt-1.5 mt-1.5">
                     <div className="flex items-center justify-start gap-6">
                       {/* Like Button with Long Press */}
                       <div 
@@ -9494,9 +9573,9 @@ function ProfileDetailPage({
 
                   {/* Inline Comments Section */}
                   {openComments[post.id] && (
-                    <div className="mt-3 border-t border-gray-100 pt-3">
+                    <div className="mt-2 border-t border-gray-100 pt-2">
                       {/* Add Comment */}
-                      <div className="mb-4">
+                      <div className="mb-3">
                         <div className="flex gap-2">
                           <Avatar src={currentUserProfile?.avatar_url} name={currentUserProfile?.full_name} className="w-6 h-6 flex-shrink-0" useInlineSize={false} />
                           <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 rounded-full focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
@@ -9532,9 +9611,9 @@ function ProfileDetailPage({
 
                       {/* Comments List */}
                       {comments[post.id] && comments[post.id].length > 0 && (
-                        <div className="space-y-4">
+                        <div className="space-y-3">
                           {comments[post.id].map(comment => (
-                            <div key={comment.id} className="flex gap-3 items-start">
+                            <div key={comment.id} className="flex gap-2 items-start">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -9574,7 +9653,7 @@ function ProfileDetailPage({
 
                                 {/* Reply Input */}
                                 {replyingTo[comment.id] && (
-                                  <div className="mt-2 ml-4">
+                                  <div className="mt-1 ml-3">
                                     <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                                       <textarea
                                         value={replyContents[comment.id] || ''}
@@ -9653,7 +9732,7 @@ function ProfileDetailPage({
 
                                 {/* Replies */}
                                 {comment.replies && comment.replies.length > 0 && (
-                                  <div className="mt-2 ml-4 space-y-2">
+                                  <div className="mt-1.5 ml-3 space-y-2">
                                     {comment.replies.map((reply: any) => (
                                       <div key={reply.id} className="flex gap-2 items-start">
                                         <Avatar
@@ -10482,6 +10561,7 @@ function CommunityComponent({
   const [coAuthorInput, setCoAuthorInput] = useState('')
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({})
+  const [expandedMetadata, setExpandedMetadata] = useState<Record<string, boolean>>({})
   const [openComments, setOpenComments] = useState<Record<string, boolean>>({})
   const [activeFeedTab, setActiveFeedTab] = useState<'all' | 'saved' | 'my'>('all')
   const [bookmarkedPosts, setBookmarkedPosts] = useState<string[]>([])
@@ -10516,10 +10596,12 @@ function CommunityComponent({
     title: string;
     content: string;
     metadata: PostMetadata;
+    shared_post_id?: string | null;
   }>({
     id: '',
     title: '',
     content: '',
+    shared_post_id: null,
     metadata: {
       professions: [],
       clinical_areas: [],
@@ -13960,6 +14042,7 @@ function CommunityComponent({
         title: editForm.title.trim() || null,
         content: editForm.content, // Store HTML content
         metadata: editForm.metadata
+        // Note: shared_post_id is not updated during edit - it remains as is in database
       })
       
       toast.success('Post updated successfully!')
@@ -13990,6 +14073,7 @@ function CommunityComponent({
               id: postToEdit.id,
               title: postToEdit.title,
               content: postToEdit.content,
+              shared_post_id: postToEdit.shared_post_id || null,
               metadata: {
                 professions: postToEdit.post_metadata?.professions || [],
                 clinical_areas: postToEdit.post_metadata?.clinical_areas || [],
@@ -14042,43 +14126,75 @@ function CommunityComponent({
   // Render post metadata badges
   const renderPostMetadata = (post: CommunityPost) => {
     const metadata = post.post_metadata || {}
+    const isExpanded = expandedMetadata[post.id] || false
+    
+    // Collect all badges
+    const allBadges: JSX.Element[] = []
+    
+    if (metadata.content_type) {
+      allBadges.push(
+        <span key="content_type" className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          {metadata.content_type}
+        </span>
+      )
+    }
+    
+    if (metadata.audience_level) {
+      allBadges.push(
+        <span key="audience_level" className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          {metadata.audience_level}
+        </span>
+      )
+    }
+    
+    if (metadata.language && metadata.language !== 'English') {
+      allBadges.push(
+        <span key="language" className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+          {metadata.language}
+        </span>
+      )
+    }
+    
+    allBadges.push(...(metadata.professions || []).map((profession: string, idx: number) => (
+      <span key={`profession-${idx}`} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+        {profession}
+      </span>
+    )))
+    
+    allBadges.push(...(metadata.clinical_areas || []).map((area: string, idx: number) => (
+      <span key={`clinical-${idx}`} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+        {area}
+      </span>
+    )))
+    
+    allBadges.push(...(metadata.tags || []).map((tag: string, idx: number) => (
+      <span key={`tag-${idx}`} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+        #{tag}
+      </span>
+    )))
+    
+    if (allBadges.length === 0) return null
+    
+    const hasMultipleBadges = allBadges.length > 3
+    
     return (
-      <div className="flex flex-wrap gap-2 mt-3">
-        {metadata.content_type && (
-          <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-medium">
-            {metadata.content_type}
-          </span>
-        )}
-        {metadata.audience_level && (
-          <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-            {metadata.audience_level}
-          </span>
-        )}
-        {metadata.language && metadata.language !== 'English' && (
-          <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
-            {metadata.language}
-          </span>
-        )}
-        {(metadata.professions || []).slice(0, 2).map(profession => (
-          <span key={profession} className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
-            {profession}
-          </span>
-        ))}
-        {(metadata.clinical_areas || []).slice(0, 2).map(area => (
-          <span key={area} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs font-medium">
-            {area}
-          </span>
-        ))}
-        {(metadata.tags || []).slice(0, 3).map(tag => (
-          <span key={tag} className="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs font-medium">
-            #{tag}
-          </span>
-        ))}
-        {(metadata.professions || []).length > 2 && (
-          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
-            +{(metadata.professions || []).length - 2} more
-          </span>
-        )}
+      <div className="mt-3">
+        <div className={`flex gap-2 items-center ${isExpanded ? 'flex-wrap' : 'overflow-x-auto scrollbar-hide'}`}>
+          <div className={`flex gap-2 items-center ${isExpanded ? 'flex-wrap' : ''}`}>
+            {isExpanded ? allBadges : allBadges.slice(0, 3)}
+          </div>
+          {hasMultipleBadges && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setExpandedMetadata(prev => ({ ...prev, [post.id]: !prev[post.id] }))
+              }}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1 whitespace-nowrap flex-shrink-0"
+            >
+              {isExpanded ? '−' : `+${allBadges.length - 3}`}
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -14143,10 +14259,10 @@ function CommunityComponent({
   }, [posts, activeFeedTab, user?.id, bookmarkedPosts])
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto pb-20 md:pb-6">
-<div className="max-w-7xl mx-auto p-4 md:p-6">
+    <div className="flex-1 bg-gray-50 overflow-y-auto pb-16 md:pb-6">
+<div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
   {/* LinkedIn-style 3-column layout */}
-  <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+  <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 md:gap-6">
     
     {/* Left Sidebar - Profile Snapshot */}
     <div className="md:col-span-3 hidden lg:block">
@@ -14638,7 +14754,7 @@ function CommunityComponent({
           </div>
         )}
 
-        <div className="space-y-4" style={{ transform: pullDistance > 0 ? `translateY(${Math.min(pullDistance, 60)}px)` : 'translateY(0)' }}>
+        <div className="space-y-3" style={{ transform: pullDistance > 0 ? `translateY(${Math.min(pullDistance, 60)}px)` : 'translateY(0)' }}>
           {/* Feed tabs */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -14734,10 +14850,10 @@ function CommunityComponent({
               return (
           <div 
             key={post.id} 
-            className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+            className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100">
             {/* Repost Header - LinkedIn style */}
             {isRepost && reposter && (
-              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100">
                 <Avatar 
                   src={reposter.avatar_url} 
                   name={getUserDisplayName(reposter)} 
@@ -14757,7 +14873,7 @@ function CommunityComponent({
             )}
 
             {/* Post Header with Menu */}
-            <div className="flex items-start justify-between mb-4">
+            <div className="flex items-start justify-between mb-2">
               <div className="flex-1">
                 <div className="flex items-center gap-2 mb-2">
                   <button
@@ -14827,7 +14943,7 @@ function CommunityComponent({
                 </button>
 
                 {activeMenuPost === post.id && (
-                  <div className="absolute right-0 top-10 w-40 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1">
+                  <div className="absolute right-0 top-10 w-12 bg-white border border-gray-200 rounded-lg shadow-xl z-50 py-1">
                     {isPostOwner(post) ? (
                       <>
                         <button
@@ -14915,7 +15031,7 @@ function CommunityComponent({
 
             {/* Post Content with See More/Less */}
             {displayPost && (
-              <div className="group relative text-gray-700 mb-3 text-sm leading-relaxed">
+              <div className="group relative text-gray-700 mb-2 text-sm leading-relaxed">
                 {(() => {
                   const postContent = displayPost.content || ''
                   const textContent = postContent.replace(/<[^>]*>/g, '')
@@ -14992,7 +15108,7 @@ function CommunityComponent({
                     }
                   }
                 }}
-                className="w-full text-left border-l-4 border-blue-500 bg-gray-50 rounded-lg p-3 mb-3 mt-3 hover:bg-gray-100 transition-colors cursor-pointer"
+                className="w-full text-left border-l-4 border-blue-500 bg-gray-50 rounded-lg p-2.5 mb-2 mt-2 hover:bg-gray-100 transition-colors cursor-pointer"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <Avatar 
@@ -15019,7 +15135,7 @@ function CommunityComponent({
 
             {/* Attachments */}
             {displayPost?.post_metadata?.attachments && displayPost.post_metadata.attachments.length > 0 && (
-              <div className="mb-4">
+              <div className="mb-2">
                 <div className="flex flex-wrap gap-2">
                   {displayPost.post_metadata.attachments.map((attachment: string, idx: number) => {
                     const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment)
@@ -15119,7 +15235,7 @@ function CommunityComponent({
             })()}
 
             {/* Action Bar */}
-            <div className="border-t border-gray-100 pt-2 mt-2">
+            <div className="border-t border-gray-100 pt-1.5 mt-1.5">
               <div className="flex items-center justify-start gap-6">
                 {/* Like Button with Long Press */}
                 <div 
@@ -15339,10 +15455,10 @@ function CommunityComponent({
 
             {/* Inline Comments Section */}
             {openComments[post.id] && (
-              <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="mt-2 border-t border-gray-100 pt-2">
                 {/* Add Comment */}
                 {!postSettings[post.id]?.comments_disabled && (
-                  <div className="mb-4">
+                  <div className="mb-3">
                     <div className="flex gap-2">
                       <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-6 h-6 flex-shrink-0" useInlineSize={false} />
                       <div className="flex-1 flex items-center gap-2 px-2.5 py-1.5 border border-gray-200 rounded-full focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
@@ -15390,9 +15506,9 @@ function CommunityComponent({
                     return null;
                   }
                   return (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {comments[postIdForComments].map(comment => (
-                      <div key={comment.id} data-comment-id={comment.id} className="flex gap-3 items-start">
+                      <div key={comment.id} data-comment-id={comment.id} className="flex gap-2 items-start">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -15612,7 +15728,7 @@ function CommunityComponent({
 
                           {/* Reply Input */}
                           {replyingTo[comment.id] && (
-                            <div className="mt-2 ml-4">
+                            <div className="mt-1 ml-3">
                               <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                                 <textarea
                                   value={replyContents[comment.id] || ''}
@@ -15651,15 +15767,15 @@ function CommunityComponent({
 
                           {/* Collapsible Replies */}
                           {comment.replies && comment.replies.length > 0 && (
-                            <div className="mt-2 ml-4">
+                            <div className="mt-1.5 ml-3">
                               <button
                                 onClick={() => setExpandedComments(prev => ({ ...prev, [comment.id]: !prev[comment.id] }))}
-                                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                               >
                                 {expandedComments[comment.id] ? 'Hide' : 'View'} {comment.replies.length} {comment.replies.length === 1 ? 'reply' : 'replies'}
                               </button>
                               {expandedComments[comment.id] && (
-                                <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
+                                <div className="mt-2 space-y-2 border-l-2 border-gray-200 pl-2">
                                   {comment.replies.map(reply => (
                                     <div key={reply.id} data-comment-id={reply.id} className="flex gap-2 items-start">
                                       <button
@@ -16319,7 +16435,7 @@ function CommunityComponent({
 
         {/* Footer Links */}
         <div className="text-xs text-gray-500 text-center space-y-1">
-          <p>© 2025 UK Therapist Network</p>
+          <p>© 2025 TherapySocial</p>
           <div className="flex justify-center gap-3">
             <a href="#" className="hover:text-blue-600">About</a>
             <span>•</span>
@@ -18706,7 +18822,7 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
     // Footer
     content += `
       <footer class="cv-footer">
-        <p>Generated by UK Therapist Network • ${new Date().toLocaleDateString('en-GB')}</p>
+        <p>Generated by TherapySocial • ${new Date().toLocaleDateString('en-GB')}</p>
       </footer>
     `
 

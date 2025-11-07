@@ -170,16 +170,16 @@ export function GlobalSearch({
           onChange={(e) => { setQuery(e.target.value); setOpen(true); setActiveIndex(-1) }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search people or posts..."
-          className="w-full rounded-full border px-4 py-2 shadow-sm bg-white focus:outline-none"
+          placeholder="Search..."
+          className="w-full rounded-full border px-3 sm:px-4 py-1.5 sm:py-2 text-sm sm:text-base shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         />
         {query && (
-          <button className="-ml-10 text-gray-500 hover:text-gray-700" aria-label="Clear" onClick={() => setQuery('')}>✕</button>
+          <button className="-ml-9 sm:-ml-10 text-gray-500 hover:text-gray-700 text-sm sm:text-base" aria-label="Clear" onClick={() => setQuery('')}>✕</button>
         )}
       </div>
 
       {open && (
-        <div className="absolute mt-2 w-full max-w-xl bg-white border rounded-lg shadow-lg z-50">
+        <div className="absolute mt-2 w-full max-w-full sm:max-w-xl bg-white border rounded-lg shadow-lg z-50 max-h-[70vh] sm:max-h-[80vh] overflow-y-auto">
           {loading ? (
             <SearchResultsSkeleton />
           ) : (
