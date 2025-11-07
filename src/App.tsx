@@ -8410,8 +8410,8 @@ function ProfileDetailPage({
               }`}
             >
               <div className="flex items-center justify-center gap-2">
-                <User className="w-4 h-4" />
-                <span>About Me</span>
+                <User className="w-5 h-5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">About Me</span>
               </div>
             </button>
             <button
@@ -8423,8 +8423,8 @@ function ProfileDetailPage({
               }`}
             >
               <div className="flex items-center justify-center gap-2">
-                <FileText className="w-4 h-4" />
-                <span>Posts</span>
+                <FileText className="w-5 h-5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Posts</span>
               </div>
             </button>
             <button
@@ -8436,8 +8436,8 @@ function ProfileDetailPage({
               }`}
             >
               <div className="flex items-center justify-center gap-2">
-                <ThumbsUp className="w-4 h-4" />
-                <span>Activities</span>
+                <ThumbsUp className="w-5 h-5 sm:w-4 sm:h-4" />
+                <span className="hidden sm:inline">Activities</span>
               </div>
             </button>
           </div>
@@ -14259,7 +14259,7 @@ function CommunityComponent({
   }, [posts, activeFeedTab, user?.id, bookmarkedPosts])
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto pb-16 md:pb-6">
+    <div className="flex-1 bg-gray-50 overflow-y-auto pb-200 md:pb-6">
 <div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
   {/* LinkedIn-style 3-column layout */}
   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 md:gap-6">
