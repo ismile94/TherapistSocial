@@ -2709,7 +2709,7 @@ function AppInner() {
     }
   }, [showMessagesDropdown])
 
-  // Real-time notifications subscription
+  // Real-time notifications subscription - GÜNCELLENDİ: INSERT, UPDATE, DELETE için
   useEffect(() => {
     if (!currentUser?.id) return
 
@@ -2718,24 +2718,51 @@ function AppInner() {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*', // Tüm event'leri yakala (INSERT, UPDATE, DELETE)
           schema: 'public',
           table: 'notifications',
           filter: `user_id=eq.${currentUser.id}`
         },
         (payload) => {
-          const newNotification = payload.new
-          setNotifications(prev => [newNotification, ...prev])
-          setUnreadNotificationsCount(prev => prev + 1)
+          console.log('Notification realtime event:', payload.eventType);
           
-          if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification(newNotification.title, {
-              body: newNotification.message,
-              icon: '/favicon.ico'
+          if (payload.eventType === 'INSERT') {
+            const newNotification = payload.new
+            setNotifications(prev => [newNotification, ...prev])
+            setUnreadNotificationsCount(prev => prev + 1)
+            
+            if ('Notification' in window && Notification.permission === 'granted') {
+              new Notification(newNotification.title, {
+                body: newNotification.message,
+                icon: '/favicon.ico'
+              })
+            }
+            
+            playNotificationSound?.()
+          } else if (payload.eventType === 'UPDATE') {
+            // Bildirim okundu olarak işaretlendiğinde güncelle
+            const updatedNotification = payload.new
+            setNotifications(prev => prev.map(n => 
+              n.id === updatedNotification.id ? { ...n, ...updatedNotification } : n
+            ))
+            // Okunmamış sayısını güncelle
+            if (updatedNotification.read && !payload.old?.read) {
+              setUnreadNotificationsCount(prev => Math.max(0, prev - 1))
+            } else if (!updatedNotification.read && payload.old?.read) {
+              setUnreadNotificationsCount(prev => prev + 1)
+            }
+          } else if (payload.eventType === 'DELETE') {
+            // Bildirim silindiğinde listeden kaldır
+            const deletedId = payload.old?.id
+            setNotifications(prev => {
+              const deleted = prev.find(n => n.id === deletedId)
+              // Okunmamış bir bildirim silindiyse sayacı azalt
+              if (deleted && !deleted.read) {
+                setUnreadNotificationsCount(count => Math.max(0, count - 1))
+              }
+              return prev.filter(n => n.id !== deletedId)
             })
           }
-          
-          playNotificationSound?.()
         }
       )
       .subscribe()
@@ -5058,6 +5085,20 @@ function ChatBoxComponent({
               msg.id === updatedMsg.id ? { ...msg, read: updatedMsg.read } : msg
             )
           )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { 
+          event: 'DELETE', 
+          schema: 'public', 
+          table: 'messages',
+          filter: `conversation_id=eq.${chatBox.conversation.id}`
+        },
+        (payload) => {
+          // Mesaj silindiğinde listeden kaldır
+          const deletedMsg = payload.old as Message
+          setMessages(prev => prev.filter(msg => msg.id !== deletedMsg.id))
         }
       )
       .subscribe((status) => {
@@ -11403,6 +11444,7 @@ function CommunityComponent({
     let repliesChannel: any;
     let commentReactionsChannel: any;
     let bookmarksChannel: any;
+    let postReactionsChannel: any;
   
     const setupRealtimeSubscriptions = async () => {
       try {
@@ -11499,6 +11541,27 @@ function CommunityComponent({
               console.error('Bookmarks channel error:', error);
             }
           });
+
+        // Post reactions channel - YENİ: Gönderi beğenileri için realtime
+        postReactionsChannel = supabase.channel('post-reactions-follow')
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'post_reactions',
+            },
+            (payload) => {
+              console.log('Post reaction real-time update:', payload);
+              handlePostReactionRealtime(payload);
+            }
+          )
+          .subscribe((status, error) => {
+            console.log('Post reactions channel subscription status:', status);
+            if (error) {
+              console.error('Post reactions channel error:', error);
+            }
+          });
   
       } catch (error) {
         console.error('Error setting up real-time subscriptions:', error);
@@ -11515,6 +11578,7 @@ function CommunityComponent({
         repliesChannel?.unsubscribe();
         commentReactionsChannel?.unsubscribe();
         bookmarksChannel?.unsubscribe();
+        postReactionsChannel?.unsubscribe();
         setRealtimeStatus('disconnected');
       } catch (e) {
         console.error('Error unsubscribing channels:', e);
@@ -11551,53 +11615,11 @@ function CommunityComponent({
     })
   }, [posts])
 
-  // useEffect içindeki real-time subscription'ı güncelle
+  // Posts ve following posts yüklemesi için useEffect (realtime subscription'lar ayrı yönetiliyor)
   useEffect(() => {
     if (user) {
       loadPosts(0, true)
       loadFollowingPosts()
-      
-      // Real-time subscriptions
-      const postsChannel = supabase.channel('public:posts')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'posts' }, (payload) => {
-          handlePostRealtime(payload)
-        })
-        .subscribe()
-  
-      const repliesChannel = supabase.channel('public:post_comments')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'post_comments' }, (payload) => {
-          handleReplyRealtime(payload)
-        })
-        .subscribe()
-  
-      // YENİ: Yorum reaksiyonları için real-time subscription
-      const commentReactionsChannel = supabase.channel('public:comment_reactions')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'comment_reactions' }, (payload) => {
-          handleCommentReactionRealtime(payload)
-        })
-        .subscribe()
-
-      const bookmarksChannel = supabase.channel('public:post_bookmarks')
-        .on('postgres_changes', { 
-          event: '*', 
-          schema: 'public', 
-          table: 'post_bookmarks',
-          filter: `user_id=eq.${user?.id || ''}`,
-        }, (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setBookmarkedPosts(prev => [...prev, payload.new.post_id]);
-          } else if (payload.eventType === 'DELETE') {
-            setBookmarkedPosts(prev => prev.filter(id => id !== payload.old.post_id));
-          }
-        })
-        .subscribe()
-
-      return () => {
-        try { postsChannel.unsubscribe() } catch (e) {}
-        try { repliesChannel.unsubscribe() } catch (e) {}
-        try { commentReactionsChannel.unsubscribe() } catch (e) {}
-        try { bookmarksChannel.unsubscribe() } catch (e) {}
-      }
     }
   }, [user, feedFilters])
 
@@ -12439,6 +12461,97 @@ function CommunityComponent({
     }
   };
 
+  // Real-time post reaction handler - YENİ: Gönderi beğenileri için
+  const handlePostReactionRealtime = async (payload: any) => {
+    const { eventType, new: newRow, old: oldRow } = payload;
+    
+    console.log('Real-time post reaction event:', eventType, 'User:', newRow?.user_id || oldRow?.user_id, 'Current user:', user?.id);
+
+    const isOwnAction = (newRow?.user_id === user?.id) || (oldRow?.user_id === user?.id);
+    
+    // Kendi aksiyonlarımızı filtrele (optimistic update zaten yapıldı)
+    if (isOwnAction) {
+      console.log('FILTERED: Ignoring own post reaction in real-time');
+      return;
+    }
+
+    if (eventType === 'INSERT') {
+      const { post_id, reaction_type } = newRow;
+      
+      setPostReactions(prev => {
+        const current = prev[post_id] || [];
+        const existing = current.find(r => r.emoji === reaction_type);
+        if (existing) {
+          return {
+            ...prev,
+            [post_id]: current.map(r => 
+              r.emoji === reaction_type ? { ...r, count: r.count + 1 } : r
+            )
+          };
+        }
+        return { ...prev, [post_id]: [...current, { emoji: reaction_type, count: 1 }] };
+      });
+      
+      // Post'un likes_count'ını da güncelle (eğer like emoji ise)
+      if (reaction_type === '👍') {
+        setPosts(prevPosts => 
+          prevPosts.map(p => 
+            p.id === post_id 
+              ? { ...p, likes_count: (p.likes_count || 0) + 1 }
+              : p
+          )
+        );
+      }
+      
+    } else if (eventType === 'DELETE') {
+      const { post_id, reaction_type } = oldRow;
+      
+      setPostReactions(prev => {
+        const current = prev[post_id] || [];
+        return {
+          ...prev,
+          [post_id]: current.map(r => 
+            r.emoji === reaction_type ? { ...r, count: Math.max(0, r.count - 1) } : r
+          ).filter(r => r.count > 0)
+        };
+      });
+      
+      // Post'un likes_count'ını da güncelle (eğer like emoji ise)
+      if (reaction_type === '👍') {
+        setPosts(prevPosts => 
+          prevPosts.map(p => 
+            p.id === post_id 
+              ? { ...p, likes_count: Math.max(0, (p.likes_count || 1) - 1) }
+              : p
+          )
+        );
+      }
+      
+    } else if (eventType === 'UPDATE') {
+      const { post_id, reaction_type } = newRow;
+      const oldReactionType = oldRow.reaction_type;
+      
+      setPostReactions(prev => {
+        const current = prev[post_id] || [];
+        // Eski emoji'yi azalt
+        let updated = current.map(r => 
+          r.emoji === oldReactionType ? { ...r, count: Math.max(0, r.count - 1) } : r
+        ).filter(r => r.count > 0);
+        
+        // Yeni emoji'yi artır
+        const existing = updated.find(r => r.emoji === reaction_type);
+        if (existing) {
+          updated = updated.map(r => 
+            r.emoji === reaction_type ? { ...r, count: r.count + 1 } : r
+          );
+        } else {
+          updated = [...updated, { emoji: reaction_type, count: 1 }];
+        }
+        
+        return { ...prev, [post_id]: updated };
+      });
+    }
+  };
 
   // handleReplyRealtime fonksiyonunu güncelle
   const handleReplyRealtime = async (payload: any) => {
