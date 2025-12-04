@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from './lib/supabaseClient'
 import { ToastProvider } from './components/ToastProvider'
 import { useToast } from './components/useToast'
@@ -31,8 +32,8 @@ import {
     Briefcase, Award, Send, Star, Volume2, VolumeX, Archive, ShieldAlert, MoreHorizontal,
     UserPlus, UserCheck, Clock, Settings, Eye, EyeOff, Lock, Bell, Filter,
     Download, Info, Trash2,ThumbsUp, Flag, RefreshCw, Printer,
-    FileText, MessageCircle, Bookmark,
-    CheckCircle, Circle, UserX, Monitor, Smartphone, LogOut, QrCode,
+    FileText, MessageCircle, Bookmark, Reply, Smile, BarChart2,
+    CheckCircle, Circle, UserX, Monitor, Smartphone, LogOut, QrCode, Maximize2,
     Repeat2, Quote
 } from 'lucide-react'
 
@@ -117,6 +118,12 @@ interface PostMetadata {
     user_id: string
     user?: Profile
   }
+  // New post creation features
+  poll?: { question: string; options: string[]; duration: number; position?: 'before' | 'after'; votes?: Record<string, number>; voters?: string[] } | null
+  mood?: string
+  location?: string
+  scheduled_at?: string | null
+  album?: string[]
 }
 
 interface FeedFilters {
@@ -3656,7 +3663,7 @@ function AppInner() {
             <div className="w-8 h-8 md:w-9 md:h-9 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-full md:rounded-lg flex items-center justify-center">
               <Users className="w-5 h-5 md:w-5 md:h-5 text-white" />
             </div>
-            <h1 className="hidden md:block ml-2 text-xl font-bold text-gray-900">TherapySocial</h1>
+            <h1 className="hidden md:block ml-2 text-xl font-bold text-gray-900">TherapistSocial</h1>
           </div>
 
           {/* Search - Hidden on mobile, icon button instead */}
@@ -8061,7 +8068,7 @@ function ProfileDetailPage({
 
         {profile.contact_email && (
           <a 
-            href={`mailto:${profile.contact_email}?subject=Contact from TherapySocial&body=Hello ${profile.full_name}, I found your profile on TherapySocial and would like to get in touch.`}
+            href={`mailto:${profile.contact_email}?subject=Contact from TherapistSocial&body=Hello ${profile.full_name}, I found your profile on TherapistSocial and would like to get in touch.`}
             className="flex items-center justify-center w-10 h-10 border border-gray-300 rounded-full hover:bg-gray-50 font-medium transition-colors"
             title="Email"
           >
@@ -9274,19 +9281,23 @@ function ProfileDetailPage({
                     {(() => {
                       const textContent = post.content.replace(/<[^>]*>/g, '')
                       const contentLength = textContent.length
+                      const hasImages = /<img[^>]*>/i.test(post.content)
+                      const needsCollapse = contentLength > 300 || hasImages
+                      const isExpanded = expandedPosts[post.id]
+                      
                       return (
                         <>
-                          {contentLength > 300 && (
+                          {needsCollapse && (
                             <>
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                                className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
+                                className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${isExpanded ? 'block' : 'hidden'}`}
                               >
                                 See less
                               </button>
                               <button
                                 onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                                className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
+                                className={`absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${isExpanded ? 'hidden' : 'block'}`}
                               >
                                 See more
                               </button>
@@ -9295,13 +9306,13 @@ function ProfileDetailPage({
 
                           <div 
                             className={`
-                              ${expandedPosts[post.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                              ${isExpanded || !needsCollapse ? '' : 'max-h-[200px] overflow-hidden'}
                               rich-text-content
                             `}
                             dangerouslySetInnerHTML={{ __html: post.content }}
                           />
 
-                          {!expandedPosts[post.id] && contentLength > 300 && (
+                          {!isExpanded && needsCollapse && (
                             <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
                           )}
                         </>
@@ -9347,35 +9358,69 @@ function ProfileDetailPage({
                   {/* Attachments */}
                   {post.post_metadata?.attachments && post.post_metadata.attachments.length > 0 && (
                     <div className="mb-4">
-                      <div className="flex flex-wrap gap-2">
-                        {post.post_metadata.attachments.map((attachment: string, idx: number) => {
-                          const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment)
-                          return isImage ? (
-                            <img
-                              key={idx}
-                              src={attachment}
-                              alt={`Attachment ${idx + 1}`}
-                              className="max-w-full max-h-64 rounded-lg object-cover cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                window.open(attachment, '_blank')
-                              }}
-                            />
-                          ) : (
-                            <a
-                              key={idx}
-                              href={attachment}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                            >
-                              <FileText className="w-4 h-4" />
-                              <span>Attachment {idx + 1}</span>
-                            </a>
-                          )
-                        })}
-                      </div>
+                      {(() => {
+                        const attachments = post.post_metadata.attachments
+                        const images = attachments.filter((a: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(a))
+                        const files = attachments.filter((a: string) => !/\.(jpg|jpeg|png|gif|webp)$/i.test(a))
+                        
+                        return (
+                          <>
+                            {/* Image Grid */}
+                            {images.length > 0 && (
+                              <div className={`grid gap-1 rounded-xl overflow-hidden ${
+                                images.length === 1 ? 'grid-cols-1' :
+                                images.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
+                              }`}>
+                                {images.slice(0, 4).map((attachment: string, idx: number) => (
+                                  <div
+                                    key={idx}
+                                    className={`relative cursor-pointer overflow-hidden ${
+                                      images.length === 1 ? 'max-h-96' :
+                                      images.length === 2 ? 'max-h-64' :
+                                      idx === 0 ? 'row-span-2 max-h-80' : 'max-h-40'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      window.open(attachment, '_blank')
+                                    }}
+                                  >
+                                    <img
+                                      src={attachment}
+                                      alt={`Attachment ${idx + 1}`}
+                                      className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                                    />
+                                    {/* Show +N overlay on last visible image if there are more */}
+                                    {idx === 3 && images.length > 4 && (
+                                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                                        <span className="text-white text-2xl font-bold">+{images.length - 4}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {/* File attachments */}
+                            {files.length > 0 && (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {files.map((attachment: string, idx: number) => (
+                                  <a
+                                    key={idx}
+                                    href={attachment}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                                  >
+                                    <FileText className="w-4 h-4" />
+                                    <span className="text-sm">Attachment {idx + 1}</span>
+                                  </a>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )
+                      })()}
                     </div>
                   )}
 
@@ -10527,6 +10572,7 @@ function CommunityComponent({
   const toast = useToast();
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [expandedReplies, setExpandedReplies] = useState<Record<string, boolean>>({});
+  const [showMoreReplies, setShowMoreReplies] = useState<Record<string, boolean>>({});
   const [userPostReactions, setUserPostReactions] = useState<Record<string, 'like' | 'dislike' | string | null>>({});
   const [currentVisibleExpandedPost, setCurrentVisibleExpandedPost] = useState<string | null>(null);
   const [stickyButtonStyle, setStickyButtonStyle] = useState<{ left: string; width: string }>({ left: '0px', width: '0px' });
@@ -10546,9 +10592,242 @@ function CommunityComponent({
       attachments: [] as string[],
       co_authors: [] as string[],
       is_public: true,
-      visibility: 'public' as 'public' | 'connections' | 'only_me'
+      visibility: 'public' as 'public' | 'connections' | 'only_me',
+      poll: null as { question: string; options: string[]; duration: number } | null,
+      mood: '' as string,
+      location: '' as string,
+      scheduled_at: null as string | null
     } as PostMetadata
   })
+  // Post creation enhancements
+  const [showPollCreator, setShowPollCreator] = useState(false)
+  const [pollOptions, setPollOptions] = useState(['', ''])
+  const [pollDuration, setPollDuration] = useState(24) // hours
+  const [showMoodPicker, setShowMoodPicker] = useState(false)
+  const [showLocationPicker, setShowLocationPicker] = useState(false)
+  const [showSchedulePicker, setShowSchedulePicker] = useState(false)
+  const [scheduleDate, setScheduleDate] = useState('')
+  const [scheduleTime, setScheduleTime] = useState('')
+  const [postSuccess, setPostSuccess] = useState(false)
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null)
+  const [expandedImages, setExpandedImages] = useState<Record<string, boolean>>({})
+  const [hasDraft, setHasDraft] = useState(false)
+  const [draftSaving, setDraftSaving] = useState(false)
+  const [lastDraftSave, setLastDraftSave] = useState<Date | null>(null)
+  const [albumImages, setAlbumImages] = useState<string[]>([])
+  const [showAlbumModal, setShowAlbumModal] = useState(false)
+  const [albumModalImages, setAlbumModalImages] = useState<string[]>([])
+  const [albumModalIndex, setAlbumModalIndex] = useState(0)
+  const [pollVotes, setPollVotes] = useState<Record<string, number>>({}) // postId -> optionIndex
+  const [votingPoll, setVotingPoll] = useState<string | null>(null)
+  const [pollPosition, setPollPosition] = useState<'before' | 'after'>('after')
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
+  const [isPageVisible, setIsPageVisible] = useState(false)
+  const mainContainerRef = useRef<HTMLDivElement>(null)
+  const CHARACTER_LIMIT = 2000
+  const DRAFT_KEY = 'therapist_finder_post_draft'
+  const MOOD_OPTIONS = [
+    { emoji: '😊', label: 'Happy' },
+    { emoji: '🤔', label: 'Thoughtful' },
+    { emoji: '😍', label: 'Excited' },
+    { emoji: '💪', label: 'Motivated' },
+    { emoji: '🎉', label: 'Celebrating' },
+    { emoji: '📚', label: 'Learning' },
+    { emoji: '💡', label: 'Inspired' },
+    { emoji: '🙏', label: 'Grateful' }
+  ]
+  const HASHTAG_SUGGESTIONS = ['#mentalhealth', '#therapy', '#psychology', '#wellness', '#selfcare', '#mindfulness', '#counseling', '#therapist', '#mentalhealthawareness', '#healing']
+  
+  // Mouse tracking for interactive gradient background
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      requestAnimationFrame(() => {
+        setMousePosition({ x: e.clientX, y: e.clientY })
+      })
+    }
+    window.addEventListener('mousemove', handleMouseMove, { passive: true })
+    return () => window.removeEventListener('mousemove', handleMouseMove)
+  }, [])
+
+  // Page visibility animation
+  useEffect(() => {
+    const timer = setTimeout(() => setIsPageVisible(true), 100)
+    return () => clearTimeout(timer)
+  }, [])
+
+  // Keyboard shortcut: N to open new post modal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only trigger if not typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        setShowNewPostModal(true)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+  
+  // Draft auto-save: Load draft on mount
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_KEY)
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft)
+        if (draft.content || draft.albumImages?.length > 0) {
+          setHasDraft(true)
+        }
+      }
+    } catch (e) {
+      console.error('Error loading draft:', e)
+    }
+  }, [])
+
+  // Draft auto-save: Save draft when content changes
+  useEffect(() => {
+    const saveDraft = () => {
+      const hasContent = newPost.content.replace(/<[^>]*>/g, '').trim().length > 0
+      const hasAlbum = albumImages.length > 0
+      
+      if (hasContent || hasAlbum) {
+        setDraftSaving(true)
+        try {
+          const draft = {
+            content: newPost.content,
+            metadata: newPost.metadata,
+            albumImages: albumImages,
+            savedAt: new Date().toISOString()
+          }
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+          setLastDraftSave(new Date())
+          setHasDraft(true)
+        } catch (e) {
+          console.error('Error saving draft:', e)
+        }
+        setDraftSaving(false)
+      }
+    }
+
+    // Debounce save
+    const timeoutId = setTimeout(saveDraft, 1000)
+    return () => clearTimeout(timeoutId)
+  }, [newPost.content, newPost.metadata, albumImages])
+
+  // Vote on poll
+  const votePoll = async (postId: string, optionIndex: number) => {
+    if (!user || votingPoll === postId) return
+    
+    setVotingPoll(postId)
+    try {
+      // First, get the LATEST post data from database to avoid race conditions
+      const { data: currentPost, error: fetchError } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('id', postId)
+        .single()
+      
+      if (fetchError || !currentPost) {
+        console.error('Error fetching post for voting:', fetchError)
+        toast.error('Post not found')
+        return
+      }
+      
+      const poll = currentPost.post_metadata?.poll
+      if (!poll) {
+        toast.error('Poll not found')
+        return
+      }
+      
+      const votes = poll.votes || {}
+      const voters = poll.voters || []
+      
+      // Check if already voted
+      if (voters.includes(user.id)) {
+        toast.info('You have already voted on this poll')
+        return
+      }
+      
+      // Update votes
+      const optionKey = `option_${optionIndex}`
+      const newVotes = { ...votes, [optionKey]: (votes[optionKey] || 0) + 1 }
+      const newVoters = [...voters, user.id]
+      
+      // Update post metadata
+      const updatedPoll = { ...poll, votes: newVotes, voters: newVoters }
+      const updatedMetadata = { ...currentPost.post_metadata, poll: updatedPoll }
+      
+      console.log('Voting on poll:', { postId, optionIndex, updatedMetadata })
+      
+      const { error, data: updatedPost } = await supabase
+        .from('posts')
+        .update({ post_metadata: updatedMetadata })
+        .eq('id', postId)
+        .select()
+        .single()
+      
+      if (error) {
+        console.error('Error updating poll vote:', error)
+        // Check if it's an RLS error
+        if (error.code === '42501' || error.message?.includes('policy')) {
+          toast.error('Permission denied. Please check RLS policies.')
+        } else {
+          toast.error('Failed to vote: ' + error.message)
+        }
+        return
+      }
+      
+      console.log('Vote recorded successfully:', updatedPost)
+      
+      // Update local state immediately
+      setPosts(prev => prev.map(p => 
+        p.id === postId 
+          ? { ...p, post_metadata: updatedMetadata }
+          : p
+      ))
+      setPollVotes(prev => ({ ...prev, [postId]: optionIndex }))
+      toast.success('Vote recorded!')
+    } catch (err) {
+      console.error('Error voting:', err)
+      toast.error('Failed to vote')
+    } finally {
+      setVotingPoll(null)
+    }
+  }
+
+  // Load draft content
+  const loadDraft = () => {
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_KEY)
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft)
+        setNewPost(prev => ({
+          ...prev,
+          content: draft.content || '',
+          metadata: { ...prev.metadata, ...draft.metadata }
+        }))
+        if (draft.albumImages) {
+          setAlbumImages(draft.albumImages)
+        }
+        toast.success('Draft loaded')
+      }
+    } catch (e) {
+      console.error('Error loading draft:', e)
+      toast.error('Failed to load draft')
+    }
+  }
+
+  // Clear draft
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY)
+      setHasDraft(false)
+      setLastDraftSave(null)
+    } catch (e) {
+      console.error('Error clearing draft:', e)
+    }
+  }
+
   const [selectedUserProfile, setSelectedUserProfile] = useState<Profile | null>(null)
   const [selectedPost, setSelectedPost] = useState<CommunityPost | null>(null)
   const [modalMutualConnections, setModalMutualConnections] = useState<Profile[]>([])
@@ -10562,6 +10841,11 @@ function CommunityComponent({
   const [showVisibilityDropdown, setShowVisibilityDropdown] = useState(false)
   const [commentLikes, setCommentLikes] = useState<Record<string, number>>({});
   const [commentFavorites, setCommentFavorites] = useState<Record<string, boolean>>({});
+  
+  // Calculate total comment likes for analytics
+  const totalCommentLikes = useMemo(() => 
+    Object.values(commentLikes).reduce((sum, count) => sum + count, 0)
+  , [commentLikes]);
   const [userReactions, setUserReactions] = useState<Record<string, string | null>>({});
   const [commentReactions, setCommentReactions] = useState<Record<string, { emoji: string; count: number }[]>>({});
   const [showCommentEmojiPicker, setShowCommentEmojiPicker] = useState<string | null>(null);
@@ -10569,6 +10853,8 @@ function CommunityComponent({
   const [activeCommentMenu, setActiveCommentMenu] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentContent, setEditCommentContent] = useState<string>('');
+  const [commentSort, setCommentSort] = useState<Record<string, 'newest' | 'oldest' | 'popular'>>({});
+  const [showCommentInputEmoji, setShowCommentInputEmoji] = useState<string | null>(null);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
   const [reportReason, setReportReason] = useState('');
@@ -13204,6 +13490,14 @@ function CommunityComponent({
         }
       }
       
+      // Add album images to metadata
+      if (albumImages.length > 0) {
+        metadata.album = albumImages
+      }
+      
+      // Check if post is scheduled
+      const isScheduled = metadata.scheduled_at && new Date(metadata.scheduled_at) > new Date()
+      
       const { error } = await supabase
         .from('posts')
         .insert({
@@ -13221,7 +13515,11 @@ function CommunityComponent({
         return
       }
 
-      toast.success(newPost.metadata.quoted_post_id ? 'Post quoted successfully' : 'Post created successfully')
+      if (isScheduled) {
+        toast.success(`Post scheduled for ${new Date(metadata.scheduled_at!).toLocaleString()}`)
+      } else {
+        toast.success(newPost.metadata.quoted_post_id ? 'Post quoted successfully' : 'Post created successfully')
+      }
 
       // Reset form
       setNewPost({
@@ -13246,7 +13544,23 @@ function CommunityComponent({
       setAttachmentInput('')
       setCoAuthorInput('')
       setShowAdvancedOptions(false)
-      setShowNewPostModal(false)
+      setShowPollCreator(false)
+      setShowMoodPicker(false)
+      setShowLocationPicker(false)
+      setShowSchedulePicker(false)
+      setPollOptions(['', ''])
+      setAlbumImages([])
+      
+      // Clear draft after successful post
+      clearDraft()
+      
+      // Show success animation
+      setPostSuccess(true)
+      setTimeout(() => {
+        setPostSuccess(false)
+        setShowNewPostModal(false)
+      }, 1500)
+      
       await loadPosts(0, true)
 
     } catch (err) {
@@ -14365,21 +14679,70 @@ function CommunityComponent({
 
   // Filter posts based on active tab
   const filteredPosts = useMemo(() => {
-    if (activeFeedTab === 'all') return posts
-    if (activeFeedTab === 'my') return posts.filter(p => p.user_id === user?.id)
-    if (activeFeedTab === 'saved') return posts.filter(p => bookmarkedPosts.includes(p.id))
-    return posts
+    // Filter out scheduled posts that are in the future (unless it's the owner viewing)
+    const visiblePosts = posts.filter(p => {
+      const scheduledAt = p.post_metadata?.scheduled_at
+      if (scheduledAt) {
+        const scheduledDate = new Date(scheduledAt)
+        const now = new Date()
+        // Show if scheduled time has passed OR if it's the owner
+        return scheduledDate <= now || p.user_id === user?.id
+      }
+      return true
+    })
+    
+    if (activeFeedTab === 'all') return visiblePosts
+    if (activeFeedTab === 'my') return visiblePosts.filter(p => p.user_id === user?.id)
+    if (activeFeedTab === 'saved') return visiblePosts.filter(p => bookmarkedPosts.includes(p.id))
+    return visiblePosts
   }, [posts, activeFeedTab, user?.id, bookmarkedPosts])
 
   return (
-    <div className="flex-1 bg-gray-50 overflow-y-auto pb-200 md:pb-6">
-<div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6">
+    <div 
+      ref={mainContainerRef}
+      className={`flex-1 overflow-y-auto pb-200 md:pb-6 relative transition-opacity duration-500 ${isPageVisible ? 'opacity-100' : 'opacity-0'}`}
+      style={{
+        background: 'linear-gradient(135deg, #f8fafc 0%, #eef2ff 50%, #faf5ff 100%)',
+      }}
+    >
+      {/* Interactive mouse gradient overlay */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0 transition-opacity duration-300"
+        style={{
+          background: `radial-gradient(600px circle at ${mousePosition.x}px ${mousePosition.y}px, rgba(99, 102, 241, 0.08), transparent 40%)`,
+        }}
+      />
+      
+      {/* Floating particles background */}
+      <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+        {[...Array(15)].map((_, i) => (
+          <div
+            key={i}
+            className="absolute rounded-full animate-pulse"
+            style={{
+              left: `${Math.random() * 100}%`,
+              top: `${Math.random() * 100}%`,
+              width: `${Math.random() * 6 + 3}px`,
+              height: `${Math.random() * 6 + 3}px`,
+              background: i % 3 === 0 
+                ? 'rgba(59, 130, 246, 0.2)' 
+                : i % 3 === 1 
+                  ? 'rgba(99, 102, 241, 0.2)' 
+                  : 'rgba(139, 92, 246, 0.2)',
+              animation: `float ${8 + Math.random() * 6}s ease-in-out infinite`,
+              animationDelay: `${Math.random() * 5}s`,
+            }}
+          />
+        ))}
+      </div>
+
+<div className="max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-3 sm:py-4 md:py-6 relative z-10">
   {/* LinkedIn-style 3-column layout */}
   <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 md:gap-6">
     
     {/* Left Sidebar - Profile Snapshot */}
     <div className="md:col-span-3 hidden lg:block">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden sticky top-6">
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 overflow-hidden sticky top-6 hover:shadow-xl transition-all duration-300">
         {/* Profile Header with gradient */}
         <div className="h-16 bg-gradient-to-r from-blue-500 to-blue-600"></div>
         <div className="px-4 pb-4 -mt-8">
@@ -14522,7 +14885,7 @@ function CommunityComponent({
             <h2 className="text-lg font-semibold text-gray-900">Feed</h2>
             
             {/* Real-time status */}
-            <div className="ml-2 hidden md:flex items-center">
+            <div className="ml-2 hidden md:flex items-center" title={`Total comment likes: ${totalCommentLikes}`}>
               <div className={`w-1.5 h-1.5 rounded-full mr-1.5 ${
                 realtimeStatus === 'connected' ? 'bg-green-500' : 
                 realtimeStatus === 'connecting' ? 'bg-yellow-500' : 'bg-red-500'
@@ -14577,16 +14940,20 @@ function CommunityComponent({
             haptic.light();
             setShowNewPostModal(true);
           }}
-          className="w-full flex items-center gap-3 px-3 py-2 border border-gray-200 rounded-full hover:bg-gray-50 transition-colors text-left"
+          className="w-full flex items-center gap-3 px-3 sm:px-4 py-2.5 sm:py-3 bg-white/60 backdrop-blur-sm border border-white/50 rounded-full hover:bg-white/80 hover:shadow-lg transition-all duration-300 text-left group"
         >
-          <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-8 h-8" useInlineSize={false} />
-          <span className="text-sm text-gray-500 flex-1">Share an update, question or insight...</span>
+          <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name} className="w-8 h-8 sm:w-10 sm:h-10" useInlineSize={false} />
+          <span className="text-sm sm:text-base text-gray-500 flex-1 group-hover:text-gray-700 transition-colors">Share an update, question or insight...</span>
+          <div className="hidden sm:flex items-center gap-2 text-gray-400">
+            <span className="text-xs">Press</span>
+            <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs font-mono">N</kbd>
+          </div>
         </button>
       </div>
 
       {/* Filters Panel */}
       {showFilters && (
-        <div className="bg-white rounded-lg p-6 mb-6 shadow-sm border border-gray-200">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl p-4 sm:p-6 mb-6 shadow-lg border border-white/50">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-semibold text-gray-900">Filter Posts</h3>
             <button 
@@ -14963,7 +15330,7 @@ function CommunityComponent({
               return (
           <div 
             key={post.id} 
-            className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-gray-100">
+            className="bg-white/90 backdrop-blur-sm rounded-xl p-3 sm:p-4 shadow-lg border border-white/50 hover:shadow-xl hover:bg-white transition-all duration-300 group/card">
             {/* Repost Header - LinkedIn style */}
             {isRepost && reposter && (
               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-100">
@@ -15032,6 +15399,31 @@ function CommunityComponent({
                     <span className="flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full">
                       <Bell className="w-2.5 h-2.5" />
                       Following
+                    </span>
+                  )}
+                  {/* Mood Display */}
+                  {displayPost?.post_metadata?.mood && (
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <span className="text-sm">
+                        {MOOD_OPTIONS.find(m => m.label === displayPost.post_metadata?.mood)?.emoji || '😊'}
+                      </span>
+                      <span className="text-xs">Feeling {displayPost.post_metadata.mood}</span>
+                    </span>
+                  )}
+                  {/* Location Display */}
+                  {displayPost?.post_metadata?.location && (
+                    <span className="flex items-center gap-1 text-gray-500">
+                      <MapPin className="w-3 h-3" />
+                      <span className="text-xs">{displayPost.post_metadata.location}</span>
+                    </span>
+                  )}
+                  {/* Scheduled Post Indicator (only visible to owner) */}
+                  {displayPost?.post_metadata?.scheduled_at && new Date(displayPost.post_metadata.scheduled_at) > new Date() && displayPost.user_id === user?.id && (
+                    <span className="flex items-center gap-1 text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                      <Clock className="w-3 h-3" />
+                      <span className="text-xs font-medium">
+                        Scheduled: {new Date(displayPost.post_metadata.scheduled_at).toLocaleString()}
+                      </span>
                     </span>
                   )}
                 </div>
@@ -15142,6 +15534,72 @@ function CommunityComponent({
               </div>
             </div>
 
+            {/* Poll Display (Before Content) */}
+            {displayPost?.post_metadata?.poll && displayPost.post_metadata.poll.position === 'before' && (
+              <div className="mb-3 border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart2 className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-gray-700">Poll</span>
+                  {displayPost.post_metadata.poll.voters?.includes(user?.id || '') && (
+                    <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Voted</span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {displayPost.post_metadata.poll.options.map((option: string, idx: number) => {
+                    const poll = displayPost.post_metadata?.poll
+                    const votes = poll?.votes || {}
+                    const totalVotes = Object.values(votes).reduce((sum: number, v) => sum + (v as number), 0)
+                    const optionVotes = votes[`option_${idx}`] || 0
+                    const percentage = totalVotes > 0 ? Math.round((optionVotes / totalVotes) * 100) : 0
+                    const hasVoted = poll?.voters?.includes(user?.id || '')
+                    const isMyVote = pollVotes[post.id] === idx || (hasVoted && poll?.voters?.includes(user?.id || ''))
+                    
+                    return (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!hasVoted) {
+                            votePoll(post.id, idx)
+                          }
+                        }}
+                        disabled={hasVoted || votingPoll === post.id}
+                        className={`w-full text-left relative overflow-hidden rounded-lg border transition-all ${
+                          hasVoted 
+                            ? 'border-gray-200 cursor-default' 
+                            : 'border-blue-200 hover:border-blue-400 cursor-pointer'
+                        }`}
+                      >
+                        {hasVoted && (
+                          <div 
+                            className={`absolute inset-y-0 left-0 ${isMyVote ? 'bg-blue-100' : 'bg-gray-100'} transition-all`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        )}
+                        <div className="relative px-4 py-2.5 flex items-center justify-between">
+                          <span className={`text-sm ${isMyVote ? 'font-medium text-blue-700' : 'text-gray-700'}`}>
+                            {option}
+                            {isMyVote && <Check className="w-3.5 h-3.5 inline ml-1.5" />}
+                          </span>
+                          {hasVoted && (
+                            <span className="text-xs text-gray-500">{percentage}%</span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
+                  <span>
+                    {Object.values(displayPost.post_metadata.poll.votes || {}).reduce((sum: number, v) => sum + (v as number), 0)} votes
+                  </span>
+                  <span>
+                    {displayPost.post_metadata.poll.duration}h poll
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Post Content with See More/Less */}
             {displayPost && (
               <div className="group relative text-gray-700 mb-2 text-sm leading-relaxed">
@@ -15149,19 +15607,24 @@ function CommunityComponent({
                   const postContent = displayPost.content || ''
                   const textContent = postContent.replace(/<[^>]*>/g, '')
                   const contentLength = textContent.length
+                  const hasImages = /<img[^>]*>/i.test(postContent)
+                  // Show "See More" if text is long OR if there are images (content likely tall)
+                  const needsCollapse = contentLength > 300 || hasImages
+                  const isExpanded = expandedPosts[post.id]
+                  
                   return (
                     <>
-                      {contentLength > 300 && (
+                      {needsCollapse && (
                         <>
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                            className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'block' : 'hidden'}`}
+                            className={`sticky top-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${isExpanded ? 'block' : 'hidden'}`}
                           >
                             See less
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleExpandPost(post.id); }}
-                            className={`absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${expandedPosts[post.id] ? 'hidden' : 'block'}`}
+                            className={`absolute bottom-2 right-2 z-10 opacity-0 group-hover:opacity-100 bg-white shadow-md rounded-md px-3 py-1 text-sm text-blue-600 hover:bg-gray-50 transition-all duration-200 ${isExpanded ? 'hidden' : 'block'}`}
                           >
                             See more
                           </button>
@@ -15170,18 +15633,85 @@ function CommunityComponent({
 
                       <div 
                         className={`
-                          ${expandedPosts[post.id] || contentLength <= 300 ? '' : 'max-h-[200px] overflow-hidden'}
+                          ${isExpanded || !needsCollapse ? '' : 'max-h-[200px] overflow-hidden'}
                           rich-text-content
                         `}
                         dangerouslySetInnerHTML={{ __html: postContent }}
                       />
 
-                      {!expandedPosts[post.id] && contentLength > 300 && (
+                      {!isExpanded && needsCollapse && (
                         <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white to-transparent pointer-events-none" />
                       )}
                     </>
                   )
                 })()}
+              </div>
+            )}
+
+            {/* Poll Display (After Content - default) */}
+            {displayPost?.post_metadata?.poll && (displayPost.post_metadata.poll.position === 'after' || !displayPost.post_metadata.poll.position) && (
+              <div className="mb-3 border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center gap-2 mb-3">
+                  <BarChart2 className="w-4 h-4 text-blue-600" />
+                  <span className="text-sm font-medium text-gray-700">Poll</span>
+                  {displayPost.post_metadata.poll.voters?.includes(user?.id || '') && (
+                    <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded-full">Voted</span>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  {displayPost.post_metadata.poll.options.map((option: string, idx: number) => {
+                    const poll = displayPost.post_metadata?.poll
+                    const votes = poll?.votes || {}
+                    const totalVotes = Object.values(votes).reduce((sum: number, v) => sum + (v as number), 0)
+                    const optionVotes = votes[`option_${idx}`] || 0
+                    const percentage = totalVotes > 0 ? Math.round((optionVotes / totalVotes) * 100) : 0
+                    const hasVoted = poll?.voters?.includes(user?.id || '')
+                    const isMyVote = pollVotes[post.id] === idx || (hasVoted && poll?.voters?.includes(user?.id || ''))
+                    
+                    return (
+                      <button
+                        key={idx}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          if (!hasVoted) {
+                            votePoll(post.id, idx)
+                          }
+                        }}
+                        disabled={hasVoted || votingPoll === post.id}
+                        className={`w-full text-left relative overflow-hidden rounded-lg border transition-all ${
+                          hasVoted 
+                            ? 'border-gray-200 cursor-default' 
+                            : 'border-blue-200 hover:border-blue-400 cursor-pointer'
+                        }`}
+                      >
+                        {/* Progress bar */}
+                        {hasVoted && (
+                          <div 
+                            className={`absolute inset-y-0 left-0 ${isMyVote ? 'bg-blue-100' : 'bg-gray-100'} transition-all`}
+                            style={{ width: `${percentage}%` }}
+                          />
+                        )}
+                        <div className="relative px-4 py-2.5 flex items-center justify-between">
+                          <span className={`text-sm ${isMyVote ? 'font-medium text-blue-700' : 'text-gray-700'}`}>
+                            {option}
+                            {isMyVote && <Check className="w-3.5 h-3.5 inline ml-1.5" />}
+                          </span>
+                          {hasVoted && (
+                            <span className="text-xs text-gray-500">{percentage}%</span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="mt-2 text-xs text-gray-500 flex items-center justify-between">
+                  <span>
+                    {Object.values(displayPost.post_metadata.poll.votes || {}).reduce((sum: number, v) => sum + (v as number), 0)} votes
+                  </span>
+                  <span>
+                    {displayPost.post_metadata.poll.duration}h poll
+                  </span>
+                </div>
               </div>
             )}
 
@@ -15246,37 +15776,145 @@ function CommunityComponent({
               </button>
             )}
 
-            {/* Attachments */}
+            {/* Attachments with Grid, Collapse & Lightbox */}
             {displayPost?.post_metadata?.attachments && displayPost.post_metadata.attachments.length > 0 && (
               <div className="mb-2">
-                <div className="flex flex-wrap gap-2">
-                  {displayPost.post_metadata.attachments.map((attachment: string, idx: number) => {
-                    const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(attachment)
-                    return isImage ? (
+                {(() => {
+                  const attachments = displayPost.post_metadata.attachments
+                  const images = attachments.filter((a: string) => /\.(jpg|jpeg|png|gif|webp)$/i.test(a))
+                  const files = attachments.filter((a: string) => !/\.(jpg|jpeg|png|gif|webp)$/i.test(a))
+                  const postId = displayPost.id || post.id
+                  const showAll = expandedImages[postId]
+                  const displayImages = showAll ? images : images.slice(0, 3)
+                  const hiddenCount = images.length - 3
+                  
+                  return (
+                    <>
+                      {/* Image Grid */}
+                      {images.length > 0 && (
+                        <div className={`grid gap-1 rounded-xl overflow-hidden ${
+                          images.length === 1 ? 'grid-cols-1' :
+                          images.length === 2 ? 'grid-cols-2' : 'grid-cols-2'
+                        }`}>
+                          {displayImages.map((attachment: string, idx: number) => (
+                            <div
+                              key={idx}
+                              className={`relative cursor-pointer overflow-hidden group bg-gray-100 flex items-center justify-center ${
+                                images.length === 1 ? 'max-h-96' :
+                                images.length === 2 ? 'max-h-64' :
+                                idx === 0 ? 'row-span-2 max-h-80' : 'max-h-40'
+                              }`}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setLightboxImage(attachment)
+                              }}
+                            >
+                              <img
+                                src={attachment}
+                                alt={`Attachment ${idx + 1}`}
+                                className="max-w-full max-h-full object-contain group-hover:scale-105 transition-transform duration-300"
+                              />
+                              {/* Show +N overlay on last visible image if there are more */}
+                              {idx === 2 && !showAll && hiddenCount > 0 && (
+                                <div 
+                                  className="absolute inset-0 bg-black/60 flex items-center justify-center"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setExpandedImages((prev: Record<string, boolean>) => ({ ...prev, [postId]: true }))
+                                  }}
+                                >
+                                  <span className="text-white text-2xl font-bold">+{hiddenCount}</span>
+                                </div>
+                              )}
+                              {/* Fullscreen icon on hover */}
+                              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <div className="w-8 h-8 bg-black/50 rounded-full flex items-center justify-center">
+                                  <Maximize2 className="w-4 h-4 text-white" />
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {/* Collapse button if showing all images */}
+                      {showAll && images.length > 3 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setExpandedImages((prev: Record<string, boolean>) => ({ ...prev, [postId]: false }))
+                          }}
+                          className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Show less
+                        </button>
+                      )}
+                      
+                      {/* File attachments */}
+                      {files.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {files.map((attachment: string, idx: number) => (
+                            <a
+                              key={idx}
+                              href={attachment}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+                            >
+                              <FileText className="w-4 h-4" />
+                              <span className="text-sm">Attachment {idx + 1}</span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )
+                })()}
+              </div>
+            )}
+
+            {/* Album Display */}
+            {displayPost?.post_metadata?.album && displayPost.post_metadata.album.length > 0 && (
+              <div className="mb-2">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bookmark className="w-4 h-4 text-pink-600" />
+                  <span className="text-sm font-medium text-gray-700">Album ({displayPost.post_metadata.album.length} photos)</span>
+                </div>
+                <div className={`grid gap-1 rounded-xl overflow-hidden ${
+                  displayPost.post_metadata.album.length === 1 ? 'grid-cols-1' :
+                  displayPost.post_metadata.album.length === 2 ? 'grid-cols-2' :
+                  displayPost.post_metadata.album.length === 3 ? 'grid-cols-3' : 'grid-cols-4'
+                }`}>
+                  {displayPost.post_metadata.album.slice(0, 8).map((img: string, idx: number) => (
+                    <div
+                      key={idx}
+                      className="relative cursor-pointer overflow-hidden group aspect-square"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setAlbumModalImages(displayPost.post_metadata?.album || [])
+                        setAlbumModalIndex(idx)
+                        setShowAlbumModal(true)
+                      }}
+                    >
                       <img
-                        key={idx}
-                        src={attachment}
-                        alt={`Attachment ${idx + 1}`}
-                        className="max-w-full max-h-64 rounded-lg object-cover cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          window.open(attachment, '_blank')
-                        }}
+                        src={img}
+                        alt={`Album ${idx + 1}`}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
-                    ) : (
-                      <a
-                        key={idx}
-                        href={attachment}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
-                      >
-                        <FileText className="w-4 h-4" />
-                        <span>Attachment {idx + 1}</span>
-                      </a>
-                    )
-                  })}
+                      {idx === 7 && (displayPost.post_metadata?.album?.length || 0) > 8 && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                          <span className="text-white text-2xl font-bold">+{(displayPost.post_metadata?.album?.length || 0) - 8}</span>
+                        </div>
+                      )}
+                      {/* Fullscreen icon on hover */}
+                      <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="w-8 h-8 bg-black/50 rounded-full flex items-center justify-center">
+                          <Maximize2 className="w-4 h-4 text-white" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -15596,6 +16234,34 @@ function CommunityComponent({
                           }}
                           style={{ maxHeight: '80px', minHeight: '20px', height: '20px' }}
                         />
+                        {/* Emoji Picker for Comment Input */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setShowCommentInputEmoji(showCommentInputEmoji === post.id ? null : post.id)}
+                            className="flex items-center justify-center w-6 h-6 text-gray-400 hover:text-gray-600 transition-colors"
+                            title="Add emoji"
+                          >
+                            <Smile className="w-4 h-4" />
+                          </button>
+                          {showCommentInputEmoji === post.id && (
+                            <div className="absolute bottom-full right-0 mb-2 bg-white rounded-lg shadow-xl border border-gray-200 p-2 z-50">
+                              <div className="flex gap-1 flex-wrap max-w-[200px]">
+                                {['😀', '😂', '😍', '🥰', '😊', '👍', '👏', '🎉', '❤️', '🔥', '💯', '✨', '🙏', '💪', '🤔', '😢'].map(emoji => (
+                                  <button
+                                    key={emoji}
+                                    onClick={() => {
+                                      setNewComments(prev => ({ ...prev, [post.id]: (prev[post.id] || '') + emoji }));
+                                      setShowCommentInputEmoji(null);
+                                    }}
+                                    className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded text-lg transition-colors"
+                                  >
+                                    {emoji}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
                         <button
                           onClick={() => {
                             const postIdForComments = displayPost?.id || post.id;
@@ -15618,10 +16284,62 @@ function CommunityComponent({
                   if (!comments[postIdForComments] || comments[postIdForComments].length === 0) {
                     return null;
                   }
+                  
+                  // Sort comments based on selection
+                  const sortedComments = [...comments[postIdForComments]].sort((a, b) => {
+                    const sortType = commentSort[postIdForComments] || 'newest';
+                    if (sortType === 'oldest') {
+                      return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+                    } else if (sortType === 'popular') {
+                      const aLikes = commentReactions[a.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                      const bLikes = commentReactions[b.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                      return bLikes - aLikes;
+                    }
+                    // newest (default)
+                    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                  });
+                  
+                  // Helper to check if comment is new (within last 5 minutes)
+                  const isNewComment = (createdAt: string) => {
+                    const commentTime = new Date(createdAt).getTime();
+                    const now = Date.now();
+                    return now - commentTime < 5 * 60 * 1000; // 5 minutes
+                  };
+                  
                   return (
                   <div className="space-y-3">
-                    {comments[postIdForComments].map(comment => (
-                      <div key={comment.id} data-comment-id={comment.id} className="flex gap-2 items-start">
+                    {/* Comments Header with Count and Sort */}
+                    <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+                      <span className="text-sm font-medium text-gray-700">
+                        {comments[postIdForComments].length} {comments[postIdForComments].length === 1 ? 'Comment' : 'Comments'}
+                      </span>
+                      <select 
+                        value={commentSort[postIdForComments] || 'newest'}
+                        onChange={(e) => setCommentSort(prev => ({ 
+                          ...prev, 
+                          [postIdForComments]: e.target.value as 'newest' | 'oldest' | 'popular' 
+                        }))}
+                        className="text-xs border-none bg-transparent text-gray-500 cursor-pointer hover:text-gray-700 focus:outline-none focus:ring-0"
+                      >
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="popular">Most Liked</option>
+                      </select>
+                    </div>
+                    
+                    <AnimatePresence>
+                    {sortedComments.map((comment, index) => (
+                      <motion.div 
+                        key={comment.id} 
+                        data-comment-id={comment.id} 
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: 0.2, delay: index * 0.05 }}
+                        className={`flex gap-2 items-start transition-colors ${
+                          comment.user_id === user?.id ? 'bg-blue-50/60 -mx-2 px-2 py-1.5 rounded-xl' : ''
+                        }`}
+                      >
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -15637,22 +16355,29 @@ function CommunityComponent({
                             />
                           ) : (
                             <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                          {comment.user?.full_name?.charAt(0) || 'U'}
-                        </div>
+                              {comment.user?.full_name?.charAt(0) || 'U'}
+                            </div>
                           )}
                         </button>
                         <div className="flex-1">
                           <div className="bg-gray-50 rounded-lg px-3 py-2">
                             <div className="flex items-start justify-between">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  viewUserProfile(comment.user_id || getUserId(comment.user));
-                                }}
-                                className="font-semibold text-sm text-gray-900 hover:text-blue-600 transition-colors text-left"
-                              >
-                                {comment.user?.full_name || 'User'}
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    viewUserProfile(comment.user_id || getUserId(comment.user));
+                                  }}
+                                  className="font-semibold text-sm text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                >
+                                  {comment.user?.full_name || 'User'}
+                                </button>
+                                {isNewComment(comment.created_at) && (
+                                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] rounded-full font-medium animate-pulse">
+                                    New
+                                  </span>
+                                )}
+                              </div>
                               {isCommentOwner(comment) && (
                                 <div className="relative">
                                   <button
@@ -15842,6 +16567,18 @@ function CommunityComponent({
                           {/* Reply Input */}
                           {replyingTo[comment.id] && (
                             <div className="mt-1 ml-3">
+                              {/* Reply to indicator */}
+                              <div className="flex items-center gap-1.5 mb-1.5 text-xs text-blue-600">
+                                <Reply className="w-3 h-3" />
+                                <span>Replying to</span>
+                                <span className="font-medium">{comment.user?.full_name || 'User'}</span>
+                                <button 
+                                  onClick={() => setReplyingTo(prev => ({ ...prev, [comment.id]: false }))}
+                                  className="ml-1 text-gray-400 hover:text-gray-600"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
                               <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                                 <textarea
                                   value={replyContents[comment.id] || ''}
@@ -15851,7 +16588,7 @@ function CommunityComponent({
                                     e.target.style.height = 'auto';
                                     e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
                                   }}
-                                  placeholder="Write a reply..."
+                                  placeholder={`Reply to ${comment.user?.full_name || 'User'}...`}
                                   className="flex-1 resize-none border-none outline-none text-sm py-1"
                                   rows={1}
                                   onKeyDown={(e) => {
@@ -15889,8 +16626,27 @@ function CommunityComponent({
                               </button>
                               {expandedComments[comment.id] && (
                                 <div className="mt-2 space-y-2 border-l-2 border-gray-200 pl-2">
-                                  {comment.replies.map(reply => (
-                                    <div key={reply.id} data-comment-id={reply.id} className="flex gap-2 items-start">
+                                  {/* Show "show more" button if 5+ replies and not expanded */}
+                                  {comment.replies.length >= 5 && !showMoreReplies[comment.id] && (
+                                    <button
+                                      onClick={() => setShowMoreReplies(prev => ({ ...prev, [comment.id]: true }))}
+                                      className="text-xs text-blue-600 hover:text-blue-700 font-medium mb-2 flex items-center gap-1"
+                                    >
+                                      <ChevronDown className="w-3 h-3" />
+                                      Show {comment.replies.length - 1} earlier {comment.replies.length - 1 === 1 ? 'reply' : 'replies'}
+                                    </button>
+                                  )}
+                                  {(comment.replies.length >= 5 && !showMoreReplies[comment.id] 
+                                    ? [comment.replies[comment.replies.length - 1]] 
+                                    : comment.replies
+                                  ).map(reply => (
+                                    <div 
+                                      key={reply.id} 
+                                      data-comment-id={reply.id} 
+                                      className={`flex gap-2 items-start transition-colors ${
+                                        reply.user_id === user?.id ? 'bg-blue-50/60 -mx-1 px-1 py-1 rounded-lg' : ''
+                                      }`}
+                                    >
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
@@ -15913,15 +16669,22 @@ function CommunityComponent({
                                       <div className="flex-1">
                                         <div className="bg-gray-50 rounded-lg px-3 py-2">
                                           <div className="flex items-start justify-between">
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                viewUserProfile(reply.user_id || getUserId(reply.user));
-                                              }}
-                                              className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
-                                            >
-                                              {reply.user?.full_name || 'User'}
-                                            </button>
+                                            <div className="flex items-center gap-1.5">
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  viewUserProfile(reply.user_id || getUserId(reply.user));
+                                                }}
+                                                className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                              >
+                                                {reply.user?.full_name || 'User'}
+                                              </button>
+                                              {isNewComment(reply.created_at) && (
+                                                <span className="px-1 py-0.5 bg-green-100 text-green-700 text-[9px] rounded-full font-medium animate-pulse">
+                                                  New
+                                                </span>
+                                              )}
+                                            </div>
                                             {isCommentOwner(reply) && (
                                               <div className="relative">
                                                 <button
@@ -15985,7 +16748,10 @@ function CommunityComponent({
                                               </div>
                                             </div>
                                           ) : (
-                                          <p className="text-gray-700 text-xs mt-1">{reply.content}</p>
+                                          <p className="text-gray-700 text-xs mt-1">
+                                            <span className="text-blue-600 font-medium">@{comment.user?.full_name || 'User'}</span>{' '}
+                                            {reply.content}
+                                          </p>
                                           )}
                                         </div>
                                           <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
@@ -16108,6 +16874,18 @@ function CommunityComponent({
                                         {/* Reply to Reply Input */}
                                         {replyingTo[reply.id] && (
                                           <div className="mt-2">
+                                            {/* Reply to indicator */}
+                                            <div className="flex items-center gap-1.5 mb-1.5 text-xs text-blue-600">
+                                              <Reply className="w-3 h-3" />
+                                              <span>Replying to</span>
+                                              <span className="font-medium">{reply.user?.full_name || 'User'}</span>
+                                              <button 
+                                                onClick={() => setReplyingTo(prev => ({ ...prev, [reply.id]: false }))}
+                                                className="ml-1 text-gray-400 hover:text-gray-600"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </div>
                                             <div className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
                                             <textarea
                                               value={replyContents[reply.id] || ''}
@@ -16117,7 +16895,7 @@ function CommunityComponent({
                                                   e.target.style.height = 'auto';
                                                   e.target.style.height = `${Math.min(e.target.scrollHeight, 80)}px`;
                                                 }}
-                                              placeholder="Write a reply..."
+                                              placeholder={`Reply to ${reply.user?.full_name || 'User'}...`}
                                                 className="flex-1 resize-none border-none outline-none text-xs py-1"
                                                 rows={1}
                                                 onKeyDown={(e) => {
@@ -16156,7 +16934,13 @@ function CommunityComponent({
                                             {expandedReplies[reply.id] && (
                                               <div className="mt-3 space-y-3 border-l-2 border-gray-200 pl-3">
                                                 {reply.replies.map(nestedReply => (
-                                                  <div key={nestedReply.id} data-comment-id={nestedReply.id} className="flex gap-2 items-start">
+                                                  <div 
+                                                    key={nestedReply.id} 
+                                                    data-comment-id={nestedReply.id} 
+                                                    className={`flex gap-2 items-start transition-colors ${
+                                                      nestedReply.user_id === user?.id ? 'bg-blue-50/60 -mx-1 px-1 py-1 rounded-lg' : ''
+                                                    }`}
+                                                  >
                                                     <button
                                                       onClick={(e) => {
                                                         e.stopPropagation();
@@ -16179,15 +16963,22 @@ function CommunityComponent({
                                                     <div className="flex-1">
                                                       <div className="bg-gray-50 rounded-lg px-3 py-2">
                                                         <div className="flex items-start justify-between">
-                                                          <button
-                                                            onClick={(e) => {
-                                                              e.stopPropagation();
-                                                              viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
-                                                            }}
-                                                            className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
-                                                          >
-                                                            {nestedReply.user?.full_name || 'User'}
-                                                          </button>
+                                                          <div className="flex items-center gap-1.5">
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                viewUserProfile(nestedReply.user_id || getUserId(nestedReply.user));
+                                                              }}
+                                                              className="font-semibold text-xs text-gray-900 hover:text-blue-600 transition-colors text-left"
+                                                            >
+                                                              {nestedReply.user?.full_name || 'User'}
+                                                            </button>
+                                                            {isNewComment(nestedReply.created_at) && (
+                                                              <span className="px-1 py-0.5 bg-green-100 text-green-700 text-[9px] rounded-full font-medium animate-pulse">
+                                                                New
+                                                              </span>
+                                                            )}
+                                                          </div>
                                                           {isCommentOwner(nestedReply) && (
                                                             <div className="relative">
                                                               <button
@@ -16251,7 +17042,10 @@ function CommunityComponent({
                                                             </div>
                                                           </div>
                                                         ) : (
-                                                        <p className="text-gray-700 text-xs mt-1">{nestedReply.content}</p>
+                                                        <p className="text-gray-700 text-xs mt-1">
+                                                          <span className="text-blue-600 font-medium">@{reply.user?.full_name || 'User'}</span>{' '}
+                                                          {nestedReply.content}
+                                                        </p>
                                                         )}
                                                       </div>
                                                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
@@ -16379,8 +17173,9 @@ function CommunityComponent({
                             </div>
                           )}
                         </div>
-                      </div>
+                    </motion.div>
                     ))}
+                    </AnimatePresence>
                   </div>
                   );
                 })()}
@@ -16453,7 +17248,7 @@ function CommunityComponent({
       <div className="sticky top-6 space-y-6">
         
         {/* Suggested Connections */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 overflow-hidden hover:shadow-xl transition-all duration-300">
           <div className="px-4 py-3 border-b border-gray-200">
             <h3 className="font-semibold text-gray-900">People You May Know</h3>
           </div>
@@ -16508,7 +17303,7 @@ function CommunityComponent({
         </div>
 
         {/* Professional Tip */}
-        <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg shadow-sm border border-blue-200 p-4">
+        <div className="bg-gradient-to-br from-blue-50/80 to-indigo-50/80 backdrop-blur-sm rounded-xl shadow-lg border border-blue-200/50 p-4 hover:shadow-xl transition-all duration-300">
           <div className="flex items-start gap-3">
             <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
               <Info className="w-4 h-4 text-white" />
@@ -16523,12 +17318,12 @@ function CommunityComponent({
         </div>
 
         {/* Upcoming Activities */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 overflow-hidden hover:shadow-xl transition-all duration-300">
           <UpcomingEvents currentUserId={user?.id} userProfile={userProfile} />
         </div>
 
         {/* Quick Stats */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+        <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white/50 p-4 hover:shadow-xl transition-all duration-300">
           <h3 className="font-semibold text-gray-900 mb-3 text-sm">Network Activity</h3>
           <div className="space-y-3">
             <div className="flex items-center justify-between text-sm">
@@ -16548,7 +17343,7 @@ function CommunityComponent({
 
         {/* Footer Links */}
         <div className="text-xs text-gray-500 text-center space-y-1">
-          <p>© 2025 TherapySocial</p>
+          <p>© 2025 TherapistSocial</p>
           <div className="flex justify-center gap-3">
             <a href="#" className="hover:text-blue-600">About</a>
             <span>•</span>
@@ -16583,20 +17378,42 @@ function CommunityComponent({
     </div>
 
     {/* LinkedIn-Style New Post Modal */}
+    <AnimatePresence>
     {showNewPostModal && (
-      <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
         onClick={(e) => {
           if (e.target === e.currentTarget) {
             setShowNewPostModal(false)
             setShowAdvancedOptions(false)
+            setShowPollCreator(false)
+            setShowMoodPicker(false)
+            setShowLocationPicker(false)
+            setShowSchedulePicker(false)
           }
         }}
       >
-        <div 
-          className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.95, y: 20 }}
+          transition={{ type: "spring", duration: 0.3 }}
+          className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl"
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            // Ctrl+Enter to submit
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+              e.preventDefault()
+              const textContent = newPost.content.replace(/<[^>]*>/g, '').trim()
+              if (textContent || newPost.metadata.quoted_post_id) {
+                createPost()
+              }
+            }
+          }}
         >
           {/* Header with User Info */}
           <div className="p-4 border-b border-gray-200">
@@ -16617,64 +17434,128 @@ function CommunityComponent({
                       <ChevronDown className={`w-3 h-3 transition-transform ${showVisibilityDropdown ? 'rotate-180' : ''}`} />
                     </button>
                     {showVisibilityDropdown && (
-                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-300 rounded-lg shadow-lg z-10 min-w-[180px]">
+                      <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl z-10 min-w-[220px] p-2">
                         <button
                           onClick={() => {
                             setNewPost({ ...newPost, metadata: { ...newPost.metadata, visibility: 'public', is_public: true } })
                             setShowVisibilityDropdown(false)
                           }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
-                            newPost.metadata.visibility === 'public' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${
+                            newPost.metadata.visibility === 'public' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          Public
+                          <Globe className="w-4 h-4" />
+                          <div>
+                            <p className="text-sm font-medium">Public</p>
+                            <p className="text-xs text-gray-500">Anyone can see</p>
+                          </div>
+                          {newPost.metadata.visibility === 'public' && <Check className="w-4 h-4 ml-auto" />}
                         </button>
                         <button
                           onClick={() => {
                             setNewPost({ ...newPost, metadata: { ...newPost.metadata, visibility: 'connections', is_public: false } })
                             setShowVisibilityDropdown(false)
                           }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
-                            newPost.metadata.visibility === 'connections' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${
+                            newPost.metadata.visibility === 'connections' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          Connections only
+                          <Users className="w-4 h-4" />
+                          <div>
+                            <p className="text-sm font-medium">Connections</p>
+                            <p className="text-xs text-gray-500">Only your connections</p>
+                          </div>
+                          {newPost.metadata.visibility === 'connections' && <Check className="w-4 h-4 ml-auto" />}
                         </button>
                         <button
                           onClick={() => {
                             setNewPost({ ...newPost, metadata: { ...newPost.metadata, visibility: 'only_me', is_public: false } })
                             setShowVisibilityDropdown(false)
                           }}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-gray-50 ${
-                            newPost.metadata.visibility === 'only_me' ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                          className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${
+                            newPost.metadata.visibility === 'only_me' ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
                           }`}
                         >
-                          Only me
-                  </button>
+                          <Lock className="w-4 h-4" />
+                          <div>
+                            <p className="text-sm font-medium">Only me</p>
+                            <p className="text-xs text-gray-500">Private post</p>
+                          </div>
+                          {newPost.metadata.visibility === 'only_me' && <Check className="w-4 h-4 ml-auto" />}
+                        </button>
                       </div>
                     )}
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={() => {
-                  setShowAdvancedOptions(false)
-                  setShowNewPostModal(false)
-                  setQuotePostData(null)
-                  setNewPost(prev => ({
-                    ...prev,
-                    metadata: { ...prev.metadata, quoted_post_id: undefined }
-                  }))
-                }} 
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={loading}
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-2">
+                {/* Draft Status Indicator */}
+                {(draftSaving || lastDraftSave) && (
+                  <span className="text-xs text-gray-400 flex items-center gap-1">
+                    {draftSaving ? (
+                      <>
+                        <div className="w-2 h-2 bg-yellow-400 rounded-full animate-pulse" />
+                        Saving...
+                      </>
+                    ) : lastDraftSave ? (
+                      <>
+                        <div className="w-2 h-2 bg-green-400 rounded-full" />
+                        Draft saved
+                      </>
+                    ) : null}
+                  </span>
+                )}
+                <button 
+                  onClick={() => {
+                    setShowAdvancedOptions(false)
+                    setShowNewPostModal(false)
+                    setQuotePostData(null)
+                    setAlbumImages([])
+                    setNewPost(prev => ({
+                      ...prev,
+                      metadata: { ...prev.metadata, quoted_post_id: undefined }
+                    }))
+                  }} 
+                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={loading}
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </div>
 
           <div className="p-4 space-y-3">
+            {/* Draft Recovery Notice */}
+            {hasDraft && !newPost.content.replace(/<[^>]*>/g, '').trim() && albumImages.length === 0 && (
+              <div className="flex items-center justify-between px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm text-amber-700">You have a saved draft</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      loadDraft()
+                      setHasDraft(false)
+                    }}
+                    className="px-3 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 rounded-lg transition-colors"
+                  >
+                    Load Draft
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearDraft()
+                      setHasDraft(false)
+                    }}
+                    className="px-3 py-1 text-xs font-medium text-gray-500 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Discard
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Quote Post Preview */}
             {quotePostData && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-3">
@@ -16745,6 +17626,453 @@ function CommunityComponent({
                 // Handle image insertion if needed
               }}
             />
+
+            {/* Character Counter */}
+            <div className="flex items-center justify-between text-xs">
+              <span className={`${newPost.content.replace(/<[^>]*>/g, '').length > CHARACTER_LIMIT ? 'text-red-500' : 'text-gray-400'}`}>
+                {newPost.content.replace(/<[^>]*>/g, '').length} / {CHARACTER_LIMIT}
+              </span>
+              <span className="text-gray-400">
+                Press <kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Ctrl</kbd>+<kbd className="px-1.5 py-0.5 bg-gray-100 rounded text-xs">Enter</kbd> to post
+              </span>
+            </div>
+
+            {/* Mood Display */}
+            {newPost.metadata.mood && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 rounded-lg">
+                <span className="text-lg">{MOOD_OPTIONS.find(m => m.label === newPost.metadata.mood)?.emoji || '😊'}</span>
+                <span className="text-sm text-blue-700">Feeling {newPost.metadata.mood}</span>
+                <button
+                  onClick={() => setNewPost({ ...newPost, metadata: { ...newPost.metadata, mood: '' } })}
+                  className="ml-auto text-blue-400 hover:text-blue-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Location Display */}
+            {newPost.metadata.location && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-green-50 rounded-lg">
+                <MapPin className="w-4 h-4 text-green-600" />
+                <span className="text-sm text-green-700">{newPost.metadata.location}</span>
+                <button
+                  onClick={() => setNewPost({ ...newPost, metadata: { ...newPost.metadata, location: '' } })}
+                  className="ml-auto text-green-400 hover:text-green-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Schedule Display */}
+            {newPost.metadata.scheduled_at && (
+              <div className="flex items-center gap-2 px-3 py-2 bg-purple-50 rounded-lg">
+                <Clock className="w-4 h-4 text-purple-600" />
+                <span className="text-sm text-purple-700">
+                  Scheduled for {new Date(newPost.metadata.scheduled_at).toLocaleString()}
+                </span>
+                <button
+                  onClick={() => setNewPost({ ...newPost, metadata: { ...newPost.metadata, scheduled_at: null } })}
+                  className="ml-auto text-purple-400 hover:text-purple-600"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+
+            {/* Poll Creator */}
+            {showPollCreator && (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                    <BarChart2 className="w-4 h-4 text-blue-600" />
+                    Create Poll
+                  </h4>
+                  <button onClick={() => setShowPollCreator(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {pollOptions.map((option, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500 w-4">{idx + 1}.</span>
+                      <input
+                        type="text"
+                        value={option}
+                        onChange={(e) => {
+                          const newOptions = [...pollOptions]
+                          newOptions[idx] = e.target.value
+                          setPollOptions(newOptions)
+                        }}
+                        placeholder={`Option ${idx + 1}`}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      {pollOptions.length > 2 && (
+                        <button
+                          onClick={() => setPollOptions(pollOptions.filter((_, i) => i !== idx))}
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {pollOptions.length < 4 && (
+                    <button
+                      onClick={() => setPollOptions([...pollOptions, ''])}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      + Add option
+                    </button>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Duration:</span>
+                    <select
+                      value={pollDuration}
+                      onChange={(e) => setPollDuration(Number(e.target.value))}
+                      className="text-sm border border-gray-300 rounded-lg px-2 py-1"
+                    >
+                      <option value={24}>1 day</option>
+                      <option value={72}>3 days</option>
+                      <option value={168}>1 week</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Position:</span>
+                    <select
+                      value={pollPosition}
+                      onChange={(e) => setPollPosition(e.target.value as 'before' | 'after')}
+                      className="text-sm border border-gray-300 rounded-lg px-2 py-1"
+                    >
+                      <option value="before">Before content</option>
+                      <option value="after">After content</option>
+                    </select>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    const validOptions = pollOptions.filter(o => o.trim())
+                    if (validOptions.length >= 2) {
+                      setNewPost({
+                        ...newPost,
+                        metadata: {
+                          ...newPost.metadata,
+                          poll: { question: '', options: validOptions, duration: pollDuration, position: pollPosition }
+                        }
+                      })
+                      setShowPollCreator(false)
+                      toast.success('Poll added to post')
+                    } else {
+                      toast.error('Add at least 2 options')
+                    }
+                  }}
+                  className="mt-3 w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700"
+                >
+                  Add Poll
+                </button>
+              </div>
+            )}
+
+            {/* Mood Picker */}
+            {showMoodPicker && (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900">How are you feeling?</h4>
+                  <button onClick={() => setShowMoodPicker(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-4 gap-2">
+                  {MOOD_OPTIONS.map((mood) => (
+                    <button
+                      key={mood.label}
+                      onClick={() => {
+                        setNewPost({ ...newPost, metadata: { ...newPost.metadata, mood: mood.label } })
+                        setShowMoodPicker(false)
+                      }}
+                      className={`p-3 rounded-xl border transition-all hover:scale-105 ${
+                        newPost.metadata.mood === mood.label 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <span className="text-2xl block mb-1">{mood.emoji}</span>
+                      <span className="text-xs text-gray-600">{mood.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Location Picker */}
+            {showLocationPicker && (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                    <MapPin className="w-4 h-4 text-green-600" />
+                    Add Location
+                  </h4>
+                  <button onClick={() => setShowLocationPicker(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={newPost.metadata.location || ''}
+                  onChange={(e) => setNewPost({ ...newPost, metadata: { ...newPost.metadata, location: e.target.value } })}
+                  placeholder="Enter location..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                <button
+                  onClick={() => setShowLocationPicker(false)}
+                  className="mt-3 w-full py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                >
+                  Add Location
+                </button>
+              </div>
+            )}
+
+            {/* Schedule Picker */}
+            {showSchedulePicker && (
+              <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium text-gray-900 flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-purple-600" />
+                    Schedule Post
+                  </h4>
+                  <button onClick={() => setShowSchedulePicker(false)} className="text-gray-400 hover:text-gray-600">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Date</label>
+                    <input
+                      type="date"
+                      value={scheduleDate}
+                      onChange={(e) => setScheduleDate(e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">Time</label>
+                    <input
+                      type="time"
+                      value={scheduleTime}
+                      onChange={(e) => setScheduleTime(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    if (scheduleDate && scheduleTime) {
+                      const scheduledAt = new Date(`${scheduleDate}T${scheduleTime}`).toISOString()
+                      setNewPost({ ...newPost, metadata: { ...newPost.metadata, scheduled_at: scheduledAt } })
+                      setShowSchedulePicker(false)
+                      toast.success('Post scheduled')
+                    } else {
+                      toast.error('Select date and time')
+                    }
+                  }}
+                  className="mt-3 w-full py-2 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                >
+                  Schedule
+                </button>
+              </div>
+            )}
+
+            {/* Quick Action Buttons */}
+            <div className="flex items-center gap-1 py-2 border-t border-b border-gray-100">
+              <button
+                onClick={() => {
+                  setShowPollCreator(!showPollCreator)
+                  setShowMoodPicker(false)
+                  setShowLocationPicker(false)
+                  setShowSchedulePicker(false)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  showPollCreator ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Create Poll"
+              >
+                <BarChart2 className="w-4 h-4" />
+                <span className="hidden sm:inline">Poll</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowMoodPicker(!showMoodPicker)
+                  setShowPollCreator(false)
+                  setShowLocationPicker(false)
+                  setShowSchedulePicker(false)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  showMoodPicker ? 'bg-yellow-100 text-yellow-700' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Add Mood"
+              >
+                <Smile className="w-4 h-4" />
+                <span className="hidden sm:inline">Mood</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowLocationPicker(!showLocationPicker)
+                  setShowPollCreator(false)
+                  setShowMoodPicker(false)
+                  setShowSchedulePicker(false)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  showLocationPicker ? 'bg-green-100 text-green-700' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Add Location"
+              >
+                <MapPin className="w-4 h-4" />
+                <span className="hidden sm:inline">Location</span>
+              </button>
+              <button
+                onClick={() => {
+                  setShowSchedulePicker(!showSchedulePicker)
+                  setShowPollCreator(false)
+                  setShowMoodPicker(false)
+                  setShowLocationPicker(false)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                  showSchedulePicker ? 'bg-purple-100 text-purple-700' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Schedule Post"
+              >
+                <Clock className="w-4 h-4" />
+                <span className="hidden sm:inline">Schedule</span>
+              </button>
+              {/* Album Upload Button */}
+              <label
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
+                  albumImages.length > 0 ? 'bg-pink-100 text-pink-700' : 'text-gray-600 hover:bg-gray-100'
+                }`}
+                title="Add Album"
+              >
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || [])
+                    if (files.length === 0) return
+                    
+                    // Upload images to Supabase storage
+                    const uploadedUrls: string[] = []
+                    for (const file of files) {
+                      try {
+                        const fileExt = file.name.split('.').pop()
+                        const fileName = `${user?.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+                        
+                        const { error: uploadError } = await supabase.storage
+                          .from('post-attachments')
+                          .upload(`album/${fileName}`, file, {
+                            cacheControl: '3600',
+                            upsert: false
+                          })
+                        
+                        if (uploadError) {
+                          console.error('Upload error:', uploadError)
+                          toast.error(`Failed to upload: ${file.name}`)
+                          continue
+                        }
+                        
+                        const { data: urlData } = supabase.storage
+                          .from('post-attachments')
+                          .getPublicUrl(`album/${fileName}`)
+                        
+                        if (urlData?.publicUrl) {
+                          uploadedUrls.push(urlData.publicUrl)
+                        }
+                      } catch (err) {
+                        console.error('Error uploading:', err)
+                      }
+                    }
+                    
+                    if (uploadedUrls.length > 0) {
+                      setAlbumImages(prev => [...prev, ...uploadedUrls])
+                      toast.success(`${uploadedUrls.length} image(s) added to album`)
+                    }
+                    e.target.value = ''
+                  }}
+                />
+                <Bookmark className="w-4 h-4" />
+                <span className="hidden sm:inline">Album</span>
+                {albumImages.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-pink-200 text-pink-800 text-xs rounded-full">{albumImages.length}</span>
+                )}
+              </label>
+            </div>
+
+            {/* Album Preview */}
+            {albumImages.length > 0 && (
+              <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                    <Bookmark className="w-4 h-4 text-pink-600" />
+                    Album ({albumImages.length} images)
+                  </h4>
+                  <button
+                    onClick={() => setAlbumImages([])}
+                    className="text-xs text-red-500 hover:text-red-600"
+                  >
+                    Clear all
+                  </button>
+                </div>
+                <div className={`grid gap-1 rounded-lg overflow-hidden ${
+                  albumImages.length === 1 ? 'grid-cols-1' :
+                  albumImages.length === 2 ? 'grid-cols-2' :
+                  albumImages.length === 3 ? 'grid-cols-3' : 'grid-cols-4'
+                }`}>
+                  {albumImages.slice(0, 8).map((img, idx) => (
+                    <div key={idx} className="relative group aspect-square">
+                      <img
+                        src={img}
+                        alt={`Album ${idx + 1}`}
+                        className="w-full h-full object-cover rounded"
+                      />
+                      <button
+                        onClick={() => setAlbumImages(prev => prev.filter((_, i) => i !== idx))}
+                        className="absolute top-1 right-1 w-5 h-5 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-3 h-3 text-white" />
+                      </button>
+                      {idx === 7 && albumImages.length > 8 && (
+                        <div className="absolute inset-0 bg-black/60 flex items-center justify-center rounded">
+                          <span className="text-white font-bold">+{albumImages.length - 8}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Hashtag Suggestions */}
+            <div className="flex flex-wrap gap-1.5">
+              {HASHTAG_SUGGESTIONS.slice(0, 6).map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => {
+                    const currentContent = newPost.content
+                    setNewPost({ 
+                      ...newPost, 
+                      content: currentContent + (currentContent.endsWith(' ') || currentContent === '' ? '' : ' ') + tag + ' '
+                    })
+                  }}
+                  className="px-2 py-1 text-xs bg-gray-100 hover:bg-blue-100 text-gray-600 hover:text-blue-600 rounded-full transition-colors"
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
 
             {/* Advanced Options Toggle */}
             <button
@@ -17121,7 +18449,7 @@ function CommunityComponent({
             <div className="flex gap-2">
               <button
                 onClick={createPost}
-                disabled={loading || !newPost.content.replace(/<[^>]*>/g, '').trim()}
+                disabled={loading || !newPost.content.replace(/<[^>]*>/g, '').trim() || newPost.content.replace(/<[^>]*>/g, '').length > CHARACTER_LIMIT}
                 className="px-6 py-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 text-sm font-semibold"
               >
                 {loading ? (
@@ -17129,15 +18457,184 @@ function CommunityComponent({
                     <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
                     Posting...
                   </>
+                ) : newPost.metadata.scheduled_at ? (
+                  <>
+                    <Clock className="w-4 h-4" />
+                    Schedule
+                  </>
                 ) : (
                   'Post'
                 )}
               </button>
             </div>
           </div>
-        </div>
-      </div>
+
+          {/* Success Overlay */}
+          <AnimatePresence>
+            {postSuccess && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="absolute inset-0 bg-white/95 flex flex-col items-center justify-center rounded-2xl"
+              >
+                <motion.div
+                  initial={{ scale: 0 }}
+                  animate={{ scale: 1 }}
+                  transition={{ type: "spring", duration: 0.5 }}
+                  className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4"
+                >
+                  <Check className="w-10 h-10 text-green-600" />
+                </motion.div>
+                <motion.p
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="text-lg font-semibold text-gray-900"
+                >
+                  {newPost.metadata.scheduled_at ? 'Post Scheduled!' : 'Post Created!'}
+                </motion.p>
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.3 }}
+                  className="text-sm text-gray-500"
+                >
+                  🎉 Your post is now live
+                </motion.p>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      </motion.div>
     )}
+    </AnimatePresence>
+
+    {/* Lightbox Modal for Images */}
+    <AnimatePresence>
+      {lightboxImage && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/95 flex items-center justify-center z-[100] p-4"
+          onClick={() => setLightboxImage(null)}
+        >
+          <button
+            onClick={() => setLightboxImage(null)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+          >
+            <X className="w-6 h-6" />
+          </button>
+          <motion.img
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.9, opacity: 0 }}
+            src={lightboxImage}
+            alt="Full size"
+            className="max-w-full max-h-[90vh] object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <a
+            href={lightboxImage}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="absolute bottom-4 right-4 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center gap-2 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Open Original
+          </a>
+        </motion.div>
+      )}
+    </AnimatePresence>
+
+    {/* Album Modal */}
+    <AnimatePresence>
+      {showAlbumModal && albumModalImages.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 bg-black/95 flex flex-col z-[100]"
+          onClick={() => setShowAlbumModal(false)}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 text-white">
+            <span className="text-sm">{albumModalIndex + 1} / {albumModalImages.length}</span>
+            <button
+              onClick={() => setShowAlbumModal(false)}
+              className="w-10 h-10 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center transition-colors"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Main Image */}
+          <div className="flex-1 flex items-center justify-center p-4 relative" onClick={(e) => e.stopPropagation()}>
+            {/* Previous Button */}
+            {albumModalIndex > 0 && (
+              <button
+                onClick={() => setAlbumModalIndex(prev => prev - 1)}
+                className="absolute left-4 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+            )}
+            
+            <motion.img
+              key={albumModalIndex}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              src={albumModalImages[albumModalIndex]}
+              alt={`Album ${albumModalIndex + 1}`}
+              className="max-w-full max-h-[70vh] object-contain rounded-lg"
+            />
+            
+            {/* Next Button */}
+            {albumModalIndex < albumModalImages.length - 1 && (
+              <button
+                onClick={() => setAlbumModalIndex(prev => prev + 1)}
+                className="absolute right-4 w-12 h-12 bg-white/10 hover:bg-white/20 rounded-full flex items-center justify-center text-white transition-colors rotate-180"
+              >
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+            )}
+          </div>
+
+          {/* Thumbnail Strip */}
+          <div className="p-4 overflow-x-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex gap-2 justify-center">
+              {albumModalImages.map((img, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => setAlbumModalIndex(idx)}
+                  className={`w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 transition-all ${
+                    idx === albumModalIndex ? 'ring-2 ring-white scale-110' : 'opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Download Button */}
+          <div className="p-4 flex justify-center">
+            <a
+              href={albumModalImages[albumModalIndex]}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg flex items-center gap-2 transition-colors"
+            >
+              <Download className="w-4 h-4" />
+              Open Original
+            </a>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
 
     {/* Edit Post Modal */}
     {editForm.id && (
@@ -18935,7 +20432,7 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
     // Footer
     content += `
       <footer class="cv-footer">
-        <p>Generated by TherapySocial • ${new Date().toLocaleDateString('en-GB')}</p>
+        <p>Generated by TherapistSocial • ${new Date().toLocaleDateString('en-GB')}</p>
       </footer>
     `
 
