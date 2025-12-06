@@ -12495,11 +12495,15 @@ export function CommunityComponent({
             };
           }
         });
-        // Update commentLikes for backward compatibility (👍 is treated as like)
-        setCommentLikes(prev => ({ ...prev, [commentId]: (prev[commentId] || 0) + 1 }));
-
+        // If user has an existing reaction (different from like), remove it first from database
         if (currentReaction && currentReaction !== 'like' && currentReaction !== likeEmoji) {
-          // Remove old emoji reaction
+          await supabase
+            .from('comment_reactions')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
+          
+          // Update local state to remove the old reaction
           setCommentReactions(prev => {
             const current = prev[commentId] || [];
             return {
@@ -12510,15 +12514,6 @@ export function CommunityComponent({
             };
           });
         }
-
-        setUserReactions(prev => ({ ...prev, [commentId]: likeEmoji }));
-
-        // Remove old reaction if exists
-        await supabase
-          .from('comment_reactions')
-          .delete()
-          .eq('comment_id', commentId)
-          .eq('user_id', user.id);
 
         // Add 👍 reaction
         const { error } = await supabase
@@ -12623,6 +12618,26 @@ export function CommunityComponent({
           .eq('comment_id', commentId)
           .eq('user_id', user.id);
       } else {
+        // If user has an existing reaction (different emoji), remove it first from database
+        if (currentReaction && currentReaction !== emoji) {
+          await supabase
+            .from('comment_reactions')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
+          
+          // Update local state to remove the old reaction
+          setCommentReactions(prev => {
+            const current = prev[commentId] || [];
+            return {
+              ...prev,
+              [commentId]: current.map(r => 
+                r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
+              ).filter(r => r.count > 0)
+            };
+          });
+        }
+        
         // Add emoji reaction
         setCommentReactions(prev => {
           const current = prev[commentId] || [];
@@ -12642,27 +12657,14 @@ export function CommunityComponent({
           }
         });
 
+        // If user has an existing reaction (different emoji), remove it first from database
         if (currentReaction && currentReaction !== emoji) {
-          // Remove old reaction
-          setCommentReactions(prev => {
-            const current = prev[commentId] || [];
-            return {
-              ...prev,
-              [commentId]: current.map(r => 
-                r.emoji === currentReaction ? { ...r, count: Math.max(0, r.count - 1) } : r
-              ).filter(r => r.count > 0)
-            };
-          });
+          await supabase
+            .from('comment_reactions')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', user.id);
         }
-
-        setUserReactions(prev => ({ ...prev, [commentId]: emoji }));
-
-        // Remove old reaction if exists
-        await supabase
-          .from('comment_reactions')
-          .delete()
-          .eq('comment_id', commentId)
-          .eq('user_id', user.id);
 
         // Add new reaction
         await supabase
@@ -12674,6 +12676,8 @@ export function CommunityComponent({
           }, {
             onConflict: 'user_id,comment_id,reaction_type'
           });
+        
+        setUserReactions(prev => ({ ...prev, [commentId]: emoji }));
 
         // Create notification for comment owner
         // Get comment from database to ensure we have the owner

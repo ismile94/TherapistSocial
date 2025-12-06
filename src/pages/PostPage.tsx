@@ -86,6 +86,14 @@ export default function PostPage() {
   const [showCommentEmojiPicker, setShowCommentEmojiPicker] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState<string>('')
+  
+  // Reactions Modal states
+  const [reactionsModalOpen, setReactionsModalOpen] = useState(false)
+  const [reactionsModalCommentId, setReactionsModalCommentId] = useState<string | null>(null)
+  const [reactionsModalData, setReactionsModalData] = useState<{ emoji: string; users: { user: Profile; reaction_type: string }[] }[]>([])
+  const [reactionsModalActiveTab, setReactionsModalActiveTab] = useState<string>('ALL')
+  const [loadingReactionsModal, setLoadingReactionsModal] = useState(false)
+  
   // Function to create a notification
   const createNotification = useCallback(async ({
     userId,
@@ -1161,64 +1169,64 @@ export default function PostPage() {
           }));
         }
       } else {
-        // Add reaction
-        const { data: reaction, error } = await supabase
+        // Check if user has any existing reaction on this comment
+        const existingReaction = commentReactions[commentId]?.find(
+          (r: any) => r.user_id === currentUserId
+        );
+        
+        // If user has an existing reaction (different emoji), remove it first
+        if (existingReaction) {
+          const { error: deleteError } = await supabase
+            .from('comment_reactions')
+            .delete()
+            .eq('comment_id', commentId)
+            .eq('user_id', currentUserId);
+          
+          if (deleteError) throw deleteError;
+          
+          // Update local state to remove the old reaction
+          setCommentReactions((prev: Record<string, Array<{ emoji: string; user_id: string; user: Profile }>>) => ({
+            ...prev,
+            [commentId]: (prev[commentId] || []).filter(
+              r => r.user_id !== currentUserId
+            )
+          }));
+          
+          // Update commentLikes if the old reaction was a like
+          if (existingReaction.emoji === '👍' || existingReaction.emoji === 'like') {
+            setCommentLikes((prev) => ({
+              ...prev,
+              [commentId]: Math.max(0, (prev[commentId] || 0) - 1)
+            }));
+          }
+        }
+        
+        // Add new reaction
+        const { error } = await supabase
           .from('comment_reactions')
-          .insert({
+          .upsert({
             comment_id: commentId,
             user_id: currentUserId,
             reaction_type: emoji
-          })
-          .select()
-          .single();
-        // Handle duplicate key error (409 Conflict)
-        if (error) {
-          // If it's a duplicate key error, the reaction already exists
-          // So we should remove it instead (toggle behavior)
-          // error.code can be string or number, so check both
-          const errorCode = String(error.code);
-          if (errorCode === '23505') {
-            // Reaction already exists, remove it
-            const { error: deleteError } = await supabase
-              .from('comment_reactions')
-              .delete()
-              .eq('comment_id', commentId)
-              .eq('user_id', currentUserId)
-              .eq('reaction_type', emoji);
-            if (deleteError) throw deleteError;
-            // Update local state to remove the reaction
-            setCommentReactions((prev: Record<string, Array<{ emoji: string; user_id: string; user: Profile }>>) => ({
-              ...prev,
-              [commentId]: (prev[commentId] || []).filter(
-                r => !(r.emoji === emoji && r.user_id === currentUserId)
-              )
-            }));
-            // Update commentLikes if it's a like reaction
-            if (emoji === '👍' || emoji === 'like') {
-              setCommentLikes((prev) => ({
-                ...prev,
-                [commentId]: Math.max(0, (prev[commentId] || 0) - 1)
-              }));
-            }
-            return; // Exit early since we've handled the toggle
-          }
-          // If it's a different error, throw it
-          throw error;
-        }
-        // If we get here, the insert was successful
-        console.log('Reaction inserted successfully:', reaction);
+          }, {
+            onConflict: 'user_id,comment_id,reaction_type'
+          });
+        
+        if (error) throw error;
+        
         // Update local state
         setCommentReactions((prev: Record<string, Array<{ emoji: string; user_id: string; user: Profile }>>) => ({
           ...prev,
           [commentId]: [
-            ...(prev[commentId] || []),
+            ...(prev[commentId] || []).filter(r => r.user_id !== currentUserId),
             {
-              ...reaction,
               emoji: emoji,
+              user_id: currentUserId,
               user: userProfile as Profile
             }
           ]
         }));
+        
         // Update commentLikes if it's a like reaction
         if (emoji === '👍' || emoji === 'like') {
           setCommentLikes((prev) => ({
@@ -1255,6 +1263,53 @@ export default function PostPage() {
       toast.error('Failed to update reaction');
     }
   }, [currentUserId, comments, commentReactions, userProfile, createNotification]);
+  
+  // Load comment reactions modal
+  const loadCommentReactionsModal = async (commentId: string) => {
+    setReactionsModalOpen(true)
+    setReactionsModalCommentId(commentId)
+    setLoadingReactionsModal(true)
+    setReactionsModalActiveTab('ALL')
+    
+    try {
+      const { data: reactions, error } = await supabase
+        .from('comment_reactions')
+        .select('user_id, reaction_type, profiles!comment_reactions_user_id_fkey(*)')
+        .eq('comment_id', commentId)
+      
+      if (error) throw error
+      
+      const reactionsByType: Record<string, { user: Profile; reaction_type: string }[]> = {}
+      
+      if (reactions) {
+        reactions.forEach((reaction: any) => {
+          const reactionType = reaction.reaction_type === 'like' ? '👍' : reaction.reaction_type
+          if (!reactionsByType[reactionType]) {
+            reactionsByType[reactionType] = []
+          }
+          if (reaction.profiles) {
+            reactionsByType[reactionType].push({
+              user: reaction.profiles as Profile,
+              reaction_type: reaction.reaction_type
+            })
+          }
+        })
+      }
+      
+      const reactionsArray = Object.entries(reactionsByType).map(([emoji, users]) => ({
+        emoji,
+        users
+      })).sort((a, b) => b.users.length - a.users.length)
+      
+      setReactionsModalData(reactionsArray)
+    } catch (err) {
+      console.error('Error loading comment reactions:', err)
+      setReactionsModalData([])
+    } finally {
+      setLoadingReactionsModal(false)
+    }
+  }
+  
   // Add missing state variables
   const [commentLikes, setCommentLikes] = useState<Record<string, number>>({});
   const [commentFavorites, setCommentFavorites] = useState<Record<string, boolean>>({});
@@ -2414,16 +2469,17 @@ export default function PostPage() {
                                       return <span className="text-base">👍</span>;
                                     })()}
                                     {(() => {
-                                      const currentReaction = userReactions[comment.id];
-                                      if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
-                                        const reactionCount = commentReactions[comment.id]?.filter(r => r.emoji === currentReaction).length || 0;
-                                        return reactionCount > 0 ? (
-                                          <span className="text-xs">{reactionCount}</span>
-                                        ) : null;
-                                      }
-                                      const likeCount = commentLikes[comment.id] || 0;
-                                      return likeCount > 0 ? (
-                                        <span className="text-xs">{likeCount}</span>
+                                      const totalReactions = commentReactions[comment.id]?.length || 0;
+                                      return totalReactions > 0 ? (
+                                        <span 
+                                          className="text-xs cursor-pointer hover:underline"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            loadCommentReactionsModal(comment.id);
+                                          }}
+                                        >
+                                          {totalReactions}
+                                        </span>
                                       ) : null;
                                     })()}
                                   </button>
@@ -2625,6 +2681,154 @@ export default function PostPage() {
               </button>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white text-sm">
                 {albumModalIndex + 1} / {albumModalImages.length}
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Reactions Modal */}
+        {reactionsModalOpen && reactionsModalCommentId && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={() => {
+            setReactionsModalOpen(false)
+            setReactionsModalCommentId(null)
+          }}>
+            <div className="bg-white rounded-xl w-full max-w-lg max-h-[70vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+              {/* Header */}
+              <div className="px-4 py-3 border-b flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Reactions</h2>
+                <button 
+                  onClick={() => {
+                    setReactionsModalOpen(false)
+                    setReactionsModalCommentId(null)
+                  }}
+                  className="text-gray-400 hover:text-gray-600 rounded-full p-1.5 hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Tabs */}
+              <div className="border-b px-4 flex items-center gap-0.5 overflow-x-auto">
+                <button
+                  onClick={() => setReactionsModalActiveTab('ALL')}
+                  className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap ${
+                    reactionsModalActiveTab === 'ALL'
+                      ? 'border-blue-600 text-blue-600'
+                      : 'border-transparent text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <span className="mr-1.5">All</span>
+                  <span className="text-gray-500 text-xs">
+                    {reactionsModalData.reduce((sum, r) => sum + r.users.length, 0)}
+                  </span>
+                </button>
+                {reactionsModalData.map((reaction) => {
+                  const reactionType = reaction.emoji === '👍' ? 'LIKE' : 
+                    reaction.emoji === '❤️' ? 'EMPATHY' :
+                    reaction.emoji === '💡' ? 'INTEREST' :
+                    reaction.emoji === '😂' ? 'HAHA' :
+                    reaction.emoji === '😮' ? 'WOW' :
+                    reaction.emoji === '😢' ? 'SAD' : 'OTHER';
+                  return (
+                    <button
+                      key={reaction.emoji}
+                      onClick={() => setReactionsModalActiveTab(reactionType)}
+                      className={`px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap flex items-center gap-1.5 ${
+                        reactionsModalActiveTab === reactionType
+                          ? 'border-blue-600 text-blue-600'
+                          : 'border-transparent text-gray-600 hover:text-gray-900'
+                      }`}
+                    >
+                      <span className="text-base">{reaction.emoji}</span>
+                      <span className="text-xs">{reaction.users.length}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto p-4">
+                {loadingReactionsModal ? (
+                  <div className="flex justify-center py-8">
+                    <div className="animate-spin h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full"></div>
+                  </div>
+                ) : (() => {
+                  let usersToShow: { user: Profile; reaction_type: string }[] = [];
+                  
+                  if (reactionsModalActiveTab === 'ALL') {
+                    // Combine all users
+                    usersToShow = reactionsModalData.flatMap(r => r.users);
+                  } else {
+                    // Filter by selected reaction type
+                    const selectedReaction = reactionsModalData.find(r => {
+                      const reactionType = r.emoji === '👍' ? 'LIKE' : 
+                        r.emoji === '❤️' ? 'EMPATHY' :
+                        r.emoji === '💡' ? 'INTEREST' :
+                        r.emoji === '😂' ? 'HAHA' :
+                        r.emoji === '😮' ? 'WOW' :
+                        r.emoji === '😢' ? 'SAD' : 'OTHER';
+                      return reactionType === reactionsModalActiveTab;
+                    });
+                    usersToShow = selectedReaction?.users || [];
+                  }
+
+                  if (usersToShow.length === 0) {
+                    return (
+                      <div className="text-center py-8">
+                        <p className="text-gray-500">No reactions found</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <ul className="space-y-1">
+                      {usersToShow.map((item, idx) => {
+                        const reactionData = reactionsModalData.find(r => 
+                          r.users.some(u => u.user.id === item.user.id && u.reaction_type === item.reaction_type)
+                        );
+                        const reactionEmoji = reactionData?.emoji || '👍';
+                        
+                        return (
+                          <li key={`${item.user.id}-${idx}`} className="py-2 border-b border-gray-100 last:border-0">
+                            <button
+                              onClick={() => {
+                                setReactionsModalOpen(false)
+                                setReactionsModalCommentId(null)
+                                navigate(`/profile/${item.user.id}`)
+                              }}
+                              className="flex items-center gap-2.5 w-full text-left hover:bg-gray-50 px-2 py-1.5 rounded-lg transition-colors"
+                            >
+                              <div className="relative">
+                                <Avatar 
+                                  src={item.user.avatar_url} 
+                                  name={item.user.full_name} 
+                                  className="w-10 h-10" 
+                                  useInlineSize={false} 
+                                />
+                                <span 
+                                  className="absolute -bottom-0.5 -right-0.5 text-base bg-white rounded-full p-0.5"
+                                  style={{ filter: 'drop-shadow(0 1px 1px rgba(0,0,0,0.1))' }}
+                                >
+                                  {reactionEmoji}
+                                </span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm text-gray-900 truncate">
+                                  {item.user.full_name}
+                                </div>
+                                {item.user.profession && (
+                                  <div className="text-xs text-gray-600 truncate">
+                                    {item.user.profession}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  );
+                })()}
               </div>
             </div>
           </div>
