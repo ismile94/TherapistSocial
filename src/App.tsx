@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from './lib/supabaseClient'
 import { ToastProvider } from './components/ToastProvider'
 import { useToast } from './components/useToast'
@@ -26,6 +27,12 @@ import { IoHome } from "react-icons/io5";
 import { useSession } from '@supabase/auth-helpers-react'
 import UpcomingEvents from './components/UpcomingEvents'
 import LandingPage from './components/LandingPage'
+import SettingsPage from './pages/SettingsPage'
+import NetworkPage from './pages/NetworkPage'
+import CVMakerPage from './pages/CVMakerPage'
+import NotificationsPage from './pages/NotificationsPage'
+import MessagesPage from './pages/MessagesPage'
+import PostPage from './pages/PostPage'
 import { 
     Users, MapPin, User, Search, ChevronDown, X, MessageSquare, 
     Plus, Edit2, Check, ArrowLeft, Mail, Phone, Globe, Calendar, 
@@ -414,11 +421,13 @@ console.log(calculateTotalExperience([
 
 function AccountDropdown({ 
   currentUser, 
+  userProfile,
   onProfileClick, 
   onSettingsClick,
   onSignOut,
 }: { 
   currentUser: any
+  userProfile: any
   onProfileClick: () => void
   onSettingsClick: () => void
   onSignOut: () => void
@@ -444,9 +453,7 @@ function AccountDropdown({
         aria-label="Account"
       >
         {currentUser ? (
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-semibold text-sm">
-            {currentUser.email?.charAt(0).toUpperCase() || 'U'}
-          </div>
+          <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || currentUser.email} size={36} />
         ) : (
           <User className="w-5 h-5 text-gray-600" />
         )}
@@ -456,31 +463,25 @@ function AccountDropdown({
         <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden z-50 animate-slideDown">
           {currentUser ? (
             <>
-              {/* User info header */}
-              <div className="px-3 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-100">
+              {/* User info header - Clickable */}
+              <button
+                onClick={() => {
+                  onProfileClick()
+                  setIsOpen(false)
+                }}
+                className="w-full px-3 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-gray-100 hover:from-blue-100 hover:to-purple-100 transition-colors cursor-pointer"
+              >
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
-                    {currentUser.email?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{currentUser.email}</p>
+                  <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || currentUser.email} size={40} />
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{userProfile?.full_name || 'Your Name'}</p>
                     <p className="text-xs text-gray-500">View your profile</p>
                   </div>
                 </div>
-              </div>
+              </button>
               
               {/* Menu items */}
               <div className="py-1">
-                <button
-                  onClick={() => {
-                    onProfileClick()
-                    setIsOpen(false)
-                  }}
-                  className="w-full text-left px-3 py-2.5 hover:bg-gray-50 flex items-center text-sm text-gray-700 transition-colors"
-                >
-                  <User className="mr-3 w-4 h-4 text-gray-500" />
-                  My Profile
-                </button>
                 <button
                   onClick={() => {
                     onSettingsClick()
@@ -595,7 +596,9 @@ function MobileBottomNav({
   )
 }
 
-function SettingsComponent({ onClose }: { onClose: () => void }) {
+// SettingsComponent moved to src/pages/SettingsPage.tsx
+
+export function SettingsComponent_DEPRECATED({ onClose }: { onClose: () => void }) {
   const [activeSection, setActiveSection] = useState<'account' | 'security' | 'visibility' | 'privacy' | 'notifications' | 'blocked' | 'sessions'>('account')
   const [settings, setSettings] = useState({
     email_notifications: true,
@@ -2271,15 +2274,104 @@ function SettingsComponent({ onClose }: { onClose: () => void }) {
 }
 
 function AppInner() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const postRefs = useRef<{ [postId: string]: HTMLDivElement | null }>({});
   const { status: connectionStatus } = useNetworkStatus();
-  const [activeView, setActiveView] = useState<'map' | 'community'>('community')
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  
+  // URL-based navigation helpers
+  const getActiveView = useCallback((): 'map' | 'community' => {
+    if (location.pathname === '/map') return 'map';
+    return 'community';
+  }, [location.pathname]);
+  
+  const getSelectedProfileId = useCallback((): string | null => {
+    const match = location.pathname.match(/^\/profile\/(.+)$/);
+    return match ? match[1] : null;
+  }, [location.pathname]);
+  
+  // Derived state from URL
+  const activeView = getActiveView();
+  const selectedProfileId = getSelectedProfileId();
+  const isAuthModalOpen = location.pathname === '/auth';
+  const isMessagesOverlayOpen = location.pathname === '/messages';
+  const isConnectionsOpen = location.pathname === '/network';
+  const isSettingsOpen = location.pathname === '/settings';
+  const isCVMakerOpen = location.pathname === '/cv-maker';
+  const isNotificationsPageOpen = location.pathname === '/notifications';
+  
+  // Separate state for notifications dropdown (not URL-based)
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  
+  // Navigation functions
+  const setActiveView = useCallback((view: 'map' | 'community') => {
+    navigate(view === 'map' ? '/map' : '/community');
+  }, [navigate]);
+  
+  const setSelectedProfileId = useCallback((id: string | null) => {
+    if (id) {
+      navigate(`/profile/${id}`);
+    } else {
+      // Go back to previous page or default to community
+      if (window.history.length > 2) {
+        navigate(-1);
+      } else {
+        navigate('/community');
+      }
+    }
+  }, [navigate]);
+  
+  const setIsAuthModalOpen = useCallback((open: boolean) => {
+    if (open) {
+      navigate('/auth');
+    } else {
+      navigate('/community');
+    }
+  }, [navigate]);
+  
+  const setIsMessagesOverlayOpen = useCallback((open: boolean) => {
+    if (open) {
+      navigate('/messages');
+    } else {
+      navigate('/community');
+    }
+  }, [navigate]);
+  
+  const setIsConnectionsOpen = useCallback((open: boolean) => {
+    if (open) {
+      navigate('/network');
+    } else {
+      navigate('/community');
+    }
+  }, [navigate]);
+  
+  const setIsSettingsOpen = useCallback((open: boolean) => {
+    if (open) {
+      navigate('/settings');
+    } else {
+      navigate('/community');
+    }
+  }, [navigate]);
+  
+  const setIsCVMakerOpen = useCallback((open: boolean) => {
+    if (open) {
+      navigate('/cv-maker');
+    } else {
+      navigate('/community');
+    }
+  }, [navigate]);
+  
+  // Navigation to full notifications page
+  const openNotificationsPage = useCallback(() => {
+    setShowNotificationsDropdown(false);
+    navigate('/notifications');
+  }, [navigate]);
+  
+  // Regular state
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const [selectedMobileConversation, setSelectedMobileConversation] = useState<Conversation | null>(null);
   const [userProfile, setUserProfile] = useState<any>(null)
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState({
@@ -2307,31 +2399,32 @@ function AppInner() {
   // Chat boxes state
   const [chatBoxes, setChatBoxes] = useState<ChatBox[]>([])
   const [conversationMetadata, setConversationMetadata] = useState<{ [key: string]: ConversationMetadata }>({})
-  const [isMessagesOverlayOpen, setIsMessagesOverlayOpen] = useState(false)
   
   // Connections state
   const [connections, setConnections] = useState<Connection[]>([])
   const [connectionRequests, setConnectionRequests] = useState<Connection[]>([])
-  const [isConnectionsOpen, setIsConnectionsOpen] = useState(false)
-  
-  // Settings state
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  
-  // CV Maker state
-  const [isCVMakerOpen, setIsCVMakerOpen] = useState(false)
   
   // Blocked users state
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]) // Users I blocked
   const [blockedByUserIds, setBlockedByUserIds] = useState<string[]>([]) // Users who blocked me
   
   // Notifications state
-  const [showNotifications, setShowNotifications] = useState(false)
   const [notifications, setNotifications] = useState<any[]>([])
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0)
+  
+  // Redirect from root to community when logged in
+  useEffect(() => {
+    if (currentUser && location.pathname === '/') {
+      navigate('/community', { replace: true });
+    }
+  }, [currentUser, location.pathname, navigate]);
   
   // Messages dropdown state
   const [showMessagesDropdown, setShowMessagesDropdown] = useState(false)
   const messagesDropdownRef = useRef<HTMLDivElement>(null)
+  
+  // Mobile search modal state
+  const [showMobileSearch, setShowMobileSearch] = useState(false)
   
   // Cache
   const profileCacheRef = useRef<{ [key: string]: { data: any, timestamp: number } }>({})
@@ -2502,6 +2595,16 @@ function AppInner() {
     return () => window.removeEventListener('openProfileDetail', handleOpenProfileDetail as EventListener)
   }, [])
 
+  useEffect(() => {
+    const handleViewUserProfile = (event: CustomEvent) => {
+      if (event.detail?.userId) {
+        setSelectedProfileId(event.detail.userId)
+      }
+    }
+
+    window.addEventListener('viewUserProfile', handleViewUserProfile as EventListener)
+    return () => window.removeEventListener('viewUserProfile', handleViewUserProfile as EventListener)
+  }, [setSelectedProfileId])
 
   useEffect(() => {
     const handleOpenCVMaker = () => {
@@ -2779,6 +2882,112 @@ function AppInner() {
     }
   }, [currentUser?.id])
 
+  // Real-time subscription for deleted posts and comments to clean up notifications
+  useEffect(() => {
+    if (!currentUser?.id) return
+
+    const postsChannel = supabase
+      .channel('posts-deletion-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'posts'
+        },
+        async (payload) => {
+          const deletedPostId = payload.old?.id
+          if (!deletedPostId) return
+
+          // Remove notifications related to this post
+          setNotifications(prev => {
+            const toRemove = prev.filter(n => 
+              n.related_entity_id === deletedPostId && n.related_entity_type === 'post' ||
+              n.metadata?.post_id === deletedPostId ||
+              n.post?.id === deletedPostId
+            )
+            
+            // Update unread count
+            const unreadToRemove = toRemove.filter(n => !n.read).length
+            if (unreadToRemove > 0) {
+              setUnreadNotificationsCount(count => Math.max(0, count - unreadToRemove))
+            }
+
+            // Delete from database
+            const idsToDelete = toRemove.map(n => n.id)
+            if (idsToDelete.length > 0) {
+              supabase
+                .from('notifications')
+                .delete()
+                .in('id', idsToDelete)
+                .then(() => console.log(`Deleted ${idsToDelete.length} notifications for deleted post`))
+            }
+
+            return prev.filter(n => 
+              !(n.related_entity_id === deletedPostId && n.related_entity_type === 'post') &&
+              n.metadata?.post_id !== deletedPostId &&
+              n.post?.id !== deletedPostId
+            )
+          })
+        }
+      )
+      .subscribe()
+
+    const commentsChannel = supabase
+      .channel('comments-deletion-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'post_comments'
+        },
+        async (payload) => {
+          const deletedCommentId = payload.old?.id
+          if (!deletedCommentId) return
+
+          // Remove notifications related to this comment
+          setNotifications(prev => {
+            const toRemove = prev.filter(n => 
+              n.related_entity_id === deletedCommentId && n.related_entity_type === 'comment' ||
+              n.metadata?.comment_id === deletedCommentId ||
+              n.metadata?.reply_id === deletedCommentId ||
+              n.comment?.id === deletedCommentId
+            )
+            
+            // Update unread count
+            const unreadToRemove = toRemove.filter(n => !n.read).length
+            if (unreadToRemove > 0) {
+              setUnreadNotificationsCount(count => Math.max(0, count - unreadToRemove))
+            }
+
+            // Delete from database
+            const idsToDelete = toRemove.map(n => n.id)
+            if (idsToDelete.length > 0) {
+              supabase
+                .from('notifications')
+                .delete()
+                .in('id', idsToDelete)
+                .then(() => console.log(`Deleted ${idsToDelete.length} notifications for deleted comment`))
+            }
+
+            return prev.filter(n => 
+              !(n.related_entity_id === deletedCommentId && n.related_entity_type === 'comment') &&
+              n.metadata?.comment_id !== deletedCommentId &&
+              n.metadata?.reply_id !== deletedCommentId &&
+              n.comment?.id !== deletedCommentId
+            )
+          })
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(postsChannel)
+      supabase.removeChannel(commentsChannel)
+    }
+  }, [currentUser?.id])
+
   // Fallback polling to ensure notifications stay fresh even if a realtime event is missed
   useEffect(() => {
     if (!currentUser?.id) return
@@ -2827,17 +3036,24 @@ function AppInner() {
           } else if (payload.eventType === 'UPDATE') {
             // Status change for incoming
             if (payload.new.status === 'accepted') {
+              // Find the existing request to get sender profile
+              setConnectionRequests(prev => {
+                const existingRequest = prev.find(req => req.id === payload.new.id);
+                const senderProfile = existingRequest?.sender;
+                
               const acceptedConnection: Connection = {
                 id: payload.new.id,
                 created_at: payload.new.created_at,
                 sender_id: payload.new.sender_id,
                 receiver_id: payload.new.receiver_id,
                 status: 'accepted',
-                sender: payload.old?.sender,
+                  sender: senderProfile || payload.old?.sender,
                 receiver: userProfile
               };
-              setConnections(prev => [...prev, acceptedConnection]);
-              setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
+                
+                setConnections(prevConnections => [...prevConnections, acceptedConnection]);
+                return prev.filter(req => req.id !== payload.new.id);
+              });
             } else if (payload.new.status === 'rejected') {
               setConnectionRequests(prev => prev.filter(req => req.id !== payload.new.id));
             }
@@ -2858,13 +3074,20 @@ function AppInner() {
         async (payload) => {
           console.log('Connection change (sender):', payload);
 
-          if (payload.eventType === 'INSERT' && payload.new.status === 'pending') {
-            // New outgoing request - should NOT be added to connectionRequests
-            // connectionRequests should only contain requests received by us (receiver_id === currentUser.id)
-            // Outgoing requests are handled separately by loadSentRequests() in ConnectionsManager
-          } else if (payload.eventType === 'UPDATE') {
-            // Status change for outgoing - should only update connections, not connectionRequests
+          if (payload.eventType === 'UPDATE') {
+            // Status change for outgoing request
             if (payload.new.status === 'accepted') {
+              // Get receiver profile if not already in payload
+              let receiver = payload.old?.receiver;
+              if (!receiver) {
+                const { data: receiverData } = await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', payload.new.receiver_id)
+                  .single();
+                receiver = receiverData;
+              }
+
               const acceptedConnection: Connection = {
                 id: payload.new.id,
                 created_at: payload.new.created_at,
@@ -2872,14 +3095,12 @@ function AppInner() {
                 receiver_id: payload.new.receiver_id,
                 status: 'accepted',
                 sender: userProfile,
-                receiver: payload.old?.receiver
+                receiver
               };
               setConnections(prev => [...prev, acceptedConnection]);
-              // Don't filter connectionRequests here - this is an outgoing request
             }
-            // Rejected outgoing requests don't need to update connectionRequests
           } else if (payload.eventType === 'DELETE') {
-            // Only remove from connections, not from connectionRequests (outgoing request)
+            // Remove from connections
             setConnections(prev => prev.filter(conn => conn.id !== payload.old.id));
           }
         }
@@ -2960,49 +3181,71 @@ function AppInner() {
         }
         
         // Fetch post data if needed
-        if (notification.related_entity_type === 'post' && notification.related_entity_id) {
+        let postId = notification.related_entity_type === 'post' ? notification.related_entity_id : notification.metadata?.post_id
+        if (postId) {
           const { data: postData } = await supabase
             .from('posts')
             .select('id, title, content, post_metadata')
-            .eq('id', notification.related_entity_id)
+            .eq('id', postId)
             .maybeSingle()
           
           if (postData) {
             result.post = postData
+          } else {
+            // Post was deleted - mark notification for deletion
+            result._shouldDelete = true
           }
         }
         
         // Fetch comment data if needed
-        if (notification.related_entity_type === 'comment' && notification.related_entity_id) {
+        let commentId = notification.related_entity_type === 'comment' ? notification.related_entity_id : notification.metadata?.comment_id
+        if (commentId) {
           const { data: commentData } = await supabase
             .from('post_comments')
-            .select('id, content, user_id')
-            .eq('id', notification.related_entity_id)
+            .select('id, content, user_id, post_id, parent_reply_id')
+            .eq('id', commentId)
             .maybeSingle()
           
           if (commentData) {
             result.comment = commentData
-          }
-        }
-        
-        // Also check metadata for comment_id
-        if (notification.metadata?.comment_id) {
-          const { data: commentData } = await supabase
-            .from('post_comments')
-            .select('id, content, user_id')
-            .eq('id', notification.metadata.comment_id)
+            // If we don't have post_id yet, get it from comment
+            if (!postId && commentData.post_id) {
+              result.metadata = { ...result.metadata, post_id: commentData.post_id }
+              // Also fetch the post
+              const { data: postData } = await supabase
+                .from('posts')
+                .select('id, title, content, post_metadata')
+                .eq('id', commentData.post_id)
             .maybeSingle()
           
-          if (commentData) {
-            result.comment = commentData
+              if (postData) {
+                result.post = postData
+              }
+            }
+          } else {
+            // Comment was deleted - mark notification for deletion
+            result._shouldDelete = true
           }
         }
         
         return result
       }))
       
-      setNotifications(notificationsWithData || [])
-      const unreadCount = (notificationsWithData || []).filter(n => !n.read).length
+      // Filter out notifications that should be deleted (related content was removed)
+      const notificationsToDelete = notificationsWithData.filter(n => n._shouldDelete).map(n => n.id)
+      if (notificationsToDelete.length > 0) {
+        // Delete from database
+        await supabase
+          .from('notifications')
+          .delete()
+          .in('id', notificationsToDelete)
+      }
+      
+      // Keep only valid notifications
+      const validNotifications = notificationsWithData.filter(n => !n._shouldDelete)
+      
+      setNotifications(validNotifications || [])
+      const unreadCount = (validNotifications || []).filter(n => !n.read).length
       setUnreadNotificationsCount(unreadCount)
     } catch (err) {
       console.error('Error loading notifications:', err)
@@ -3073,8 +3316,7 @@ function AppInner() {
           related_entity_id: data.id
         });
 
-      // State'i güncelle
-      setConnectionRequests(prev => [...prev, data]);
+      // Real-time subscription will handle the state update for sentRequests
 
     } catch (err: any) {
       console.error('Error sending connection request:', err);
@@ -3171,23 +3413,6 @@ function AppInner() {
     }
   }
 
-  const cancelConnectionRequest = async (connectionId: string) => {
-    try {
-      const { error } = await supabase
-        .from('connections')
-        .delete()
-        .eq('id', connectionId)
-      
-      if (error) throw error
-      
-      setConnectionRequests(prev => prev.filter(req => req.id !== connectionId))
-      
-    } catch (err: any) {
-      console.error('Error canceling connection request:', err)
-      alert('Failed to cancel connection request')
-    }
-  }
-
   const handleBlockUserInAppInner = async (userId: string) => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user || userId === user.id) return
@@ -3247,41 +3472,65 @@ function AppInner() {
       console.error('Error updating notification click:', err)
     }
 
-    setShowNotifications(false)
+    setShowNotificationsDropdown(false)
 
     // Handle different notification types
-    if (notification.type === 'connection_request') {
-      setIsConnectionsOpen(true)
+    const type = notification.type
+
+    // Connection-related notifications
+    if (type === 'connection_request' || type === 'connection_accepted' || type === 'connection_rejected') {
+      navigate('/network')
       return
     }
 
-    if (notification.type === 'post_reaction' || notification.type === 'comment' || notification.type === 'comment_reaction') {
-      // Switch to community view if not already there
-      if (activeView !== 'community') {
-        setActiveView('community')
-        // Wait a bit for component to mount, then trigger event
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('openPostFromNotification', {
-            detail: {
-              postId: notification.related_entity_type === 'post' ? notification.related_entity_id : 
-                     (notification.metadata?.post_id || notification.related_entity_id),
-              commentId: notification.metadata?.comment_id || (notification.type === 'comment_reaction' ? notification.related_entity_id : null),
-              scrollToReaction: notification.type === 'post_reaction' || notification.type === 'comment_reaction'
-            }
-          }))
-        }, 300)
-      } else {
-        // Trigger event immediately
-        window.dispatchEvent(new CustomEvent('openPostFromNotification', {
-          detail: {
-            postId: notification.related_entity_type === 'post' ? notification.related_entity_id : 
-                   (notification.metadata?.post_id || notification.related_entity_id),
-            commentId: notification.metadata?.comment_id || (notification.related_entity_type === 'comment' ? notification.related_entity_id : null),
-            scrollToReaction: notification.type === 'post_reaction' || notification.type === 'comment_reaction'
-          }
-        }))
-      }
+    // Message notifications
+    if (type === 'message' || type === 'new_message') {
+      navigate('/messages')
+      return
     }
+
+    // Post/Comment/Reply related notifications - navigate to PostPage with proper highlighting
+    const postId = notification.metadata?.post_id || 
+                   notification.post?.id ||
+                   (notification.related_entity_type === 'post' ? notification.related_entity_id : null)
+    
+    const commentId = notification.metadata?.comment_id || 
+                      notification.comment?.id ||
+                      (notification.related_entity_type === 'comment' ? notification.related_entity_id : null)
+    
+    const replyId = notification.metadata?.reply_id
+    const parentCommentId = notification.metadata?.parent_comment_id || notification.comment?.parent_reply_id
+
+    // Determine the correct route
+    if (postId) {
+      let route = `/post/${postId}`
+      
+      // If it's a reply (has parent_comment_id), navigate to the reply
+      if (replyId && parentCommentId) {
+        route = `/post/${postId}/comment/${parentCommentId}/reply/${replyId}`
+      }
+      // If it's a comment reaction or comment notification
+      else if (commentId) {
+        // Check if it might be a reply by checking parent_comment_id
+        if (parentCommentId) {
+          route = `/post/${postId}/comment/${parentCommentId}/reply/${commentId}`
+      } else {
+          route = `/post/${postId}/comment/${commentId}`
+        }
+      }
+      
+      navigate(route)
+      return
+    }
+
+    // Fallback: if actor exists, go to their profile
+    if (notification.actor?.id) {
+      navigate(`/profile/${notification.actor.id}`)
+      return
+    }
+
+    // Final fallback to community
+    navigate('/community')
   }
 
   // Check for missed notifications (24 hours old, not clicked)
@@ -3694,11 +3943,7 @@ function AppInner() {
         
           {/* Mobile Search Icon */}
           <button 
-            onClick={() => {
-              // TODO: Open search modal for mobile
-              const searchInput = document.querySelector('input[aria-label="Global search"]') as HTMLInputElement;
-              if (searchInput) searchInput.focus();
-            }}
+            onClick={() => setShowMobileSearch(true)}
             className="md:hidden flex items-center justify-center w-9 h-9 rounded-full hover:bg-gray-100 transition-colors"
           >
             <Search className="w-5 h-5 text-gray-600" />
@@ -3713,7 +3958,7 @@ function AppInner() {
               setActiveView('community')
               setSelectedProfileId(null)
             }}
-            className={`hidden md:flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-full transition-all ${
+            className={`hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-all ${
               activeView === 'community' && !selectedProfileId
                 ? 'bg-blue-50 text-blue-600'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -3727,7 +3972,7 @@ function AppInner() {
             <div className="relative hidden md:block">
               <button
                 onClick={() => setIsConnectionsOpen(true)}
-                className="flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-full text-gray-600 hover:bg-gray-100 transition-colors relative"
+                className="flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 transition-colors relative"
                 aria-label="Network"
               >
                 <UserPlus className="w-5 h-5" />
@@ -3746,7 +3991,7 @@ function AppInner() {
               setActiveView('map')
               setSelectedProfileId(null)
             }}
-            className={`hidden md:flex items-center justify-center w-9 h-9 lg:w-10 lg:h-10 rounded-full transition-all ${
+            className={`hidden md:flex items-center justify-center w-9 h-9 rounded-full transition-all ${
               activeView === 'map' && !selectedProfileId
                 ? 'bg-blue-50 text-blue-600'
                 : 'text-gray-600 hover:bg-gray-100'
@@ -3811,7 +4056,7 @@ function AppInner() {
           {/* Notifications */}
           <div className="relative">
             <button 
-              onClick={() => setShowNotifications(!showNotifications)}
+              onClick={() => setShowNotificationsDropdown(!showNotificationsDropdown)}
               className="flex items-center justify-center w-9 h-9 rounded-full text-gray-600 hover:bg-gray-100 transition-colors relative"
             >
               <Bell className="w-5 h-5" />
@@ -3823,7 +4068,7 @@ function AppInner() {
             </button>
             
             {/* Notifications Dropdown */}
-            {showNotifications && (
+            {showNotificationsDropdown && (
               <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50 max-h-[80vh] overflow-hidden flex flex-col animate-slideDown">
                 <div className="p-3 sm:p-4 border-b border-gray-200 flex justify-between items-center bg-gradient-to-r from-purple-50 to-pink-50">
                   <h3 className="font-semibold text-gray-900 flex items-center gap-2 text-sm sm:text-base">
@@ -3840,9 +4085,9 @@ function AppInner() {
                   )}
                 </div>
                 
-                <div className="overflow-y-auto flex-1">
+                <div className="overflow-y-auto flex-1 max-h-[400px]">
                   {notifications.length > 0 ? (
-                    notifications.map((notification) => {
+                    notifications.slice(0, 5).map((notification) => {
                       // Format time
                       const timeAgo = (() => {
                         const now = new Date()
@@ -3970,6 +4215,20 @@ function AppInner() {
                     </div>
                   )}
                 </div>
+                
+                {/* See All Button */}
+                {notifications.length > 0 && (
+                  <div className="p-3 border-t bg-gray-50">
+                    <button
+                      onClick={openNotificationsPage}
+                      className="w-full py-2 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg font-medium transition-colors"
+                    >
+                      {notifications.length > 5 
+                        ? `See all ${notifications.length} notifications` 
+                        : 'See all notifications'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -3978,6 +4237,7 @@ function AppInner() {
           {/* Account Dropdown */}
           <AccountDropdown
             currentUser={currentUser}
+            userProfile={userProfile}
             onProfileClick={handleProfileClick}
             onSettingsClick={handleSettingsClick}
             onSignOut={handleSignOut}
@@ -4067,6 +4327,50 @@ function AppInner() {
         ))}
       </div>
 
+      {/* Mobile Search Modal */}
+      {showMobileSearch && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div 
+            className="absolute inset-0 bg-black bg-opacity-50"
+            onClick={() => setShowMobileSearch(false)}
+          />
+          <div className="absolute top-0 left-0 right-0 bg-white shadow-lg animate-slideDown">
+            <div className="flex items-center gap-2 p-3 border-b">
+              <button
+                onClick={() => setShowMobileSearch(false)}
+                className="p-2 text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="flex-1">
+                <GlobalSearch
+                  blockedUserIds={allHiddenUserIds}
+                  onSelectPerson={(id) => {
+                    setSelectedProfileId(id)
+                    setActiveView('community')
+                    setShowMobileSearch(false)
+                  }}
+                  onSelectPost={(postId) => {
+                    const target = postRefs.current[postId]
+                    if (target?.scrollIntoView) {
+                      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                    }
+                    loadComments(postId)
+                    setShowMobileSearch(false)
+                  }}
+                  isConnected={(profileId) => {
+                    try {
+                      const connSet = new Set((connections || []).map((c: any) => (c.sender_id === currentUser?.id ? c.receiver_id : c.sender_id)))
+                      return connSet.has(profileId)
+                    } catch { return false }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Messages Overlay */}
       {isMessagesOverlayOpen && (
         <div className="fixed inset-0 z-50 md:hidden" style={{ bottom: '60px' }}>
@@ -4153,7 +4457,7 @@ function AppInner() {
           >
             <div
               className="bg-blue-600 text-white h-12 px-3 flex items-center justify-between cursor-pointer"
-              onClick={() => setIsMessagesOverlayOpen(prev => !prev)}
+              onClick={() => setIsMessagesOverlayOpen(!isMessagesOverlayOpen)}
             >
               <div className="flex items-center space-x-2">
                 <MessageSquare className="w-4 h-4 opacity-90" />
@@ -4197,33 +4501,29 @@ function AppInner() {
         </div>
       </div>
 
-      {/* Connections Manager Modal */}
+      {/* Network Page (Standalone) */}
       {isConnectionsOpen && currentUser && (
-        <ConnectionsManager 
-          currentUserId={currentUser.id}
-          onClose={() => setIsConnectionsOpen(false)}
-          connections={connections}
-          connectionRequests={connectionRequests}
-          onAcceptConnectionRequest={acceptConnectionRequest}
-          onRejectConnectionRequest={rejectConnectionRequest}
-          onRemoveConnection={removeConnection}
-          onSendConnectionRequest={sendConnectionRequest}
-          onCancelConnectionRequest={cancelConnectionRequest}
-          blockedUserIds={allHiddenUserIds}
-        />
+        <NetworkPage />
       )}
 
-      {/* Settings Modal */}
+      {/* Settings Page (Standalone) */}
       {isSettingsOpen && (
-        <SettingsComponent onClose={() => setIsSettingsOpen(false)} />
+        <SettingsPage />
       )}
 
-      {/* CV Maker Modal */}
+      {/* CV Maker Page (Standalone) */}
       {isCVMakerOpen && (
-        <CVMaker 
-          userProfile={userProfile} 
-          onClose={() => setIsCVMakerOpen(false)} 
-        />
+        <CVMakerPage />
+      )}
+
+      {/* Notifications Page (Standalone) */}
+      {isNotificationsPageOpen && (
+        <NotificationsPage />
+      )}
+
+      {/* Messages Page (Standalone) */}
+      {isMessagesOverlayOpen && (
+        <MessagesPage />
       )}
 
       {/* Mobile Bottom Navigation */}
@@ -4306,12 +4606,19 @@ function AppInner() {
 export default function App() {
   return (
     <ToastProvider>
-      <AppInner />
+      <Routes>
+        {/* Post routes with parameters */}
+        <Route path="/post/:postId/comment/:commentId/reply/:replyId" element={<PostPage />} />
+        <Route path="/post/:postId/comment/:commentId" element={<PostPage />} />
+        <Route path="/post/:postId" element={<PostPage />} />
+        {/* All other routes */}
+        <Route path="/*" element={<AppInner />} />
+      </Routes>
     </ToastProvider>
   )
 }
 
-function MobileChatScreen({ 
+export function MobileChatScreen({ 
   conversation, 
   currentUserId,
   userProfile,
@@ -4562,11 +4869,14 @@ function MobileChatScreen({
   )
 }
 
-function ConnectionsManager({ 
+// Note: Old ConnectionsManager removed - now using standalone NetworkPage (src/pages/NetworkPage.tsx)
+
+export function OldConnectionsManager_DEPRECATED({ 
   currentUserId,
   onClose,
   connections,
   connectionRequests,
+  sentRequests,
   onAcceptConnectionRequest,
   onRejectConnectionRequest,
   onRemoveConnection,
@@ -4578,6 +4888,7 @@ function ConnectionsManager({
   onClose: () => void
   connections: Connection[]
   connectionRequests: Connection[]
+  sentRequests: Connection[]
   onAcceptConnectionRequest: (id: string) => Promise<void>
   onRejectConnectionRequest: (id: string) => Promise<void>
   onRemoveConnection: (id: string) => Promise<void>
@@ -4588,25 +4899,23 @@ function ConnectionsManager({
   const [activeTab, setActiveTab] = useState<'connections' | 'requests' | 'suggested'>('connections')
   const [requestSubTab, setRequestSubTab] = useState<'received' | 'sent'>('received')
   const [suggested, setSuggested] = useState<Profile[]>([])
-  const [sentRequests, setSentRequests] = useState<Connection[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (activeTab === 'suggested') {
       loadSuggested()
     }
-    if (activeTab === 'requests') {
-      loadSentRequests()
-    }
   }, [activeTab])
+
+  // Reload suggested when connections, sentRequests, or connectionRequests change
+  useEffect(() => {
+    if (activeTab === 'suggested') {
+      loadSuggested()
+    }
+  }, [connections.length, sentRequests.length, connectionRequests.length])
 
   const loadSuggested = async () => {
     setLoading(true)
-    
-    // First load sent requests if not already loaded
-    if (sentRequests.length === 0) {
-      await loadSentRequests()
-    }
     
     const { data, error } = await supabase
       .from('profiles')
@@ -4644,18 +4953,6 @@ function ConnectionsManager({
     setLoading(false)
   }
 
-  const loadSentRequests = async () => {
-    const { data, error } = await supabase
-      .from('connections')
-      .select('*, receiver:profiles!receiver_id(*)')
-      .eq('sender_id', currentUserId)
-      .eq('status', 'pending')
-
-    if (!error && data) {
-      setSentRequests(data)
-    }
-  }
-
   const handleAcceptRequest = async (connectionId: string) => {
     try {
       await onAcceptConnectionRequest(connectionId)
@@ -4686,8 +4983,10 @@ function ConnectionsManager({
   const handleCancelRequest = async (connectionId: string) => {
     try {
       await onCancelConnectionRequest(connectionId)
-      setSentRequests(prev => prev.filter(req => req.id !== connectionId))
-      loadSuggested() // Suggested listesini güncelle
+      // Suggested list will auto-update via useEffect when sentRequests changes
+      if (activeTab === 'suggested') {
+        loadSuggested()
+      }
     } catch (err: any) {
       console.error('Error canceling connection request:', err)
       alert('Failed to cancel connection request')
@@ -4697,9 +4996,9 @@ function ConnectionsManager({
   const handleSendRequest = async (receiverId: string) => {
     try {
       await onSendConnectionRequest(receiverId)
-      // İstek gönderildikten sonra suggested listesini güncelle
+      // Immediately remove from suggested list for better UX
       setSuggested(prev => prev.filter(profile => profile.id !== receiverId))
-      loadSentRequests() // Gönderilen istekler listesini güncelle
+      // Real-time subscription will handle sentRequests update
     } catch (error) {
       console.error('Error sending connection request:', error)
     }
@@ -4972,7 +5271,7 @@ function ConnectionsManager({
   )
 }
 
-function ChatBoxComponent({ 
+export function ChatBoxComponent({ 
   chatBox, 
   currentUserId,
   userProfile,
@@ -5329,7 +5628,7 @@ function ChatBoxComponent({
   )
 }
 
-function ConversationsList({
+export function ConversationsList({
   currentUserId,
   onSelectConversation,
   selectedConversationId,
@@ -5810,7 +6109,7 @@ function ConversationsList({
   );
 }
 
-function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onProfileClick, therapists }: any) {
+export function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onProfileClick, therapists }: any) {
   const [isProfessionOpen, setIsProfessionOpen] = useState(false)
   const [isLanguagesOpen, setIsLanguagesOpen] = useState(false)
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false)
@@ -6120,7 +6419,7 @@ function SidebarComponent({ searchTerm, setSearchTerm, filters, setFilters, onPr
 }
 
 // New component for therapist list
-function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any) {
+export function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   
   const filteredTherapists = therapists.filter((therapist: Profile) => {
@@ -6237,7 +6536,7 @@ function TherapistsList({ filters, searchTerm, onProfileClick, therapists }: any
   );
 }
 
-function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
+export function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
   const [therapistsWithCoords, setTherapistsWithCoords] = useState<Profile[]>([]);
 
   useEffect(() => {
@@ -6340,7 +6639,7 @@ function MapComponent({ therapists, geocodeLocation, onProfileClick }: any) {
   );
 }
 
-function ProfileDetailPage({ 
+export function ProfileDetailPage({ 
   profileId, 
   onClose, 
   navigateToCommunity,
@@ -6431,6 +6730,7 @@ function ProfileDetailPage({
   const [loadingMutualConnections, setLoadingMutualConnections] = useState(false)
   const [reactionsModalOpen, setReactionsModalOpen] = useState(false)
   const [reactionsModalPostId, setReactionsModalPostId] = useState<string | null>(null)
+  const [reactionsModalCommentId, setReactionsModalCommentId] = useState<string | null>(null)
   const [reactionsModalData, setReactionsModalData] = useState<{ emoji: string; users: { user: Profile; reaction_type: string }[] }[]>([])
   const [reactionsModalActiveTab, setReactionsModalActiveTab] = useState<string>('ALL')
   const [loadingReactionsModal, setLoadingReactionsModal] = useState(false)
@@ -8169,13 +8469,6 @@ function ProfileDetailPage({
       {/* Header */}
       <div className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-6 py-4">
-          <button
-            onClick={onClose}
-            className="flex items-center text-gray-600 hover:text-gray-900 mb-4"
-          >
-            <ArrowLeft className="w-5 h-5 mr-2" />
-            Back to Map
-          </button>
         </div>
       </div>
 
@@ -9254,7 +9547,7 @@ function ProfileDetailPage({
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 e.preventDefault();
-                                const postUrl = `${window.location.origin}?post=${post.id}`;
+                                const postUrl = `${window.location.origin}/post/${post.id}`;
                                 try {
                                   await navigator.clipboard.writeText(postUrl);
                                   const event = new CustomEvent('showToast', { detail: { message: 'Post link copied to clipboard!', type: 'success' } })
@@ -10411,10 +10704,11 @@ function ProfileDetailPage({
       )}
 
       {/* Reactions Modal */}
-      {reactionsModalOpen && reactionsModalPostId && (
+      {reactionsModalOpen && (reactionsModalPostId || reactionsModalCommentId) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={() => {
           setReactionsModalOpen(false)
           setReactionsModalPostId(null)
+          setReactionsModalCommentId(null)
         }}>
           <div className="bg-white rounded-xl w-full max-w-lg max-h-[70vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
             {/* Header */}
@@ -10424,6 +10718,7 @@ function ProfileDetailPage({
                 onClick={() => {
                   setReactionsModalOpen(false)
                   setReactionsModalPostId(null)
+                  setReactionsModalCommentId(null)
                 }}
                 className="text-gray-400 hover:text-gray-600 rounded-full p-1.5 hover:bg-gray-100 transition-colors"
               >
@@ -10516,7 +10811,9 @@ function ProfileDetailPage({
                         <li key={`${item.user.id}-${idx}`} className="py-2 border-b border-gray-100 last:border-0">
                           <button
                             onClick={() => {
-                              setSelectedUserProfile(null);
+                              setReactionsModalOpen(false)
+                              setReactionsModalPostId(null)
+                              setReactionsModalCommentId(null)
                               const event = new CustomEvent('viewUserProfile', { detail: { userId: item.user.id } });
                               window.dispatchEvent(event);
                             }}
@@ -10561,7 +10858,7 @@ function ProfileDetailPage({
   )
 }
 
-function CommunityComponent({ 
+export function CommunityComponent({ 
   onOpenConnections,
   allHiddenUserIds = []
 }: { 
@@ -10836,6 +11133,7 @@ function CommunityComponent({
   const [reactionsModalData, setReactionsModalData] = useState<{ emoji: string; users: { user: Profile; reaction_type: string }[] }[]>([])
   const [reactionsModalActiveTab, setReactionsModalActiveTab] = useState<string>('ALL')
   const [reactionsModalPostId, setReactionsModalPostId] = useState<string | null>(null)
+  const [reactionsModalCommentId, setReactionsModalCommentId] = useState<string | null>(null)
   const [loadingReactionsModal, setLoadingReactionsModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [showVisibilityDropdown, setShowVisibilityDropdown] = useState(false)
@@ -11343,6 +11641,52 @@ function CommunityComponent({
       setReactionsModalData(reactionsArray)
     } catch (err) {
       console.error('Error loading reactions:', err)
+      setReactionsModalData([])
+    } finally {
+      setLoadingReactionsModal(false)
+    }
+  }
+
+  const loadCommentReactionsModal = async (commentId: string) => {
+    setReactionsModalOpen(true)
+    setReactionsModalCommentId(commentId)
+    setReactionsModalPostId(null)
+    setLoadingReactionsModal(true)
+    setReactionsModalActiveTab('ALL')
+    
+    try {
+      const { data: reactions, error } = await supabase
+        .from('comment_reactions')
+        .select('user_id, reaction_type, profiles!comment_reactions_user_id_fkey(*)')
+        .eq('comment_id', commentId)
+      
+      if (error) throw error
+      
+      const reactionsByType: Record<string, { user: Profile; reaction_type: string }[]> = {}
+      
+      if (reactions) {
+        reactions.forEach((reaction: any) => {
+          const reactionType = reaction.reaction_type === 'like' ? '👍' : reaction.reaction_type
+          if (!reactionsByType[reactionType]) {
+            reactionsByType[reactionType] = []
+          }
+          if (reaction.profiles) {
+            reactionsByType[reactionType].push({
+              user: reaction.profiles as Profile,
+              reaction_type: reaction.reaction_type
+            })
+          }
+        })
+      }
+      
+      const reactionsArray = Object.entries(reactionsByType).map(([emoji, users]) => ({
+        emoji,
+        users
+      })).sort((a, b) => b.users.length - a.users.length)
+      
+      setReactionsModalData(reactionsArray)
+    } catch (err) {
+      console.error('Error loading comment reactions:', err)
       setReactionsModalData([])
     } finally {
       setLoadingReactionsModal(false)
@@ -14747,11 +15091,23 @@ function CommunityComponent({
         <div className="h-16 bg-gradient-to-r from-blue-500 to-blue-600"></div>
         <div className="px-4 pb-4 -mt-8">
           <div className="flex flex-col items-center">
-            {/* Avatar */}
-            <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || user?.email || 'User'} className="w-16 h-16 border-4 border-white shadow-md" useInlineSize={false} />
-            <h3 className="mt-2 text-lg font-semibold text-gray-900 text-center">
-              {userProfile?.full_name || 'Your Name'}
-            </h3>
+            {/* Avatar - Clickable */}
+            <button
+              onClick={() => user?.id && window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: user.id } }))}
+              className="cursor-pointer hover:opacity-90 transition-opacity focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 rounded-full"
+              title="View your profile"
+            >
+              <Avatar src={userProfile?.avatar_url} name={userProfile?.full_name || user?.email || 'User'} className="w-16 h-16 border-4 border-white shadow-md" useInlineSize={false} />
+            </button>
+            <button
+              onClick={() => user?.id && window.dispatchEvent(new CustomEvent('openProfileDetail', { detail: { profileId: user.id } }))}
+              className="mt-2 cursor-pointer hover:text-blue-600 transition-colors focus:outline-none"
+              title="View your profile"
+            >
+              <h3 className="text-lg font-semibold text-gray-900 text-center hover:text-blue-600">
+                {userProfile?.full_name || 'Your Name'}
+              </h3>
+            </button>
             <p className="text-sm text-gray-600 text-center">
               {userProfile?.profession || 'Professional'}
             </p>
@@ -15271,7 +15627,7 @@ function CommunityComponent({
                     content: p.content.substring(0, 200),
                     author: getUserDisplayName(p.user),
                     createdAt: p.created_at,
-                    url: `${window.location.origin}?post=${p.id}`
+                    url: `${window.location.origin}/post/${p.id}`
                   }))
                 };
                 const jsonStr = JSON.stringify(exportData, null, 2);
@@ -15514,7 +15870,7 @@ function CommunityComponent({
                           onClick={async (e) => {
                             e.stopPropagation();
                             e.preventDefault();
-                            const postUrl = `${window.location.origin}?post=${post.id}`;
+                            const postUrl = `${window.location.origin}/post/${post.id}`;
                             try {
                               await navigator.clipboard.writeText(postUrl);
                               toast.success('Post link copied to clipboard!');
@@ -16483,16 +16839,17 @@ function CommunityComponent({
                                   return <span className="text-base">👍</span>;
                                 })()}
                                 {(() => {
-                                  const currentReaction = userReactions[comment.id];
-                                  if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
-                                    const reactionData = commentReactions[comment.id]?.find(r => r.emoji === currentReaction);
-                                    return reactionData && reactionData.count > 0 ? (
-                                      <span className="text-xs">{reactionData.count}</span>
-                                    ) : null;
-                                  }
-                                  const likeReaction = commentReactions[comment.id]?.find(r => r.emoji === '👍');
-                                  return likeReaction && likeReaction.count > 0 ? (
-                                    <span className="text-xs">{likeReaction.count}</span>
+                                  const totalReactions = commentReactions[comment.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                                  return totalReactions > 0 ? (
+                                    <span 
+                                      className="text-xs cursor-pointer hover:underline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        loadCommentReactionsModal(comment.id);
+                                      }}
+                                    >
+                                      {totalReactions}
+                                    </span>
                                   ) : null;
                                 })()}
                               </button>
@@ -16790,16 +17147,17 @@ function CommunityComponent({
                                                 return <span className="text-base">👍</span>;
                                               })()}
                                               {(() => {
-                                                const currentReaction = userReactions[reply.id];
-                                                if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
-                                                  const reactionData = commentReactions[reply.id]?.find(r => r.emoji === currentReaction);
-                                                  return reactionData && reactionData.count > 0 ? (
-                                                    <span className="text-xs">{reactionData.count}</span>
-                                                  ) : null;
-                                                }
-                                                const likeReaction = commentReactions[reply.id]?.find(r => r.emoji === '👍');
-                                                return likeReaction && likeReaction.count > 0 ? (
-                                                  <span className="text-xs">{likeReaction.count}</span>
+                                                const totalReactions = commentReactions[reply.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                                                return totalReactions > 0 ? (
+                                                  <span 
+                                                    className="text-xs cursor-pointer hover:underline"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      loadCommentReactionsModal(reply.id);
+                                                    }}
+                                                  >
+                                                    {totalReactions}
+                                                  </span>
                                                 ) : null;
                                               })()}
                                             </button>
@@ -17084,16 +17442,17 @@ function CommunityComponent({
                                                               return <span className="text-base">👍</span>;
                                                             })()}
                                                             {(() => {
-                                                              const currentReaction = userReactions[nestedReply.id];
-                                                              if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
-                                                                const reactionData = commentReactions[nestedReply.id]?.find(r => r.emoji === currentReaction);
-                                                                return reactionData && reactionData.count > 0 ? (
-                                                                  <span className="text-xs">{reactionData.count}</span>
-                                                                ) : null;
-                                                              }
-                                                              const likeReaction = commentReactions[nestedReply.id]?.find(r => r.emoji === '👍');
-                                                              return likeReaction && likeReaction.count > 0 ? (
-                                                                <span className="text-xs">{likeReaction.count}</span>
+                                                              const totalReactions = commentReactions[nestedReply.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                                                              return totalReactions > 0 ? (
+                                                                <span 
+                                                                  className="text-xs cursor-pointer hover:underline"
+                                                                  onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    loadCommentReactionsModal(nestedReply.id);
+                                                                  }}
+                                                                >
+                                                                  {totalReactions}
+                                                                </span>
                                                               ) : null;
                                                             })()}
                                                           </button>
@@ -19518,16 +19877,17 @@ function CommunityComponent({
                                   return <span className="text-sm">👍</span>;
                                 })()}
                                 {(() => {
-                                  const currentReaction = userReactions[comment.id];
-                                  if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
-                                    const reactionData = commentReactions[comment.id]?.find(r => r.emoji === currentReaction);
-                                    return reactionData && reactionData.count > 0 ? (
-                                      <span className="text-[9px]">{reactionData.count}</span>
-                                    ) : null;
-                                  }
-                                  const likeReaction = commentReactions[comment.id]?.find(r => r.emoji === '👍');
-                                  return likeReaction && likeReaction.count > 0 ? (
-                                    <span className="text-[9px]">{likeReaction.count}</span>
+                                  const totalReactions = commentReactions[comment.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                                  return totalReactions > 0 ? (
+                                    <span 
+                                      className="text-[9px] cursor-pointer hover:underline"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        loadCommentReactionsModal(comment.id);
+                                      }}
+                                    >
+                                      {totalReactions}
+                                    </span>
                                   ) : null;
                                 })()}
                               </button>
@@ -19690,16 +20050,17 @@ function CommunityComponent({
                                           return <span className="text-sm">👍</span>;
                                         })()}
                                         {(() => {
-                                          const currentReaction = userReactions[reply.id];
-                                          if (currentReaction && currentReaction !== 'like' && currentReaction !== 'favorite') {
-                                            const reactionData = commentReactions[reply.id]?.find(r => r.emoji === currentReaction);
-                                            return reactionData && reactionData.count > 0 ? (
-                                              <span className="text-[9px]">{reactionData.count}</span>
-                                            ) : null;
-                                          }
-                                          const likeReaction = commentReactions[reply.id]?.find(r => r.emoji === '👍');
-                                          return likeReaction && likeReaction.count > 0 ? (
-                                            <span className="text-[9px]">{likeReaction.count}</span>
+                                          const totalReactions = commentReactions[reply.id]?.reduce((sum, r) => sum + r.count, 0) || 0;
+                                          return totalReactions > 0 ? (
+                                            <span 
+                                              className="text-[9px] cursor-pointer hover:underline"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                loadCommentReactionsModal(reply.id);
+                                              }}
+                                            >
+                                              {totalReactions}
+                                            </span>
                                           ) : null;
                                         })()}
                                       </button>
@@ -19875,10 +20236,11 @@ function CommunityComponent({
     )}
 
     {/* Reactions Modal */}
-    {reactionsModalOpen && reactionsModalPostId && (
+    {reactionsModalOpen && (reactionsModalPostId || reactionsModalCommentId) && (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4" onClick={() => {
         setReactionsModalOpen(false)
         setReactionsModalPostId(null)
+        setReactionsModalCommentId(null)
       }}>
         <div className="bg-white rounded-xl w-full max-w-lg max-h-[70vh] overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
           {/* Header */}
@@ -19888,6 +20250,7 @@ function CommunityComponent({
               onClick={() => {
                 setReactionsModalOpen(false)
                 setReactionsModalPostId(null)
+                setReactionsModalCommentId(null)
               }}
               className="text-gray-400 hover:text-gray-600 rounded-full p-1.5 hover:bg-gray-100 transition-colors"
             >
@@ -19980,7 +20343,9 @@ function CommunityComponent({
                       <li key={`${item.user.id}-${idx}`} className="py-2 border-b border-gray-100 last:border-0">
                         <button
                           onClick={() => {
-                            setSelectedUserProfile(null);
+                            setReactionsModalOpen(false)
+                            setReactionsModalPostId(null)
+                            setReactionsModalCommentId(null)
                             const event = new CustomEvent('viewUserProfile', { detail: { userId: item.user.id } });
                             window.dispatchEvent(event);
                           }}
@@ -20025,7 +20390,9 @@ function CommunityComponent({
   )
 }
 
-function CVMaker({ userProfile, onClose }: CVMakerProps) {
+// CVMaker moved to src/pages/CVMakerPage.tsx
+
+export function CVMaker_DEPRECATED({ userProfile, onClose }: CVMakerProps) {
   const [loading, setLoading] = useState(false)
   const [cvStyle, setCvStyle] = useState<'modern' | 'professional' | 'creative'>('modern')
   const [selectedSections, setSelectedSections] = useState({
@@ -20962,7 +21329,7 @@ function CVMaker({ userProfile, onClose }: CVMakerProps) {
   )
 }
 
-function AuthModalComponent({ 
+export function AuthModalComponent({ 
   onClose, 
   onSuccess, 
   currentUser, 
